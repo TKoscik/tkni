@@ -1,0 +1,178 @@
+#!/bin/bash
+#===============================================================================
+# DICOM download from XNAT
+# Authors: Steve Slevinski, Timothy R. Koscik, & Josh Cochran
+# Date: 2021-01-27
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+HPC_Q=${QUEUE}
+HPC_SLOTS=${NSLOTS}
+KEEP=false
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch
+function egress {
+ EXIT_CODE=$?
+ PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+ if [[ "${NO_LOG}" == "false" ]]; then
+   unset LOGSTR
+   LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},$#{PROC_STOP},${EXIT_CODE}"
+   writeLog --benchmark --string ${LOGSTR}
+ fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long prefix:,\
+up:,xnat-project:,download-date:,pi:,project:,dir-save:,\
+help,verbose,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+UP=
+XNAT_PROJECT=
+DOWNLOAD_DATE=
+PI=
+PROJECT=
+DIR_SAVE=${INC_IMPORT}
+HELP=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --xnat-project) XNAT_PROJECT="$2" ; shift 2 ;;
+    --up) UP="$2" ; shift 2 ;;
+    --download-date) DOWNLOAD_DATE="$2" ; shift 2 ;;
+    --pi) PI="$2" ; shift 2 ;;
+    --project) PROJECT="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo "Usage: ${FCN_NAME}"
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --up <value>             "UID:Password" '
+  echo '  --xnat-project <value>   (required) name of the project on xnat,'
+  echo '                           e.g. "TK_BLACK"'
+  echo '  --download-date <value>  (required) date range for data download,'
+  echo '                           e.g., single date = "YYYY-mm-dd"'
+  echo '                                 date range = "YYYY-mm-dd:YYYY-mm-dd"'
+  echo '                           default=previous day'
+  echo '  --pi <value>             (optional) name of the PI to use in output'
+  echo '                           filename, default will us the INC lookup'
+  echo '                           table. '
+  echo '  --project <value>        (optional) name of the project to use in the'
+  echo '                           output filename'
+  echo '  --dir-save <value>       (optional) directory to save output,'
+  echo '                           default=${DIR_IMPORT}'
+  echo 'Output filenames = ${DIR_SAVE}/pi-${PI}_project-${PROJECT}_sub-${PID}_YYYYmmdd.zip'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+
+# Check user ID and password ---------------------------------------------------
+if [[ -z ${UP} ]]; then
+  if [[ -f ~/.xnatUP ]]; then
+    UP=$(cat ~/.xnatUP)
+  else
+    echo "ERROR [INC:${FCN_NAME}] a UID and Password must be provided, or ~/.xnatUP must exist containing this information."
+    exit 1
+  fi
+else
+  #UP=$(cat ${UP})
+  UP=${UP}
+fi
+
+# make save directory if non standard ------------------------------------------
+if [[ "${DIR_SAVE}" != "${INC_IMPORT}" ]]; then
+  mkdir -p ${DIR_SAVE}
+fi
+
+# use lookup table if PI and.or project unspecified ----------------------------
+if [[ -z ${PI} ]] ||
+   [[ -z ${PROJECT} ]]; then
+  XNAT_LS=($(getColumn -i ${INC_DB}/projects.tsv -f xnat_project))
+  for (( i=1; i<${#XNAT_LS[@]}; i++ )); do
+    if [[ "${XNAT_LS[${i}]}" == "${XNAT_PROJECT}" ]]; then
+      WHICH_PROJECT=${i}
+      break
+    fi
+  done
+  if [[ -z ${PI} ]]; then
+    PI_LS=($(getColumn -i ${INC_DB}/projects.tsv -f pi))
+    PI="${PI_LS[${WHICH_PROJECT}]}"
+  fi
+  if [[ -z ${PROJECT} ]]; then
+    PROJECT_LS=($(getColumn -i ${INC_DB}/projects.tsv -f project_name))
+    PROJECT="${PROJECT_LS[${WHICH_PROJECT}]}"
+  fi
+fi
+
+# generate date list if range is given -----------------------------------------
+## default = yesterday only
+if [[ -z ${DOWNLOAD_DATE} ]]; then
+  DOWNLOAD_DATE=$(date -d "yesterday 13:00" '+%Y-%m-%d')
+fi
+DATE_LS=(${DOWNLOAD_DATE//:/ })
+if [[ "${#DATE_LS[@]}" == "2" ]]; then
+  start_time=$(date -u -d 'TZ="UTC" '${DATE_LS[0]}' 00:00:00' '+%s')  
+  end_time=$(date -u -d 'TZ="UTC" '${DATE_LS[1]}' 23:59:59' '+%s')
+  interval=86400
+  DATE_LS=($(seq ${start_time} ${interval} ${end_time} | xargs -I{} date -u -d 'TZ="UTC" @'{} '+%F'))
+fi
+
+# download scans from specified project and date range -------------------------
+for (( i=0; i<${#DATE_LS[@]}; i++ )); do
+  echo "DATE: " ${DATE_LS[${i}]}
+  URL="https://rpacs.iibi.uiowa.edu/xnat/data/projects/${XNAT_PROJECT}/experiments?format=csv"
+  curl -X GET -u ${UP} ${URL} -s --show-error \
+    | awk -F "\"*,\"*" '{ print $2"\t"$7 }' \
+    | grep "${DATE_LS[${i}]}" \
+    > ${DIR_SAVE}"/"${XNAT_PROJECT}_${DATE_LS[${i}]}".pids"
+
+  FNAME=${DIR_SAVE}"/"${XNAT_PROJECT}_${DATE_LS[${i}]}".pids"
+
+  if [[ -s ${FNAME} ]]; then
+    while read PID DT; do
+      URL="https://rpacs.iibi.uiowa.edu/xnat/data/experiments/${PID}/scans/ALL/files?format=zip"
+      curl -X GET -u $UP $URL --fail --silent --show-error \
+      > ${DIR_SAVE}"/pi-"${PI}"_project-"${PROJECT}"_"${PID}"_"${DT//[-:. ]}".zip"
+    done < ${DIR_SAVE}"/"${XNAT_PROJECT}_${DATE_LS[${i}]}".pids"
+    rm ${DIR_SAVE}"/"${XNAT_PROJECT}_${DATE_LS[${i}]}".pids"
+  else
+    rm ${DIR_SAVE}"/"${XNAT_PROJECT}_${DATE_LS[${i}]}".pids"
+  fi
+
+done
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+
+

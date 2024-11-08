@@ -1,0 +1,671 @@
+#!/bin/bash -e
+#===============================================================================
+# Functional Timeseries - Motion Correction and Registration
+#-------------------------------------------------------------------------------
+# This function performs BOLD timeseries motion correction and normalization to
+# an anatomical template in a single-interpolation. All registrations and motion
+# corrections are completed using ANTs. The processing steps in the procedure
+# are as follows:
+# 1) volumes in the BOLD timeseries (TS) are padded by 5 voxels on each side
+# 2) calculate mean BOLD TS, for an initial target for motion correction
+# 3) rigid-body (6 DF) motion correction, remake mean BOLD TS
+# 4) affine (12 DF) motion correction, remake mean BOLD TS
+# 5) generate brain mask using FSL's bet on mean BOLD TS
+# 6) register mean BOLD to participant's anatomical image (usually T1w), using
+#    rigid, affine, syn registrations. Collapse affine transformations and
+#    deformation matrix into a single deformation field.
+# 7) push mean BOLD TS and brain mask to template space using the registration
+#    to participant's anatomical and a transformation from their anatomical to
+#    template space that was generated during anatomical preprocessing
+#    (e.g., participant T1w -> template T1w)
+# 8) Redo motion correction from raw BOLD TS to the normalized mean BOLD TS,
+#    using rigid, affine, and SyN components
+# 9) Depad motion-corrected, normalized BOLD TS
+# Authors: Timothy R. Koscik, PhD
+# Date: 2020-03-27
+# ------------------------------------------------------------------------------
+# UPDATED BY L. HOPKINS 2020-07-02
+# 10) Added 4D file check
+# 11) Added option for no session variable
+# 12) Stack check
+# ------------------------------------------------------------------------------
+# UPDATE BY T. KOSCIK 2020-10-22
+# - fixed location and specification of transforms
+# --will now check early in script for necessary transforms
+# --no longer requires a stacked transform, will append affine and syn
+#   unless stack is present
+# --fixed handling of voxel spacing
+# -changed the way lack of session variables are handled to be more efficient
+# ------------------------------------------------------------------------------
+# UPDATE BY T. KOSCIK 2021-07-21
+# - update logging procedure
+# - add inputs to specify native anatomical better
+# - add inputs to specify normalization transforms
+# - add resampling of template to desired space
+# - add optional padding and variable padding amounts
+# - add PNG output of mean bold and timeseries
+# - update to pad4D function
+# - fix depadded version not being output due to bad naming in fslmerge
+# - various non-functional, code cleaning changes
+#===============================================================================
+# UPDATE BY L. HOPKINS 2021-12-02
+# - added skullstrip option to ss before registration - for when ANTS fails on vanilla
+
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+HPC_Q=${QUEUE}
+HPC_SLOTS=${NSLOTS}
+KEEP=false
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ "${KEEP}" == "false" ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          echo 'deleting scratch'
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    unset LOGSTR
+    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
+    writeLog --benchmark --string ${LOGSTR}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvkln --long prefix:,\
+ts-bold:,target:,\
+native-anat:,native-mod:,native-mask:,\
+mask-method:,mask-tool:,mask-clfrac:,mask-thresh:,\
+extra-syn,\
+xfm-align:,xfm-norm:,\
+template:,template_mod:,space:,\
+pad:,\
+dir-xfm:,dir-save:,dir-scratch:,\
+keep,help,verbose,ants-verbose,no-log,no-png -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+TS_BOLD=
+TARGET=T1w
+NATIVE_ANAT=
+NATIVE_MOD=T1w
+NATIVE_MASK=
+MASK_METHOD="apply_anat,apply_func"
+MASK_TOOL="bet"
+MASK_CLFRAC=0.25
+MASK_THRESH="auto"
+XFM_ALIGN=
+XFM_NORM=
+TEMPLATE=HCPICBM
+TEMPLATE_MOD=T1w
+SPACE=2mm
+PAD=5
+EXTRA_SYN="false"
+DIR_XFM=
+DIR_SAVE=
+DIR_SCRATCH=${INC_SCRATCH}/${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+ANTS_VERBOSE=0
+KEEP=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    --ant-verbose) ANTS_VERBOSE=1 ; shift ;;
+    -k | --keep) KEEP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --ts-bold) TS_BOLD="$2" ; shift 2 ;;
+    --target) TARGET="$2" ; shift 2 ;;
+    --native-anat) NATIVE_ANAT="$2" ; shift 2 ;;
+    --native-mod) NATIVE_MOD="$2" ; shift 2 ;;
+    --native-mask) NATIVE_MASK="$2" ; shift 2 ;;
+    --mask-method) MASK_METHOD=true ; shift 2 ;;
+    --mask-tool) MASK_TOOL="$2" ; shift 2 ;;
+    --mask-clfrac) MASK_CLFRAC="$2" ; shift 2 ;;
+    --mask-thresh) MASK_THRESH="$2" ; shift 2 ;;
+    --xfm-align) XFM_ALIGN="$2" ; shift 2 ;;
+    --xfm-norm) XFM_NORM="$2" ; shift 2 ;;
+    --template) TEMPLATE="$2" ; shift 2 ;;
+    --template-mod) TEMPLATE_MOD="$2" ; shift 2 ;;
+    --space) SPACE="$2" ; shift 2 ;;
+    --pad) PAD="$2" ; shift 2 ;;
+    --extra-syn) EXTRA_SYN="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -k | --keep              keep preliminary processing steps'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  -n | --no-png            disable PNG output'
+  echo '  --prefix <value>         scan prefix,'
+  echo '                           default: sub-123_ses-1234abcd'
+  echo '  --ts-bold <value>        Full path to single, run timeseries'
+  echo '  --mask-method            "none" (default) no masking will be done'
+  echo '                           "apply" skull strip anatomical and mean bold'
+  echo '                                   for registration'
+  echo '                           "restrict" use masks in ants registration'
+  echo '                           "apply_and_restrict" both'
+  echo '  --target <value>         target modality to work with, default=T1w'
+  echo '  --template <value>       name of template to use, e.g., HCPICBM'
+  echo '  --space <value>          spacing of template to use, e.g., 1mm'
+  echo '  --dir-save <value>       directory to save output, default varies by function'
+  echo '  --dir-scratch <value>    directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#==============================================================================
+# Start of Function
+#==============================================================================
+TS_RAW=${TS_BOLD}
+
+# Set up BIDs compliant variables and workspace --------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \t setting variables"; fi
+DIR_PROJECT=$(getDir -i ${TS_BOLD})
+PID=$(getField -i ${TS_BOLD} -f sub)
+SID=$(getField -i ${TS_BOLD} -f ses)
+if [[ ! -f "${TS_BOLD}" ]]; then
+  echo "The BOLD file does not exist. Exiting."
+  exit 1
+fi
+if [[ -z "${PREFIX}" ]]; then PREFIX=$(getBidsBase -s -i ${TS_BOLD}); fi
+if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/inc/func; fi
+PIDSTR=sub-${PID}
+DIRPID=sub-${PID}
+if [[ -n "${SID}" ]]; then
+  PIDSTR=${PIDSTR}_ses-${SID}
+  DIRPID=${DIRPID}/ses-${SID}
+fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# check XFM directory
+if [[ -z ${DIR_XFM} ]]; then
+  DIR_XFM=${DIR_PROJECT}/derivatives/inc/xfm/${DIRPID}
+fi
+
+# find anatomical unless given -------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \t getting anatomicals"; fi
+if [[ -z ${NATIVE_ANAT} ]]; then
+  NATIVE_ANAT=($(ls ${DIR_PROJECT}/derivatives/inc/anat/native/${PIDSTR}*${NATIVE_MOD}.nii.gz))
+fi
+if [[ -z ${NATIVE_ANAT} ]] || [[ ! -f ${NATIVE_ANAT} ]]; then
+  echo "Native anatomical not found, aborting."
+  exit 1
+fi
+
+# skull strip anat -------------------------------------------------------------
+if [[ "${MASK_METHOD,,}" == *"apply_anat"* ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tskullstriping anat"; fi
+  if [[ -z ${NATIVE_MASK} ]]; then
+    NATIVE_MASK=${DIR_PROJECT}/derivatives/inc/anat/mask/${PIDSTR}_mask-brain.nii.gz
+  fi
+  if [[ ! -f ${NATIVE_MASK} ]]; then
+    echo "Native anatomical mask not found, aborting."
+    exit 1
+  fi
+  fslmaths ${NATIVE_ANAT} -mas ${NATIVE_MASK} ${DIR_SCRATCH}/${PIDSTR}_roi-mask_${NATIVE_MOD}.nii.gz
+  NATIVE_ANAT=${DIR_SCRATCH}/${PIDSTR}_roi-mask_${NATIVE_MOD}.nii.gz
+fi
+if [[ -n ${NATIVE_MASK} ]] && [[ ! -f ${NATIVE_MASK} ]]; then
+  echo "Native anatomical mask not found, aborting."
+  exit 1
+fi
+
+# get alignment xfm ------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tgetting xfms"; fi
+if [[ -z ${XFM_ALIGN} ]]; then
+  XFM_ALIGN=${DIR_PROJECT}/derivatives/inc/xfm/${DIRPID}/${PIDSTR}_mod-${NATIVE_MOD}_from-raw_to-${TEMPLATE}_xfm-rigid.mat
+  if [[ ! -f ${XFM_ALIGN} ]]; then
+    XFM_ALIGN=($(ls ${DIR_PROJECT}/derivatives/inc/xfm/${DIRPID}/${PIDSTR}_mod-${NATIVE_MOD}_from-raw_to-*_xfm-rigid.mat)) || true
+    if [[ -n ${XFM_ALIGN} ]]; then
+      XFM_ALIGN=${XFM_ALIGN[0]}
+    else
+      echo "Alignment registration not found, continuing with ANTs default initialization."
+      XFM_ALIGN=[${NATIVE_ANAT},${DIR_SCRATCH}/${PREFIX}_avg.nii.gz,1]
+    fi
+  fi
+fi
+
+# get normalization transforms -------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tgetting norm transforms"; fi
+if [[ -z ${XFM_NORM} ]]; then
+  XFM_NORM=($(ls ${DIR_PROJECT}/derivatives/inc/xfm/${DIRPID}/*native_to-${TEMPLATE}*)) || true
+fi
+## for backwards compatibility with different naming schemes
+if [[ -z ${XFM_NORM} ]]; then
+  XFM_NORM=($(ls ${DIR_PROJECT}/derivatives/inc/xfm/${DIRPID}/*${TARGET}+rigid_to-${TEMPLATE}*)) || true
+fi
+if [[ -z ${XFM_NORM} ]]; then
+  XFM_NORM=($(ls ${DIR_PROJECT}/derivatives/xfm/${DIRPID}/*${TARGET}+rigid_to-${TEMPLATE}*)) || true
+fi
+if [[ -z "${XFM_NORM}" ]]; then
+  echo "Normalization transform(s) not found, aborting"
+  exit 1
+fi
+
+unset XFM_STACK XFM_RIGID XFM_AFFINE XFM_SYN
+for (( i=0; i<${#XFM_NORM[@]}; i++ )); do
+  unset XFM_ARG
+  XFM_ARG=$(getField -i ${XFM_NORM[${i}]} -f xfm)
+  if [[ "${XFM_ARG,,}" == "rigid" ]]; then XFM_RIGID=${XFM_NORM[${i}]}; fi
+  if [[ "${XFM_ARG,,}" == "affine" ]]; then XFM_AFFINE=${XFM_NORM[${i}]}; fi
+  if [[ "${XFM_ARG,,}" == "syn" ]]; then XFM_SYN=${XFM_NORM[${i}]}; fi
+  if [[ "${XFM_ARG,,}" == "stack" ]]; then XFM_STACK=${XFM_NORM[${i}]}; fi
+done
+unset XFM_NORM
+if [[ -n "${XFM_STACK}" ]]; then 
+  XFM_NORM=${XFM_STACK}
+else
+  if [[ -n "${XFM_SYN}" ]]; then XFM_NORM+=(${XFM_SYN}); fi
+  if [[ -n "${XFM_AFFINE}" ]]; then XFM_NORM+=(${XFM_AFFINE}); fi
+  if [[ -n "${XFM_RIGID}" ]]; then XFM_NORM+=(${XFM_RIGID}); fi
+fi
+N_XFM=${#XFM_NORM[@]}
+
+# Motion Correction + registration ============================================
+# Get timeseries info ---------------------------------------------------------
+NTR=$(niiInfo -i ${TS_BOLD} -f numTR)
+TR=$(niiInfo -i ${TS_BOLD} -f TR)
+# check in here for 4d file.
+if [[ "${NTR}" == 1 ]]; then
+  echo "Input file is not a 4D file. Aborting."
+  exit 1
+fi
+
+# Motion correction ===========================================================
+# pad image for better registration -------------------------------------------
+if [[ ${PAD} -ne 0 ]]; then
+  #if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tpadding"; fi
+  pad4D --ts ${TS_BOLD} --pad ${PAD} --prefix ${PREFIX}_prep-pad${PAD}_bold --dir-save ${DIR_SCRATCH}
+  #ls ${DIR_SCRATCH}/${PREFIX}*
+  # have to do it this way in case PREFIX is set different
+  TS_BOLD=$(ls ${DIR_SCRATCH}/${PREFIX}*_prep-pad${PAD}_bold.nii.gz)
+  TS_BOLD=${TS_BOLD[0]}
+  #TS_BOLD="${DIR_SCRATCH}/$(modField -i ${PREFIX} -a -f prep -v pad${PAD})_bold.nii.gz"
+fi
+
+# initialize mean BOLD ---------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo ">>> initialize mean BOLD, using: ${TS_BOLD}"
+  echo -e ">>> \tshould be padded"
+fi
+antsMotionCorr -d 3 -a ${TS_BOLD} -o ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz
+
+# rigid body motion correction to mean BOLD (6 df) -----------------------------
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo -e ">>> \tmoco to mean BOLD"
+fi
+antsMotionCorr \
+  -d 3 -u 1 -e 1 -n ${NTR} -v ${ANTS_VERBOSE} \
+  -o [${DIR_SCRATCH}/${PREFIX}_rigid_,${DIR_SCRATCH}/${PREFIX}.nii.gz,${DIR_SCRATCH}/${PREFIX}_avg.nii.gz] \
+  -t Rigid[0.1] \
+  -m MI[${DIR_SCRATCH}/${PREFIX}_avg.nii.gz,${TS_BOLD},1,32,Regular,0.2] \
+  -i 20x15x5x1 \
+  -s 3x2x1x0 \
+  -f 4x3x2x1
+
+cat ${DIR_SCRATCH}/${PREFIX}_rigid_MOCOparams.csv | tail -n+2 > ${DIR_SCRATCH}/temp.csv
+cut -d, -f1-2 --complement ${DIR_SCRATCH}/temp.csv > ${DIR_SCRATCH}/${PREFIX}_moco+6.1D
+sed -i 's/,/\t/g' ${DIR_SCRATCH}/${PREFIX}_moco+6.1D
+rm ${DIR_SCRATCH}/temp.csv
+rm ${DIR_SCRATCH}/${PREFIX}_rigid_MOCOparams.csv
+
+# Affine registration to mean BOLD ---------------------------------------------
+antsMotionCorr \
+  -d 3 -u 1 -e 1 -n ${NTR} -l 1 -v ${ANTS_VERBOSE} \
+  -o [${DIR_SCRATCH}/${PREFIX}_affine_,${DIR_SCRATCH}/${PREFIX}.nii.gz,${DIR_SCRATCH}/${PREFIX}_avg.nii.gz] \
+  -t Affine[0.1] \
+  -m MI[${DIR_SCRATCH}/${PREFIX}_avg.nii.gz,${TS_BOLD},1,32,Regular,0.2] \
+  -i 20x15x5x1 \
+  -s 3x2x1x0 \
+  -f 4x3x2x1
+
+cat ${DIR_SCRATCH}/${PREFIX}_affine_MOCOparams.csv | tail -n+2 > ${DIR_SCRATCH}/temp.csv
+cut -d, -f1-2 --complement ${DIR_SCRATCH}/temp.csv > ${DIR_SCRATCH}/${PREFIX}_moco+12.1D
+sed -i 's/,/\t/g' ${DIR_SCRATCH}/${PREFIX}_moco+12.1D
+rm ${DIR_SCRATCH}/temp.csv
+rm ${DIR_SCRATCH}/${PREFIX}_affine_MOCOparams.csv
+
+# get brain mask of mean BOLD -------------------------------------------------
+if [[ "${MASK_TOOL,,}" == "bet" ]]; then
+  bet ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+    ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz -m -n
+  mv ${DIR_SCRATCH}/${PREFIX}_mask-brain_mask.nii.gz \
+    ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz
+fi
+if [[ "${MASK_TOOL,,}" == "automask" ]] || [[ "${MASK_TOOL,,}" == "afni" ]]; then
+  echo "Using 3dAutomask to mask mean bold with clfrac = ${MASK_CLFRAC}"
+  3dAutomask \
+    -prefix ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz  \
+    -clfrac ${MASK_CLFRAC} -q \
+    ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz
+  CopyImageHeaderInformation ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+    ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+    ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz 1 1 1
+fi
+if [[ "${MASK_TOOL,,}" == "thresh" ]]; then
+  if [[ "${MASK_THRESH,,}" == "auto" ]]; then
+    MASK_THRESH=$(fslstats ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz -P 99)
+    MASK_THRESH=$(echo "scale=0; ${MASK_THRESH} / 2" | bc -l)
+    echo "MASK THRESHOLD (AUTO): ${MASK_THRESH}"
+  fi 
+  fslmaths ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+    -thr ${MASK_THRESH} -bin \
+    ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz -odt char
+  cluster --in=${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+    --thresh=1 --oindex=${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz
+  MAX=$(fslstats ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz -P 100)
+  MAX=$(printf "%.0f" ${MAX})
+  flsmaths ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+    -thr ${MAX} -bin -fillh \
+    ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz -odt char
+fi
+
+make3Dpng --bg ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+  --fg ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+  --fg-color "transparent,#FFB469" --fg-alpha 25 --fg-cbar false \
+  --layout "9:x;9:x;9:x" \
+  --offset "0,0,0" \
+  --no-slice-label --no-lr-label \
+  --filename ${PREFIX}_mask-brain+init \
+  --dir-save ${DIR_SAVE}/qc
+
+# skullstrip func for better reg ----------------------------------------------
+AVG_MASK_STR=
+if [[ "${MASK_METHOD,,}" == *"apply_func"* ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tskullstriping func"; fi
+  fslmaths ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+    -mas ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+    ${DIR_SCRATCH}/${PREFIX}_roi-mask_avg.nii.gz
+  AVG_MASK_STR=roi-mask_
+fi
+
+# Registration to subject space -----------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tregistration to subject space"; fi
+ants_fcn="antsRegistration --random-seed 16049644"
+ants_fcn="${ants_fcn} -d 3 -u 0 -z 1 -l 1 -n Linear -v ${ANTS_VERBOSE}"
+ants_fcn="${ants_fcn} -o ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_"
+ants_fcn="${ants_fcn} -r ${XFM_ALIGN}"
+ants_fcn="${ants_fcn} -t Rigid[0.25]"
+ants_fcn="${ants_fcn} -m Mattes[${NATIVE_ANAT},${DIR_SCRATCH}/${PREFIX}_${AVG_MASK_STR}avg.nii.gz,1,32,Regular,0.2]"
+ants_fcn="${ants_fcn} -c [1200x1200x100,1e-6,5]"
+ants_fcn="${ants_fcn} -f 4x2x1"
+ants_fcn="${ants_fcn} -s 2x1x0vox"
+if [[ "${MASK_METHOD,,}" == *"restrict"* ]]; then
+  ants_fcn="${ants_fcn} -x [${NATIVE_MASK},${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz]"
+fi
+ants_fcn="${ants_fcn} -t Affine[0.25]"
+ants_fcn="${ants_fcn} -m Mattes[${NATIVE_ANAT},${DIR_SCRATCH}/${PREFIX}_${AVG_MASK_STR}avg.nii.gz,1,32,Regular,0.2]"
+ants_fcn="${ants_fcn} -c [200x20,1e-6,5]"
+ants_fcn="${ants_fcn} -f 2x1"
+ants_fcn="${ants_fcn} -s 1x0vox"
+if [[ "${MASK_METHOD,,}" == *"restrict"* ]]; then
+  ants_fcn="${ants_fcn} -x [${NATIVE_MASK},${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz]"
+fi
+ants_fcn="${ants_fcn} -t SyN[0.2,3,0]"
+ants_fcn="${ants_fcn} -m Mattes[${NATIVE_ANAT},${DIR_SCRATCH}/${PREFIX}_${AVG_MASK_STR}avg.nii.gz,1,32]"
+if [[ "${EXTRA_SYN}" == "true" ]]; then
+  ants_fcn="${ants_fcn} -c [80x40x10,1e-7,8]"
+else
+  ants_fcn="${ants_fcn} -c [40x20x0,1e-7,8]"
+fi
+ants_fcn="${ants_fcn} -f 4x2x1"
+ants_fcn="${ants_fcn} -s 2x1x0vox"
+if [[ "${MASK_METHOD,,}" == *"restrict"* ]]; then
+  ants_fcn="${ants_fcn} -x [${NATIVE_MASK},${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz]"
+fi
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo -e "\n***coregistration Mean BOLD to ANATOMICAL:\n${ants_fcn}\n"
+fi
+eval ${ants_fcn}
+
+# push transforms to native space for qc ---------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tpush transforms to NATIVE space for qc"; fi
+antsApplyTransforms -d 3 \
+  -o ${DIR_SCRATCH}/${PREFIX}_avg+warpToNative.nii.gz \
+  -i ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+  -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_1Warp.nii.gz \
+  -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_0GenericAffine.mat \
+  -r ${NATIVE_ANAT}
+antsApplyTransforms -d 3 -n NearestNeighbor\
+  -o ${DIR_SCRATCH}/${PREFIX}_mask-brain+warpToNative.nii.gz \
+  -i ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz\
+  -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_1Warp.nii.gz\
+  -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_0GenericAffine.mat\
+  -r ${NATIVE_ANAT}
+make3Dpng --bg ${DIR_SCRATCH}/${PREFIX}_avg+warpToNative.nii.gz \
+  --fg ${DIR_SCRATCH}/${PREFIX}_mask-brain+warpToNative.nii.gz \
+  --fg-color "transparent,#FFB469" --fg-alpha 25 --fg-cbar false \
+  --layout "9:x;9:x;9:x" \
+  --offset "0,0,0" \
+  --no-slice-label --no-lr-label \
+  --filename ${PREFIX}_warpToNative \
+  --dir-save ${DIR_SAVE}/qc
+
+# check if desired space template exists, if not resample ----------------------
+TRG=${INC_TEMPLATE}/${TEMPLATE}/${SPACE}/${TEMPLATE}_${SPACE}_${TEMPLATE_MOD}.nii.gz
+if [[ ! -f ${TRG} ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tresampling template"; fi
+  ## find highest resolution version of template
+  MINSZ=99999
+  SZ=($(ls ${INC_TEMPLATE}/${TEMPLATE}))
+  for (( i=0; i<${#SZ[@]}; i++ )); do
+    if [[ "${SZ[${i}]}" == *"mm"* ]]; then
+      SZ[${i}]=$(ezMath -x "${SZ[${i}]::-2}*1000" -d 0)
+    else
+      SZ[${i}]=$(echo ${SZ[${i}]::-2})
+    fi
+    if [[ ${SZ[${i}]} -lt ${MINSZ} ]]; then
+      MINSZ=${SZ[${i}]}
+      TSZ=${SZ[${i}]}
+    fi
+  done
+  TSRC=${INC_TEMPLATE}/${TEMPLATE}/${TSZ}/${TEMPLATE}_${TSZ}_T1w.nii.gz
+
+  # convert space inout to string for resampling
+  SPACESTR=$(convSpacing -i ${SPACE})
+
+  ResampleImage 3 ${TSRC} \
+    ${DIR_SCRATCH}/template_resampled_${SPACE}.nii.gz \
+    ${SPACESTR} 0 0 6
+  TRG=${DIR_SCRATCH}/template_resampled_${SPACE}.nii.gz
+fi
+
+# Push mean bold to template ---------------------------------------------------
+## depad mean bold
+if [[ ${PAD} -ne 0 ]]; then
+  ImageMath 3 ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz \
+    PadImage ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz "-${PAD}"
+fi
+
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tpush mean BOLD to template"; fi
+unset xfm_fcn
+xfm_fcn="antsApplyTransforms -d 3"
+xfm_fcn="${xfm_fcn} -o ${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz"
+xfm_fcn="${xfm_fcn} -i ${DIR_SCRATCH}/${PREFIX}_avg.nii.gz"
+for (( i=0; i<${N_XFM}; i++ )); do
+  xfm_fcn="${xfm_fcn} -t ${XFM_NORM[${i}]}"
+done
+xfm_fcn="${xfm_fcn} -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_1Warp.nii.gz"
+xfm_fcn="${xfm_fcn} -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_0GenericAffine.mat"
+xfm_fcn="${xfm_fcn} -r ${TRG}"
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo -e "\n***mean BOLD to template:\n${xfm_fcn}\n"
+fi
+eval ${xfm_fcn}
+
+# push bold brain mask to template as well, useful for QC ----------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tpush BOLD mask to template for qc"; fi
+unset xfm_fcn
+xfm_fcn="antsApplyTransforms -d 3 -n NearestNeighbor"
+xfm_fcn="${xfm_fcn} -o ${DIR_SCRATCH}/${PREFIX}_mask-brain+warp.nii.gz"
+xfm_fcn="${xfm_fcn} -i ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz"
+for (( i=0; i<${N_XFM}; i++ )); do
+  xfm_fcn="${xfm_fcn} -t ${XFM_NORM[${i}]}"
+done
+xfm_fcn="${xfm_fcn} -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_1Warp.nii.gz"
+xfm_fcn="${xfm_fcn} -t ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_0GenericAffine.mat"
+xfm_fcn="${xfm_fcn} -r ${TRG}"
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo -e "\n***BOLD brain mask to template:\n${xfm_fcn}\n"
+fi
+eval ${xfm_fcn}
+
+# push transforms to template space for qc ---------------------------------------
+make3Dpng --bg ${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz \
+  --fg ${DIR_SCRATCH}/${PREFIX}_mask-brain+warp.nii.gz \
+  --fg-color "transparent,#FFB469" --fg-alpha 25 --fg-cbar false \
+  --layout "9:x;9:x;9:x" \
+  --offset "0,0,0" \
+  --no-slice-label --no-lr-label \
+  --filename ${PREFIX}_warpToTemplate \
+  --dir-save ${DIR_SAVE}/qc
+
+# redo motion correction to normalized mean bold ------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tredo moco to normalized mean BOLD"; fi
+antsMotionCorr \
+  -d 3 -u 1 -e 1 -n ${NTR} -l 1 -v ${ANTS_VERBOSE} \
+  -o [${DIR_SCRATCH}/${PREFIX}_moco+warp_,${DIR_SCRATCH}/${PREFIX}_moco+warp.nii.gz,${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz] \
+  -t Rigid[0.25] \
+    -m MI[${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz,${TS_BOLD},1,32,Regular,0.2] \
+    -i 20x15x5x1 \
+    -s 3x2x1x0 \
+    -f 4x3x2x1 \
+  -t Affine[0.25] \
+    -m MI[${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz,${TS_BOLD},1,32,Regular,0.2] \
+    -i 20x15x5x1 \
+    -s 3x2x1x0 \
+    -f 4x3x2x1 \
+  -t SyN[0.2,3,0] \
+    -m MI[${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz,${TS_BOLD},1,32,Regular,0.2] \
+    -i 20x15x5x1 \
+    -s 3x2x1x0 \
+    -f 4x3x2x1
+
+# Move files to appropriate locations -----------------------------------------
+DIR_REGRESSOR=${DIR_SAVE}/regressors/${DIRPID}
+mkdir -p ${DIR_REGRESSOR}
+mkdir -p ${DIR_SAVE}/mask
+mkdir -p ${DIR_SAVE}/moco_${TEMPLATE}+${SPACE}
+mkdir -p ${DIR_SAVE}/mean_${TEMPLATE}+${SPACE}
+
+mv ${DIR_SCRATCH}/${PREFIX}_moco+6.1D \
+  ${DIR_REGRESSOR}/${PREFIX}_reg-${TEMPLATE}+${SPACE}_moco+6.1D
+mv ${DIR_SCRATCH}/${PREFIX}_moco+12.1D \
+  ${DIR_REGRESSOR}/${PREFIX}_reg-${TEMPLATE}+${SPACE}_moco+12.1D
+
+## move raw space brain mask - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Depad brain mask
+if [[ ${PAD} -ne 0 ]]; then
+  ImageMath 3 ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+    PadImage ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz "-${DEPAD}"
+fi
+
+# get raw whole brain time series
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>> \tget timeseries"; fi
+antsApplyTransforms -d 3 -n GenericLabel \
+  -i ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+  -o ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+  -r ${TS_RAW}
+fslmeants -i ${TS_RAW} -o ${DIR_REGRESSOR}/${PREFIX}_ts-brain+raw.1D \
+  --label=${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz
+mv ${DIR_SCRATCH}/${PREFIX}_mask-brain.nii.gz \
+  ${DIR_SAVE}/mask/${PREFIX}_acq-bold_mask-brain.nii.gz
+
+## move normalized brain mask - - - - - - - - - - - - - - - - - - - - - - - - -
+# get mocoReg whole brain time series
+fslmeants -i ${DIR_SCRATCH}/${PREFIX}_moco+warp.nii.gz \
+  -o ${DIR_REGRESSOR}/${PREFIX}_ts-brain+mocoReg.1D \
+  --label=${DIR_SCRATCH}/${PREFIX}_mask-brain+warp.nii.gz
+mv ${DIR_SCRATCH}/${PREFIX}_mask-brain+warp.nii.gz \
+  ${DIR_SAVE}/mask/${PREFIX}_reg-${TEMPLATE}+${SPACE}_acq-bold_mask-brain.nii.gz
+
+## move moco+normalized bold TS - - - - - - - - - - - - - - - - - - - - - - - -
+mv ${DIR_SCRATCH}/${PREFIX}_moco+warp.nii.gz \
+  ${DIR_SAVE}/moco_${TEMPLATE}+${SPACE}/${PREFIX}_reg-${TEMPLATE}+${SPACE}_bold.nii.gz
+
+## move moco+normalized mean bold - - - - - - - - - - - - - - - - - - - - - - -
+mv ${DIR_SCRATCH}/${PREFIX}_avg+warp.nii.gz \
+  ${DIR_SAVE}/mean_${TEMPLATE}+${SPACE}/${PREFIX}_reg-${TEMPLATE}+${SPACE}_proc-mean_bold.nii.gz
+
+## save coregistration transforms to xfm folder - - - - - - - - - - - - - - - -
+mv ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_1Warp.nii.gz \
+  ${DIR_XFM}/${PREFIX}_mod-bold_from-raw_to-native_xfm-syn.nii.gz
+mv ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_1InverseWarp.nii.gz \
+  ${DIR_XFM}/${PREFIX}_mod-bold_from-raw_to-native_xfm-syn+inverse.nii.gz
+mv ${DIR_SCRATCH}/${PREFIX}_xfm_toNative_0GenericAffine.mat \
+  ${DIR_XFM}/${PREFIX}_mod-bold_from-raw_to-native_xfm-affine.mat
+
+if [[ "${KEEP}" == "true" ]]; then
+  mkdir -p ${DIR_PROJECT}/derivatives/inc/prep/${DIRPID}/func/
+  mv ${DIR_SCRATCH}/* ${DIR_PROJECT}/derivatives/inc/prep/${DIRPID}/func/
+fi
+
+# generate output PNGs ---------------------------------------------------------
+if [[ "${NO_PNG}" == "false" ]]; then
+  ## mean bold overlay on template, masked with brain mask
+  make3Dpng --bg ${TRG} \
+    --fg ${DIR_SAVE}/mean_${TEMPLATE}+${SPACE}/${PREFIX}_reg-${TEMPLATE}+${SPACE}_proc-mean_bold.nii.gz \
+    --fg-mask ${DIR_SAVE}/mask/${PREFIX}_reg-${TEMPLATE}+${SPACE}_acq-bold_mask-brain.nii.gz \
+    --fg-color "hot" --fg-alpha 50 \
+    --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
+    --offset "0,0,0" \
+    --no-slice-label --no-lr-label \
+    --filename ${PREFIX}_reg-${TEMPLATE}+${SPACE}_proc-mean_bold \
+    --dir-save ${DIR_SAVE}/mean_${TEMPLATE}+${SPACE}
+
+  ## image of slices in 4d
+  make4Dpng --bg ${TRG} \
+    --fg ${DIR_SAVE}/moco_${TEMPLATE}+${SPACE}/${PREFIX}_reg-${TEMPLATE}+${SPACE}_bold.nii.gz \
+    --fg-mask ${DIR_SAVE}/mask/${PREFIX}_reg-${TEMPLATE}+${SPACE}_acq-bold_mask-brain.nii.gz \
+    --fg-color "hot" --fg-alpha 50 --layout "5x11" --plane "z" --slice 0.51 \
+    --no-slice-label --no-lr-label \
+    --filename ${PREFIX}_reg-${TEMPLATE}+${SPACE}_bold \
+    --dir-save ${DIR_SAVE}/moco_${TEMPLATE}+${SPACE}
+fi
+
+echo -e ">>> \t***MOCO COMPLETES***"
+#===============================================================================
+# End of function
+#===============================================================================
+exit 0
+

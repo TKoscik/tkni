@@ -1,0 +1,129 @@
+#!/bin/bash -e
+#===============================================================================
+# Reorient Image to RPI
+# Authors: Timothy R. Koscik, PhD
+# Date: 2020-09-22
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hlvn --long prefix:,image:,dir-save:,\
+help,no-log,no-png,verbose -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+IMAGE=
+DIR_SAVE=
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  -n | --no-png            disable PNG output'
+  echo '  --prefix <value>         scan prefix,'
+  echo '                           default: sub-123_ses-1234abcd'
+  echo '  --image <value>          directory listing of image to process'
+  echo '  --dir-save <value>       directory to save output'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# Set up BIDs compliant variables and workspace --------------------------------
+if [[ -z "${PREFIX}" ]]; then
+  PREFIX=$(getBidsBase -s -i ${IMAGE})
+  PREP=$(getField -i ${PREFIX} -f prep)
+  if [[ -n ${PREP} ]]; then
+    PREP="${PREP}+"
+    PREFIX=$(modField -i ${PREFIX} -r -f prep)
+  fi
+fi
+
+if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
+mkdir -p ${DIR_SAVE}
+
+# Reorient image ---------------------------------------------------------------
+MOD=$(getField -i ${IMAGE} -f modality)
+
+rs_fcn="3dresample -orient rpi"
+rs_fcn="${rs_fcn} -overwrite"
+rs_fcn="${rs_fcn} -prefix ${DIR_SAVE}/${PREFIX}_prep-${PREP}reorient_${MOD}.nii.gz"
+rs_fcn="${rs_fcn} -input ${IMAGE}"
+
+#writeScript -d ${DIR_PROJECT} -p "sub-${PID}_ses-${SID}" -s "${rs_fcn}"
+if [[ "${VERBOSE}" == "true" ]]; then echo -e "Reorient Image to RPI >>>\n\t${rs_fcn}"; fi
+
+eval ${rs_fcn}
+
+# generate PNG -----------------------------------------------------------------
+if [[ "${NO_PNG}" == "false" ]]; then
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_prep-${PREP}reorient_${MOD}.nii.gz
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+if [[ "${VERBOSE}" == "true" ]]; then echo -e "\tDONE"; fi
+exit 0
+
+

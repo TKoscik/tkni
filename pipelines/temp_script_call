@@ -1,0 +1,214 @@
+PI=evanderplas
+PROJECT=unitcall
+DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+
+PIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f participant_id))
+SIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f session_id))
+AIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f assessment_id))
+
+for (( i=1; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniAINIT.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+done
+
+for (( i=1; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniMALF.sh
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+  /usr/local/tkni/pipelines/tkniANTSCX.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+  /usr/local/tkni/pipelines/tkniREFINE.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+done
+
+for (( i=2; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniTSEG.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+done
+
+
+
+LABELS=("aparc.a2009s+aseg+MALF" "aparc.DKTatlas+aseg+MALF" "aparc+aseg+MALF" "wmparc+MALF")
+for (( j=0; j<${#LABELS[@]}; j++ )); do
+  for (( i=1; i<${#PIDLS[@]}; i++ )); do
+    IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+    IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+    /usr/local/tkni/pipelines/tkniREFINE.sh \
+      --pi ${PI} --project ${PROJECT} \
+      --id ${IDPFX} --dir-id ${IDDIR} \
+      --label ${LABELS[${j}]}
+  done
+done
+
+for (( i=3; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniREFINE.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR} \
+    --label "hcpmmp1+MALF"
+  echo -e "${i}\t$IDPFX DONE"
+done
+
+
+
+for (( i=2; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniDCON.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+  echo -e "${i}\t$IDPFX DONE"
+done
+
+
+
+
+
+
+
+for (( i=1; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniFSSYNTH.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+done
+
+
+for (( i=1; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPELINE}
+  DIR_SAVE=${DIR_PIPE}/anat
+  IMAGE=${DIR_PIPE}/anat/native/${IDPFX}_T1w.nii.gz;
+  ROIS=("gm" "gmDeep" "wm" "csf")
+  for (( i=0; i<${#ROIS[@]}; i++ )); do
+    ROI=${ROIS[${i}]}
+    make3Dpng --bg ${IMAGE} \
+      --fg ${DIR_SAVE}/posterior/${IDPFX}_posterior-${ROI}.nii.gz \
+      --fg-color "hot" --fg-cbar "true" --fg-alpha 50 --fg-threshold 20,100 \
+      --layout "9:z;9:z;9:z" --offset "0,0,0" \
+      --filename ${IDPFX}_posterior-${ROI} \
+      --dir-save ${DIR_SAVE}/posterior
+  done
+done
+
+
+
+
+
+
+
+
+
+
+
+for (( i=2; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  /usr/local/tkni/pipelines/tkniFUNK.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR} \
+    --verbose
+  echo -e "${i}\t$IDPFX DONE"
+done
+
+for (( i=2; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  LABEL=${DIR_PROJECT}/derivatives/tkni/anat/label/REFINE/${IDPFX}_label-hcpmmp1+REFINE.nii.gz
+  /usr/local/tkni/pipelines/tkniFCON.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR} \
+    --label ${LABEL} \
+    --verbose
+  echo -e "${i}\t$IDPFX DONE"
+done
+
+for (( i=2; i<${#PIDLS[@]}; i++ )); do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  LABEL=${DIR_PROJECT}/derivatives/tkni/anat/label/REFINE/${IDPFX}_label-hcpmmp1+REFINE.nii.gz
+  /usr/local/tkni/pipelines/tkniFCON.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR} \
+    --label ${LABEL} \
+    --verbose
+  echo -e "${i}\t$IDPFX DONE"
+done
+
+
+PI=evanderplas
+PROJECT=unitcall
+DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+PIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f participant_id))
+SIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f session_id))
+AIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f assessment_id))
+for i in {15..21}; do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  LABEL=${DIR_PROJECT}/derivatives/tkni/anat/label/REFINE/${IDPFX}_label-hcpmmp1+REFINE.nii.gz
+  /usr/local/tkni/pipelines/tkniFCON.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR} \
+    --label ${LABEL} \
+    --verbose
+  echo -e "${i}\t$IDPFX DONE"
+done
+
+
+tree -P ${IDPFX}* -RF --prune --nolinks -T "" --charset "ISO-8859-1" -o ${DIR_PROJECT}/test.html -H ${DIR_PROJECT} ${DIR_PROJECT}
+pandoc ${DIR_PROJECT}/test.html -t latex -o ${DIR_PROJECT}/test.pdf
+
+
+PI=evanderplas
+PROJECT=unitcall
+DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+PIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f participant_id))
+SIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f session_id))
+AIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f assessment_id))
+for i in {2..21}; do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+  DIR_SCRATCH=/scratch/do_jacobian
+  mkdir -p ${DIR_SCRATCH}
+  rm ${DIR_SCRATCH}/*
+  DIR_XFM=${DIR_PROJECT}/derivatives/tkni/xfm/${IDDIR}
+  TEMPLATE_LAB="HCPYAX+700um"
+  XFM_NORIGID=${DIR_SCRATCH}/xfm_norigid.mat
+  XFM_SYN=${DIR_XFM}/${IDPFX}_from-native_to-${TEMPLATE_LAB}_xfm-syn.nii.gz
+  AverageAffineTransformNoRigid 3 ${XFM_NORIGID} \
+    -i ${DIR_XFM}/${IDPFX}_from-native_to-${TEMPLATE_LAB}_xfm-affine.mat
+  mapJacobian --prefix ${IDPFX} \
+    --xfm "${XFM_SYN},${XFM_RIGID}" \
+    --ref-image ${FIXED} \
+    --from "native" --to ${TEMPLATE_LAB} \
+    --dir-save ${DIR_PROJECT}/derivatives/tkni/anat/outcomes
+done
+
+
+
+PI=evanderplas
+PROJECT=unitcall
+DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+PIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f participant_id))
+SIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f session_id))
+AIDLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f assessment_id))
+for i in {2..21}; do
+  IDPFX=sub-${PIDLS[${i}]}_ses-${SIDLS[${i}]}_aid-${AIDLS[${i}]}
+  IDDIR=sub-${PIDLS[${i}]}/ses-${SIDLS[${i}]}
+   /usr/local/tkni/pipelines/tkniSUMMARY.sh \
+    --pi ${PI} --project ${PROJECT} \
+    --id ${IDPFX} --dir-id ${IDDIR}
+done

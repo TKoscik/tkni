@@ -1,0 +1,157 @@
+#!/bin/bash
+#===============================================================================
+# Reorient Image
+# Authors: Timothy R. Koscik, PhD
+# Date: 2020-02-23
+# Software: AFNI, ANTs, FSL
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvn --long image:,prefix:,\
+observed-orient:,target-orient:,flip-lr,conv-short,\
+dir-save:,dir-scratch:,\
+help,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values ----------------------------------------------------------
+IMAGE=
+PREFIX=
+OBS_ORIENT="LSA"
+TRG_ORIENT="RPI"
+FLIP_LR="false"
+CONV_SHORT="false"
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --observed-orient) OBS_ORIENT="$2" ; shift 2 ;;
+    --target-orient) TRG_ORIENT="$2" ; shift 2 ;;
+    --flip-lr) FLIP_LR="true" ; shift ;;
+    --conv-short) CONV_SHORT="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help        display command help'
+  echo '  -v | --verbose     add verbose output to log file'
+  echo '  -n | --no-png      disable generating pngs of output'
+  echo '  --image            NIFTI image to reorient'
+  echo '  --prefix           prefix for output file'
+  echo '  --observed-orient  observed orientation in image'
+  echo '  --target-orient    target orientation'
+  echo '  --flip-lr          add L/R flip'
+  echo '  --conv-short       convert output to UINT16 (SHORT)'
+  echo '  --dir-save         output directory, defaults to directory of input'
+  echo '  --dir-scratch      scartch location'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
+if [[ -z ${PREFIX} ]]; then
+  PREFIX=$(getBidsBase -i ${IMAGE})
+  OUTNAME=$(modField -i ${PREFIX} -a -f "prep" -v "reorient" )
+fi
+
+mkdir -p ${DIR_SCRATCH}
+REORIENT=${DIR_SCRATCH}/reorient.nii.gz
+
+# Change orientation to match actual acquisition -------------------------------
+## orientation from nifti header will still be wrong, this just reorients the
+## file to match what was in the original header, hence the next step to restore
+## the original header that will then match the image orientation
+3dresample -orient ${OBS_ORIENT} -overwrite -prefix ${REORIENT} -input ${IMAGE}
+CopyImageHeaderInformation ${IMAGE} ${REORIENT} ${REORIENT} 1 1 0
+
+# As needed perform an additional LR flip --------------------------------------
+## this appears necessary for UHR Postmortem images
+if [[ "${FLIP_LR}" == "true" ]]; then
+  3dLRflip -LR -overwrite  ${REORIENT} ${REORIENT}
+fi
+
+# Resample to target orientation (RPI) -----------------------------------------
+3dresample -orient ${TRG_ORIENT} -overwrite -prefix ${REORIENT} -input ${REORIENT}
+
+# Apply identity transform -----------------------------------------------------
+## ensures that image is in the correct orientation and the transforms in the
+## header of the nifti file match the ordering of the binary portion of the file.
+antsApplyTransforms -d 3 -n Bspline[3] \
+    -i ${REORIENT} -o ${REORIENT} -r ${REORIENT} -t identity
+
+# Reformat ---------------------------------------------------------------------
+## if desired reformat to be a short integer, INT16
+if [[ "${CONV_SHORT}" == "true" ]]; then
+  fslmaths ${REORIENT} ${REORIENT} -odt short
+fi
+
+# Save output
+mv ${REORIENT} ${DIR_SAVE}/${OUTNAME}.nii.gz
+
+# draw pngs
+if [[ "${NO_PNG}" == "false" ]]; then
+  make3Dpng --bg ${IMAGE} --dir-save ${DIR_SAVE}
+  make3Dpng --bg ${DIR_SAVE}/${OUTNAME}.nii.gz --dir-save ${DIR_SAVE}
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+if [[ "${VERBOSE}" == "true" ]]; then echo -e "${FCN_NAME}\tDONE"; fi
+exit 0

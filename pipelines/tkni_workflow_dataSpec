@@ -1,0 +1,102 @@
+
+└───${PI}
+    └───${PROJECT}
+        ├───code/
+        ├───derivatives/
+        │   ├───fsSynth/
+        │   │   ├───${IDPFX}/
+        │   │   │   ├───label/
+        │   │   │   ├───mri/
+        │   │   │   ├───scripts/
+        │   │   │   ├───stats/
+        │   │   │   ├───surf/
+        │   │   │   ├───tmp/
+        │   │   │   ├───touch/
+        │   │   │   └───trash/
+        │   │   └───fsaverage/
+        │   ├───mrtrix/
+        │   │   └───${IDPFX}/
+        │   │       ├───ANAT/
+        │   │       ├───DWI/
+        │   │       └───XFM/
+        │   └───tkni/
+        │       ├───anat/
+        │       │   ├───label/
+        │       │   │   ├───ANTSCX/
+        │       │   │   ├───fsSynth/
+        │       │   │   ├───MALF/
+        │       │   │   ├───REFINE/
+        │       │   │   └───${IDPFX}_label-*.nii.gz
+        │       │   ├───mask/
+        │       │   │   ├───AINIT/
+        │       │   │   ├───ANTSCX/
+        │       │   │   ├───fsSynth/
+        │       │   │   ├───MALF/
+        │       │   │   ├───${IDPFX}_mask-fg.nii.gz
+        │       │   │   └───${IDPFX}_mask-brain.nii.gz
+        │       │   ├───native/
+        │       │   │   ├───dwi/
+        │       │   │   └───fsSynth/
+        │       │   ├───outcome/
+        │       │   │   ├───jacobian_${TEMPLATE}/
+        │       │   │   ├───myelin/
+        │       │   │   ├───thickness/
+        │       │   │   │   ├───ANTSCX/
+        │       │   │   │   ├───5tt/
+        │       │   │   │   └───${IDPFX}_thickness.nii.gz
+        │       │   │   └───<misc. scalar maps>
+        │       │   ├───posterior/
+        │       │   └───reg_${TEMPLATE}/
+        │       ├───dwi/
+        │       │   ├───connectome/
+        │       │   ├───preproc/
+        │       │   │   ├───b0/
+        │       │   │   ├───dwi/
+        │       │   │   ├───mask/
+        │       │   │   ├───qc/
+        │       │   ├───scalar/
+        │       │   │   ├───AD/
+        │       │   │   ├───ADC/
+        │       │   │   ├───FA/
+        │       │   │   ├───RD/
+        │       │   │   ├───AFD/
+        │       │   │   └───Dispersion/
+        │       │   └───tensor/
+        │       │       ├───${IDPFX}_tensor-kurtosis.nii.gz
+        │       │       └───${IDPFX}_tensor-diffusion.nii.gz
+        │       ├───func/
+        │       │   ├───clean/
+        │       │   ├───connectivity/
+        │       │   ├───mask/
+        │       │   ├───mean/
+        │       │   ├───qc/
+        │       │   │   └───${IDDIR}/
+        │       │   ├───regressor/
+        │       │   │   └───${IDDIR}/
+        │       │   ├───residual_native/
+        │       │   ├───residual_${TEMPLATE}/
+        │       │   ├───rsfc_parameters/
+        │       │   ├───stbs/ # task only
+        │       │   └───ts/
+        │       │       └───${IDPFX}_label-${LABEL}_ts.csv
+        │       ├───prep\
+        │       │   └───${IDDIR}/
+        │       │       └───<WORKFLOW>\
+        │       └───xfm/
+        │           └───${IDDIR}/
+        ├───qc/
+        │   └───${IDDIR}
+        ├───rawdata/
+        │   └───${IDDIR}
+        │       ├───anat/
+        │       ├───dwi/
+        │       ├───fmap/
+        │       ├───func/
+        │       └───mrs/
+        ├───status/
+        │   └───<WORKFLOW>\
+        ├───sourcedata/
+        │   └───${IDPFX}_dicom.zip
+        ├───summary
+        └───participants.tsv
+

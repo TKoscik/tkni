@@ -1,0 +1,169 @@
+#!/bin/bash -e
+#===============================================================================
+# Convert DICOM to NIfTI1, designed to work with automatic XNAT downloads
+# Authors: Timothy R. Koscik, PhD
+# Date: 2021-01-21
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+HPC_Q=${QUEUE}
+HPC_SLOTS=${NSLOTS}
+KEEP=false
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ "${KEEP}" == "false" ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    unset LOGSTR
+    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
+    writeLog --benchmark --string ${LOGSTR}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long \
+input:,dir-save:,dcm-version:,depth:,reorient:,dir-scratch:,\
+help,verbose,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+INPUT=
+DIR_SAVE=
+DCM_VERSION=
+DEPTH=5
+REORIENT=rpi
+HELP=false
+DIR_SCRATCH=${TKNI_SCRATCH}/dicomConversion_${DATE_SUFFIX}
+VERBOSE=0
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --input) INPUT="$2" ; shift 2 ;;
+    --dcm-version) DCM_VERSION="$2" ; shift 2 ;;
+    --depth) DEPTH="$2" ; shift 2 ;;
+    --reorient) REORIENT="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TK_BRAINLab: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo "Usage: ${FCN_NAME}"
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --input <value>          directory listing containing dcm files to'
+  echo '                           convert, must be unzipped'
+  echo '  --dir-save <value>       location to save nifti data'
+  echo '  --dir-scratch <value>    location to extract zipped dicom files for'
+  echo '                           conversion,'
+  echo '                           default=${TKNI_SCRATCH}/dicomConversion_${DATE_SUFFIX}'
+  echo '  --dcm-version <value>    can use any installed version of dcm2niix'
+  echo '          DCM2NIIX versioning is not currently available'
+  echo '  --depth <value>          how far down directory tree to look for dicom'
+  echo '                           files, default=5'
+  echo '  --reorient <value>       three letter code to reorient image, default=rpi'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# check that dcm2niix is installed ---------------------------------------------
+CHK=$(which dcm2niix)
+if [[ -z "${CHK}" ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] dcm2niix is not found on the system install"
+  exit 1
+fi
+
+# initialize output folder -----------------------------------------------------
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# parse inputs -----------------------------------------------------------------
+if [[ -d "${INPUT}" ]]; then
+  if [[ ${VERBOSE} == "true" ]]; then echo "DICOM folder found"; fi
+  DIR_DCM=${INPUT}
+else
+  FNAME="${INPUT##*/}"
+  FEXT="${FNAME##*.}"
+  if [[ "${FEXT,,}" != "zip" ]]; then
+    echo "ERROR [TKNI:${FCN_NAME}] Input must be either a directory or zip file"
+    exit 1
+  fi
+  unzip -qq ${INPUT} -d ${DIR_SCRATCH}
+  DIR_DCM=${DIR_SCRATCH}
+fi
+
+# convert dicoms ---------------------------------------------------------------
+dcm_fcn="dcm2niix"
+dcm_fcn="${dcm_fcn} -b y -z y -d ${DEPTH} -v ${VERBOSE}"
+dcm_fcn="${dcm_fcn} -f '%x_x-x_%n_x-x_%t_x-x_%s_x-x_%d'"
+dcm_fcn="${dcm_fcn} -o ${DIR_SAVE}/"
+dcm_fcn="${dcm_fcn} ${DIR_DCM}"
+if [[ ${VERBOSE} == "true" ]]; then echo ${dcm_fcn}; fi
+eval ${dcm_fcn}
+
+# reorient images --------------------------------------------------------------
+if [[ -n ${REORIENT} ]]; then
+  if [[ "${REORIENT,,}" =~ "r" ]] || [[ "${REORIENT,,}" =~ "l" ]]; then
+    if [[ "${REORIENT,,}" =~ "p" ]] || [[ "${REORIENT,,}" =~ "a" ]]; then
+      if [[ "${REORIENT,,}" =~ "i" ]] || [[ "${REORIENT,,}" =~ "s" ]]; then
+        FLS=($(ls ${DIR_SAVE}/*.nii.gz))
+        N=${#FLS[@]}
+        for (( i=0; i<${N}; i++ )); do
+          CUR_ORIENT=$(3dinfo -orient ${FLS[${i}]})
+          if [[ "${CUR_ORIENT,,}" != "${REORIENT,,}" ]]; then
+            if [[ ${VERBOSE} == "true" ]]; then echo "Reorienting ${i}"; fi
+            mv ${FLS[${i}]} ${DIR_SAVE}/temp.nii.gz
+            3dresample -orient ${REORIENT,,} \
+              -prefix ${FLS[${i}]} \
+              -input ${DIR_SAVE}/temp.nii.gz
+            rm ${DIR_SAVE}/temp.nii.gz
+          fi
+        done
+      fi
+    fi
+  fi
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+

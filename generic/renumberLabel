@@ -1,0 +1,124 @@
+#!/bin/bash -e
+#===============================================================================
+# Renumber Label Set
+# Authors: Timothy R. Koscik
+# Date: 2021-02-09
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hl --long prefix:,\
+label:,lut-orig:,lut-sort:,label-name:,\
+dir-save:,help,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+LABEL=
+LUT_ORIG="default"
+LUT_SORT="default"
+LABEL_NAME=
+DIR_SAVE=
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --label) LABEL="$2" ; shift 2 ;;
+    --lut-orig) LUT_ORIG="$2" ; shift 2 ;;
+    --lut-sort) LUT_SORT="$2" ; shift 2 ;;
+    --label-name) LABEL_NAME="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --dir-save <value>       directory to save output, default varies by function'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of function
+#===============================================================================
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=$(dirname ${LABEL})
+fi
+
+PFX=$(getBidsBase -i ${LABEL} -s)
+if [[ -z ${LABEL_NAME} ]]; then
+  LABEL_NAME=$(getField -i ${LABEL} -f label)
+  LABEL_NAME=(${LABEL_NAME//+/ })
+  LABEL_NAME=${LABEL_NAME[0]}
+fi
+
+# if no lut exists -------------------------------------------------------------
+if [[ ${LUT_SORT} == "rank" ]]; then
+  3dRank -prefix ${DIR_SAVE}/${PFX}_label-${LABEL_NAME}.nii.gz \
+    -input ${LABEL}
+  rm ${DIR_SAVE}/${PFX}_label-${LABEL_NAME}.nii.gz.rankmap.1D
+  exit 0
+fi
+
+# if LUT does exists or use default --------------------------------------------
+if [[ ${LUT_ORIG} == "default" ]]; then
+  LUT_ORIG=${TKNIPATH}/lut/${LABEL_NAME}_original.txt
+fi
+if [[ ${LUT_SORT} == "default" ]]; then
+  TLAB=$(getField -i ${LABEL} -f label)
+  TLAB=(${TLAB//+/ })
+  LUT_SORT=${TKNIPATH}/lut/${LABEL_NAME}_ordered.txt
+fi
+
+labelconvert ${LABEL} ${LUT_ORIG} ${LUT_SORT} \
+  ${DIR_SAVE}/${PFX}_label-${LABEL_NAME}+REORDER.nii.gz
+
+#===============================================================================
+# End of function
+#===============================================================================
+exit 0
+
+

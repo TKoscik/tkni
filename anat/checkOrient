@@ -1,0 +1,136 @@
+#!/bin/bash
+#===============================================================================
+# check image orientation, intended use in when image is not in standard
+# orientation in the scanner (e.g., for postmortem brains in an anatomically
+# impossible position that does not amtch machine encoding of orientation)
+# Authors: Timothy R. Koscik, PhD
+# Date: 2024-02-01
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvn --long img:,prefix:,\
+dir-scratch:,dir-save:,\
+help,verbose,no-png -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values ----------------------------------------------------------
+IMG=
+PFX=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${PROC_NAME}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --img) IMG="$2" ; shift 2 ;;
+    --prefix) PFX="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TK_BRAINLab: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help        display command help'
+  echo '  -v | --verbose     add verbose output to log file'
+  echo '  -n | --no-png      disable generating pngs of output'
+  echo '  --pi               folder name for PI, no underscores'
+  echo '                       default=evanderplas'
+  echo '  --project          project name, preferrable camel case'
+  echo '                       default=unitcall'
+  echo '  --pid              unique individual identifier'
+  echo '  --sid              session identifier'
+  echo '  --input-dcm        full path to DICOMs, may be directory or zip-file'
+  echo '  --dir-project      project directory'
+  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
+  echo '  --dir-scratch      directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=$(dirname ${IMG})
+fi
+
+if [[ -z ${PFX} ]]; then
+  PFX=$(getBidsBase -i ${IMG})
+  OUTNAME=$(modField -i ${PFX} -a -f "prep" -v "reorient" )
+fi
+
+mkdir -p ${DIR_SCRATCH}
+IMGRS=${DIR_SCRATCH}/image.nii.gz
+
+ORIENTLS=("AIL" "AIR" "ALI" "ALS" "ARI" "ARS" "ASL" "ASR" "IAL" "IAR" "ILA" "ILP" "IPL" "IPR" "IRA" "IRP" "LAI" "LAS" "LIA" "LIP" "LPI" "LPS" "LSA" "LSP" "PIL" "PIR" "PLI" "PLS" "PRI" "PRS" "PSL" "PSR" "RAI" "RAS" "RIA" "RIP" "RPI" "RPS" "RSA" "RSP" "SAL" "SAR" "SLA" "SLP" "SPL" "SPR" "SRA" "SRP")
+
+ResampleImage 3 ${IMG} ${IMGRS} 2x2x2 0 1
+
+for (( i=0; i<${#ORIENTLS[@]}; i++ )); do
+  ORIENT=${ORIENTLS[${i}]}
+  REORIENT=${DIR_SCRATCH}/${ORIENT}.nii.gz
+  3dresample -orient ${ORIENT} -overwrite -prefix ${REORIENT} -input ${IMGRS}
+  CopyImageHeaderInformation ${IMGRS} ${REORIENT} ${REORIENT} 1 1 0
+  3dresample -orient RPI -overwrite -prefix ${REORIENT} -input ${REORIENT}
+  antsApplyTransforms -d 3 -n Bspline[3] \
+    -i ${REORIENT} -o ${REORIENT} -r ${REORIENT} -t identity
+  make3Dpng --bg ${REORIENT} --dir-save ${DIR_SAVE}
+done
+
+# write out to log file ------------------------------------------------------
+PROC_END=$(date +%Y-%m-%dT%H:%M:%S%z)
+
+# clean up unzipped DICOMs
+FLS=($(ls ${DIR_SCRATCH}/*))
+if [[ ${#FLS[@]} -gt 0 ]]; then
+  rm ${DIR_SCRATCH}/*
+fi
+rmdir ${DIR_SCRATCH}

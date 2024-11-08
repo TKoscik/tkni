@@ -1,0 +1,153 @@
+#!/bin/bash -e
+#===============================================================================
+# Label images based on image intensity percentile, optionally within masked region,
+# and of a minimal size
+# Authors: Timothy R. Koscik, PhD
+# Date: 2020-09-17
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvkl --long prefix:,\
+image:,mask:,thresh-dir:,percentile:,min-size:,\
+dir-save:,dir-scratch:,\
+help,verbose,keep,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+IMAGE=
+MASK=
+THRESH_DIR=g
+PERCENTILE=99
+MIN_SIZE=5
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+KEEP=false
+VERBOSE=0
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -k | --keep) KEEP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
+    --thresh-dir) THRESH_DIR="$2" ; shift 2 ;;
+    --percentile) PERCENTILE="$2" ; shift 2 ;;
+    --min-size) MIN_SIZE="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo "Usage: ${FCN_NAME}"
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -k | --keep              keep preliminary processing steps'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix <value>         scan prefix, default: sub-123_ses-1234abcd'
+  echo '  --image <value>          image containing intensity values,'
+  echo '                             e.g., FLAIR for WM hyperintensity maps.'
+  echo '  --mask <value>           mask containing values which should be included'
+  echo '  --thresh-dir <value>     which direction to apply threshold, g (>=) or l (<=), default=g'
+  echo '  --percentile <value>     percentile for intensity threshold'
+  echo '  --min-size <value>       minimum cluster size to include in final map'
+  echo '  --dir-save <value>       directory to save output, default varies by function'
+  echo '  --dir-scratch <value>    directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z "${PREFIX}" ]]; then PREFIX=$(getBidsBase -s -i ${IMAGE}); fi
+
+MOD=$(getField -i ${MASK} -f modality)
+LABEL_NAME=$(getField -i ${MASK} -f label)
+if [[ -z "${LABEL_NAME}" ]]; then
+  LABEL_NAME=$(getField -i ${MASK} -f mask)
+  if [[ -z "${LABEL_NAME}" ]]; then
+    LABEL_NAME=ROI
+  fi
+fi
+
+TEST_DIR=(g l)
+if [[ ! "${TEST_DIR[@]}" =~ "${THRESH_DIR}" ]]; then
+  echo "unrecognized threshold direction, must be g or l"
+fi
+
+LABEL="${MOD}+${LABEL_NAME}+${THRESH_DIR}${PERCENTILE}+sz${MIN_SIZE}"
+
+if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# intensity threshold image
+THRESH=$(fslstats ${IMAGE} -k ${MASK} -P ${PERCENTILE})
+if [[ "${THRESH_DIR}" == "g" ]]; then
+  fslmaths ${IMAGE} -thr ${THRESH} -mas ${MASK} -bin ${DIR_SCRATCH}/${PREFIX}_thresh.nii.gz
+else
+  fslmaths ${IMAGE} -uthr ${THRESH} -mas ${MASK} -bin ${DIR_SCRATCH}/${PREFIX}_thresh.nii.gz
+fi
+
+if [[ "${MIN_SIZE}" != "0" ]]; then
+  ${FSLDIR}/bin/cluster --in=${DIR_SCRATCH}/${PREFIX}_thresh.nii.gz --thresh=0.5 --osize=${DIR_SCRATCH}/${PREFIX}_clust.nii.gz > /dev/null
+  fslmaths ${DIR_SCRATCH}/${PREFIX}_clust.nii.gz -thr ${MIN_SIZE} -bin ${DIR_SCRATCH}/${PREFIX}_clust.nii.gz
+  mv ${DIR_SCRATCH}/${PREFIX}_clust.nii.gz ${DIR_SAVE}/${PREFIX}_label-${LABEL}.nii.gz
+else
+  mv ${DIR_SCRATCH}/${PREFIX}_thresh.nii.gz ${DIR_SAVE}/${PREFIX}_label-${LABEL}.nii.gz
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+

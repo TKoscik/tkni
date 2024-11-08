@@ -1,0 +1,148 @@
+#!/bin/bash -e
+
+OPTS=$(getopt -o h --long pi:,project:,dir-project:,\
+pidstr:,help -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values ----------------------------------------------------------
+PI=
+PROJECT=
+DIR_PROJECT=
+ID=
+HELP=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    --pi) PI="$2" ; shift 2 ;;
+    --project) PROJECT="$2" ; shift 2 ;;
+    --pidstr) PIDSTR="$2" ; shift 2 ;;
+    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TK_BRAINLab: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help        display command help'
+  echo '  -v | --verbose     add verbose output to log file'
+  echo '  -n | --no-png      disable generating pngs of output'
+  echo '  --pi               folder name for PI, no underscores'
+  echo '  --project          project name, preferrable camel case'
+  echo '  --id-flags         Comma-separated string identifying the BIDS format'
+  echo '                     flags used in the filename in the order that they'
+  echo '                     should appear in filenames, DEFAULT="pid,sid"'
+  echo '  --id-values        Flag values for selected participant,'
+  echo '                     in same as id-flags order'
+  echo '  --id-cols          comma-separated values indicating the'
+  echo '                     names of the columns in the participant.tsv file'
+  echo '  --dir-project      project directory'
+  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+FLAGPAIR=(${PIDSTR//_/ })
+for (( i=0; i<${#FLAGPAIR[@]}; i++ )); do
+  TMP=(${FLAGPAIR//-/ })
+  if [[ ${#TMP[@]} -eq 2 ]]; then
+    FLAG+=(${TMP[0]})
+    VALUE+=(${TMP[1]})
+  else
+    FLAG+=("modality")
+    VALUE+=(${TMP[0]})
+  fi
+done
+
+# Check if supplied PIDSTR matches the columns of the participant.tsv file
+PXCOLS=($(head -n 1 ${DIR_PROJECT}/participants.tsv))
+
+
+# setup identifiers ------------------------------------------------------------
+ID_FLAGS=(${ID_FLAGS//,/ })
+ID_VALUES=(${ID_VALUES//,/ })
+ID_COLS=(${ID_COLS//,/ })
+
+## process newest participant or set identifiers -------------------------------
+unset TPAIR
+for (( i=0; i<${#ID_FLAGS[@]}; i++ )); do
+  TFLAG=${ID_FLAGS[${i}]}
+  if [[ -z ${ID_VALUES} ]]; then
+    TCOL=${ID_COLS[${i}]}
+    TLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f ${TCOL}))
+    TVALUE=${TLS[-1]}
+  else
+    TVALUE=${ID_VALUES[${i}]}
+  fi
+  if [[ ${TFLAG} == "pid" ]] || [[ ${TFLAG} == "sub" ]]; then
+    PID=${TVALUE}
+  elif [[ ${TFLAG} == "sid" ]] || [[ ${TFLAG} == "ses" ]]; then
+    SID=${TVALUE}
+  else
+    TPAIR+=(${TFLAG}-${TVALUE})
+  fi
+done
+
+if [[ -z ${PID} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] Participant ID not found"
+  exit 1
+fi
+
+PIDSTR=sub-${PID}
+DIRPID=sub-${PID}
+if [[ -n ${SID} ]]; then
+  PIDSTR="${PIDSTR}_ses-${SID}"
+  DIRPID="${DIRPID}_ses-${SID}"
+fi
+TSTR=$(echo ${TPAIR[@]})
+TSTR=${TSTR// /_}
+PIDSTR="${PIDSTR}_${TSTR}"
+
+# check if participant exists --------------------------------------------------
+NPX=$(cat ${DIR_PROJECT}/participants.tsv | wc -l)
+for (( i=1; i<${NPX}; i++ )); do
+  unset TPAIR
+  for (( j=0; j<${#ID_FLAGS[@]}; j++ )); do
+    unset TFLAG TCOL TLS TVALUE
+    TFLAG=${ID_FLAGS[${j}]}
+    TCOL=${ID_COLS[${j}]}
+    TLS=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f ${TCOL}))
+    TVALUE=${TLS[${i}]}
+    if [[ ${TFLAG} == "pid" ]]; then TFLAG="sub"; fi
+    if [[ ${TFLAG} == "sid" ]]; then TFLAG="ses"; fi
+    if [[ ${TFLAG} == "sub" ]]; then
+      TN=0
+    elif [[ ${TFLAG} == "ses" ]]; then
+      TN=1
+    else
+      TN=$((${j}+2))
+    fi
+    TPAIR[${TN}]=${TFLAG}-${TVALUE}
+  done
+  CHKID=$(echo ${TPAIR[@]})
+  CHKID=${CHKID// /_}
+  echo ${CHKID}
+  if [[ ${CHKID} == ${PIDSTR} ]]; then
+    echo "ERROR [TKNI:${FCN_NAME}] ID Exists, ${CHKID}, please check. Aborting"
+    exit 1
+  fi
+done
+
+#===============================================================================
+# End of Function
+#===============================================================================
+echo
+exit 0

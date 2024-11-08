@@ -1,0 +1,247 @@
+#!/bin/bash -e
+#===============================================================================
+# Make PNG images of brains from FreeSurfer, suitable for publication.
+# -flexible overlay, color, and layout options
+# Authors: Timothy R. Koscik, PhD
+# Date: 2021-02-04
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+KEEP=false
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ "${KEEP}" == "false" ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long help,verbose,no-log,\
+dir-fs:,dir-id:,\
+surface:,hemi:,curvature:,curv-method:,\
+overlay:,over-color:,over-alpha:,over-custom:,over-threshold:,\
+label:,label-outline,\
+layout:,view-size:,font:,font-size:,\
+no-hemi-label:,\
+filename:,dir-save:,dir-scratch: -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+DIR_FS=
+DIR_ID=
+SURFACE="pial"
+HEMI="both"
+CURVATURE_METHOD="off"
+
+OVERLAY=
+OVERLAY_COLOR=
+OVERLAY_ALPHA=1
+OVERLAY_CUSTOM=
+OVERLAY_THRESHOLD="2.5,97.5,percentile"
+
+LABEL=
+LABEL_OUTLINE="false"
+
+LAYOUT="lh-lateral,lh-medial;superior,inferior;rh-lateral,rh-medial"
+
+VIEWSIZE="1000 1000"
+FONT=NimbusSans-Regular
+FONT_SIZE=24
+
+FILENAME=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+
+HELP="false"
+VERBOSE="false"
+
+while true; do
+  case "$1" in
+    -h | --help) HELP="true" ; shift ;;
+    -v | --verbose) VERBOSE="true" ; shift ;;
+    -l | --no-log) NO_LOG="true" ; shift ;;
+    --dir-fs) DIR_FS="$2" ; shift 2 ;;
+    --dir-id) DIR_ID="$2" ; shift 2 ;;
+    --surface) SURFACE="$2" ; shift 2 ;;
+    --hemi) HEMI="$2" ; shift 2 ;;
+    --curvature) CURVATURE="$2" ; shift 2 ;;
+    --curv-method) CURVATURE_METHOD="$2" ; shift 2 ;;
+    --overlay) OVERLAY="$2" ; shift 2 ;;
+    --over-color) OVERLAY_COLOR="$2" ; shift 2 ;;
+    --over-alpha) OVERLAY_ALPHA="$2" ; shift 2 ;;
+    --over-custom) OVERLAY_CUSTOM="$2" ; shift 2 ;;
+    --over-threshold) OVERLAY_THRESHOLD="$2" ; shift 2 ;;
+    --label) LABEL="$2" ; shift 2 ;;
+    --label-alpha) LABEL_ALPHA="$2" ; shift 2 ;;
+    --label-outline) LABEL_OUTLINE="true" ; shift ;;
+    --layout) LAYOUT="$2" ; shift 2 ;;
+    --viewsize) VIEWSIZE="$2" ; shift 2 ;;
+    --font) FONT="$2" ; shift 2 ;;
+    --font-size) FONT_SIZE="$2" ; shift 2 ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help       display command help'
+  echo '  -v | --verbose    add verbose output to log file'
+  echo '  -l | --no-log     disable writing to output log'
+  echo '--filename          desired filename of output image,'
+  echo '                    default=sub-${PID}_ses-${SID}_YYMMDDThhmmssnnn'
+  echo '                            overlay4D_YYMMDDThhmmssnnn'
+  echo '--dir-save          location to save final image'
+  echo '--dir_scratch       directory to use to construct image'
+  echo ''
+  echo ' Details: --------------------------------------------------------------'
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z ${SURFACE} ]]; then SURFACE="pial"; fi
+if [[ ${HEMI} == "both" ]]; then HEMI="lh,rh"; fi
+
+if [[ -z ${FILENAME} ]]; then
+  FILENAME=${DIR_ID}_surface-${SURFACE}
+  if [[ -n ${OVERLAY} ]]; then FILENAME="${FILENAME}_overlay-${OVERLAY}"; fi
+  if [[ -n ${LABEL} ]]; then FILENAME="${FILENAME}_label-${LABEL}"; fi
+fi
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_FS}/png; fi
+mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SCRATCH}
+
+if [[ ${CURVATURE_METHOD,,} != "off" ]] \
+&& [[ ${CURVATURE_METHOD,,} != "binary" ]] \
+&& [[ ${CURVATURE_METHOD,,} != "threshold" ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] curvature_method: ${CURVATURE_METHOD} is not valid"
+  exit 1
+fi
+
+OPTS="curvature_method=${CURVATURE_METHOD}"
+if [[ -n ${OVERLAY} ]]; then
+  OPTS="${OPTS}:overlay=HEMI.${OVERLAY}"
+  if [[ -n ${OVERLAY_COLOR} ]]; then
+    OPTS="${OPTS}:overlay_color=${OVERLAY_COLOR}"
+  fi
+  if [[ -n ${OVERLAY_ALPHA} ]]; then
+    OPTS="${OPTS}:overlay_opacity=${OVERLAY_ALPHA}"
+  fi
+  if [[ -n ${OVERLAY_CUSTOM} ]]; then
+    OPTS="${OPTS}:overlay_custom=${OVERLAY_CUSTOM}"
+  fi
+  if [[ -n ${OVERLAY_THRESHOLD} ]]; then
+    OPTS="${OPTS}:overlay_threshold=${OVERLAY_THRESHOLD}"
+  fi
+fi
+if [[ -n ${LABEL} ]]; then
+  OPTS="${OPTS}:annot=${DIR_FS}/${DIR_ID}/label/HEMI.${LABEL}"
+  if [[ ${LABEL_OUTLINE} != "false" ]]; then
+    OPTS="${OPTS}:annot_outline=1"
+  fi
+fi
+OPTS_LH=${OPTS//HEMI/lh}
+OPTS_RH=${OPTS//HEMI/rh}
+
+DIR_SURF=${DIR_FS}/${DIR_ID}/surf
+
+COL_LAYOUT=(${LAYOUT//;/ })
+NCOL=${#COL_LAYOUT[@]}
+for (( i=0; i<${NCOL}; i++ )); do
+  unset ROW_LAYOUT NROW
+  ROW_LAYOUT=(${COL_LAYOUT[${i}]//,/ })
+  NROW=${#ROW_LAYOUT[@]}
+  for (( j=0; j<${NROW}; j++ )); do
+    echo -e "c${i}\tr${j}"
+    pngfcn="fsxvfb freeview"
+    TVIEW=${ROW_LAYOUT[${j}]}
+    if [[ ${TVIEW} != "left" ]] \
+    && [[ ${TVIEW} != "right" ]] \
+    && [[ ${TVIEW} != *"lateral"* ]] \
+    && [[ ${TVIEW} != *"medial"* ]]; then
+      if [[ ${HEMI} == *"lh"* ]]; then
+        pngfcn="${pngfcn} --surface ${DIR_SURF}/lh.${SURFACE}:${OPTS_LH}"
+      fi
+      if [[ ${HEMI} == *"rh"* ]]; then
+        pngfcn="${pngfcn} --surface ${DIR_SURF}/rh.${SURFACE}:${OPTS_RH}"
+      fi
+    elif [[ ${TVIEW} == *"lh"* ]]; then
+      pngfcn="${pngfcn} --surface ${DIR_SURF}/lh.${SURFACE}:${OPTS_LH}"
+    elif [[ ${TVIEW} == *"rh"* ]]; then
+      pngfcn="${pngfcn} --surface ${DIR_SURF}/rh.${SURFACE}:${OPTS_RH}"
+    fi
+    pngfcn="${pngfcn} --nocursor --viewport 3d --viewsize ${VIEWSIZE} -cc"
+    DO_CAM="false"
+    if [[ ${TVIEW} == "superior" ]]; then
+      TVIEW="Elevation 90 Roll 270"
+      DO_CAM="true"
+    fi
+    if [[ ${TVIEW} == "inferior" ]]; then
+      TVIEW="Elevation 270 Roll 270"
+      DO_CAM="true"
+    fi
+    if [[ ${TVIEW} == *"medial"* ]]; then TVIEW="medial"; fi
+    if [[ ${TVIEW} == *"lateral"* ]]; then TVIEW="lateral"; fi
+    if [[ ${DO_CAM} == "true" ]]; then
+      pngfcn="${pngfcn} --cam ${TVIEW}"
+    else
+      pngfcn="${pngfcn} --view ${TVIEW}"
+    fi
+    pngfcn="${pngfcn} --ss ${DIR_SCRATCH}/c${i}_r${j}.png 1 1"
+    eval ${pngfcn}
+    sleep 0.5
+  done
+  FLS=$(ls ${DIR_SCRATCH}/c${i}*.png)
+  montage ${FLS} \
+    -tile 1x -gravity center -geometry +0+0 -background "#000000" \
+    ${DIR_SCRATCH}/montage_${i}.png
+done
+FLS=$(ls ${DIR_SCRATCH}/montage_*.png)
+convert ${FLS} \
+  -gravity center +append -background "#000000" \
+  ${DIR_SCRATCH}/image.png
+
+# save output image
+mv ${DIR_SCRATCH}/image.png ${DIR_SAVE}/${FILENAME}.png
+
+#-------------------------------------------------------------------------------
+# End of Function
+#-------------------------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>DONE"; fi
+exit 0

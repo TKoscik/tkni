@@ -1,0 +1,1199 @@
+#!/bin/bash -e
+#===============================================================================
+# Image coregistration, using coregistration_recipes.json for specification of
+#    registration parameters
+# Authors: Timothy R. Koscik
+# Date: 2021-02-25
+#
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvaldn --long recipe-json:,\
+recipe-name:,\
+fixed:,\
+fixed-mask:,\
+fixed-mask-threshold:,\
+fixed-mask-dilation:,\
+moving:,\
+moving-mask:,\
+moving-mask-threshold:,\
+moving-mask-dilation:,\
+mask-procedure:,\
+dir-template:,\
+template:,\
+space-source:,\
+space-target:,\
+dimensionality:,\
+save-state:,\
+restore-state:,\
+write-composite-transform,\
+print-similarity-measure-interval:,\
+write-interval-volumes:,\
+collapse-output-transforms,\
+initialize-transforms-per-stage,\
+interpolation:,\
+restrict-deformation:,\
+initial-fixed-transform:,\
+initial-moving-transform:,\
+metric:,\
+transform:,\
+convergence:,\
+smoothing-sigmas:,\
+shrink-factors:,\
+use-histogram-matching:,\
+use-estimate-learning-rate-once,\
+winsorize-image-intensities:,\
+float,\
+random-seed:,\
+ants-verbose,\
+prefix:,\
+label-xfm:,\
+label-from:,\
+label-to:,\
+label-reg:,\
+ref-image:,\
+apply-to:,\
+apply-to-name:,\
+keep-fwd-xfm,\
+keep-inv-xfm,\
+dir-save:,\
+dir-xfm:,\
+dir-scratch:,\
+dir-interval:,\
+verbose,\
+help,\
+no-log,\
+dry-run,\
+no-png -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+VERBOSE=false
+HELP=false
+DRY_RUN=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -a | --ants-verbose) ANTS_VERBOSE=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    -d | --dry-run) DRY_RUN=true ; shift ;;
+    --recipe-json) RECIPE_JSON="$2" ; shift 2 ;;
+    --recipe-name) RECIPE_NAME="$2" ; shift 2 ;;
+    --fixed) FIXED="$2" ; shift 2 ;;
+    --fixed-mask) FIXED_MASK="$2" ; shift 2 ;;
+    --fixed-mask-threshold) FIXED_MASK_THRESHOLD="$2" ; shift 2 ;;
+    --fixed-mask-dilation) FIXED_MASK_DILATION="$2" ; shift 2 ;;
+    --moving) MOVING="$2" ; shift 2 ;;
+    --moving-mask) MOVING_MASK="$2" ; shift 2 ;;
+    --moving-mask-threshold) MOVING_MASK_THRESHOLD="$2" ; shift 2 ;;
+    --moving-mask-dilation) MOVING_MASK_DILATION="$2" ; shift 2 ;;
+    --mask-procedure) MASK_PROCEDURE="$2" ; shift 2 ;;
+    --dir-template) DIR_TEMPLATE="$2" ; shift 2 ;;
+    --template) TEMPLATE="$2" ; shift 2 ;;
+    --space-source) SPACE_SOURCE="$2" ; shift 2 ;;
+    --space-target) SPACE_TARGET="$2" ; shift 2 ;;
+    --dimensonality) DIMENSIONALITY="$2" ; shift 2 ;;
+    --save-state) SAVE_STATE="$2" ; shift 2 ;;
+    --restore-state) RESTORE_STATE="$2" ; shift 2 ;;
+    --write-composite-transform) WRITE_COMPOSITE_TRANSFORM=true ; shift ;;
+    --print-similarity-measure-interval) PRINT_SIMILARITY_MEASURE_INTERVAL="$2" ; shift 2 ;;
+    --write-interval-volumes) WRITE_INTERVAL_VOLUMES="$2" ; shift 2 ;;
+    --collapse-output-transforms) COLLAPSE_OUTPUT_TRANSFORMS=true ; shift ;;
+    --initialize-transforms-per-stage) INITIALIZE_TRANSFORMS_PER_STAGE="true" ; shift ;;
+    --interpolation) INTERPOLATION="$2" ; shift 2 ;;
+    --restrict-deformation) RESTRICT_DEFORMATION="$2" ; shift 2 ;;
+    --initial-fixed-transform) INITIAL_FIXED_TRANSFORM="$2" ; shift 2 ;;
+    --initial-moving-transform) INITIAL_MOVING_TRANSFORM="$2" ; shift 2 ;;
+    --metric) METRIC="$2" ; shift 2 ;;
+    --transform) TRANSFORM="$2" ; shift 2 ;;
+    --convergence) CONVERGENCE="$2" ; shift 2 ;;
+    --smoothing-sigmas) SMOOTHING_SIGMAS="$2" ; shift 2 ;;
+    --shrink-factors) SHRINK_FACTORS="$2" ; shift 2 ;;
+    --use-histogram-matching) USE_HISTOGRAM_MATCHING="$2" ; shift 2 ;;
+    --use-estimate-learning-rate-once) USE_ESTIMATE_LERANING_RATE_ONCE=true ; shift ;;
+    --winsorize-image-intensities) WINSORIZE_IMAGE_INTENSITIES="$2" ; shift 2 ;;
+    --float) FLOAT=true ; shift ;;
+    --random-seed) RANDOM_SEED="$2" ; shift 2 ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --label-xfm) LABEL_XFM="$2" ; shift 2 ;;
+    --label-from) LABEL_FROM="$2" ; shift 2 ;;
+    --label-to) LABEL_TO="$2" ; shift 2 ;;
+    --label-reg) LABEL_REG="$2" ; shift 2 ;;
+    --label-roi) LABEL_ROI="$2" ; shift 2 ;;
+    --ref-image) REF_IMAGE="$2" ; shift 2 ;;
+    --apply-to) APPLY_TO="$2" ; shift 2 ;;
+    --apply-to-name) APPLY_TO_NAME="$2" ; shift 2 ;;
+    --keep-fwd-xfm) KEEP_FWD_XFM="true" ; shift ;;
+    --keep-inv-xfm) KEEP_INV_XFM="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    --dir-interval) DIR_INTERVAL="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '----------------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '----------------------------------------------------------------------------------'
+  echo '-h | --help               show help                                               '
+  echo '-v | --verbose            verbose output and diagnostics                          '
+  echo '-a | --ants-verbose       verbose ANTs output                                     '
+  echo '-l | --no-log             do not write to INC logs                                '
+  echo '-d | --dry-run            perform dry run, show antsRegistration calls and names  '
+  echo '                          and locations of outputs                                '
+  echo '-n | --no-png             toggle to disable results PNGs                          '
+  echo '--recipe-json             JSON file containing coregistration recipes             '
+  echo '                            Default: ${TKNIPATH}/lut/coregistration_recipes.json   '
+  echo '--recipe-name             String indicating recipe name in JSON, case-sensitive,  '
+  echo '                          identical match                                         '
+  echo '--fixed                   Comma-separated paths to fixed images                   '
+  echo '--fixed-mask              Comma-separated paths to fixed masks The number of masks'
+  echo '                          should be either 1 (to use the same mask for each       '
+  echo '                          transform stage  or it should match the number of       '
+  echo '                          transforms NULL indicates no mask for that stage        '
+  echo '--fixed-mask-threshold    Threshold value for mask, values less than the threshold'
+  echo '                          are zeroed, then the mask is binarized before being     '
+  echo '                          dilated.                                                '
+  echo '--fixed-mask-dilation     Number of voxels to dilate the fixed mask               '
+  echo '--moving                  Comma-separted values to moving images                  '
+  echo '--moving-mask             Comma-separated paths to moving masks The number of     '
+  echo '                          masks should be either 1 (to use the same mask for each '
+  echo '                          transform stage or it should match the number of        '
+  echo '                          transforms NULL indicates no mask for that stage        '
+  echo '--moving-mask-threshold   Threshold value for mask, values less than the threshold'
+  echo '                          are zeroed, then the mask is binarized before being     '
+  echo '                          dilated.                                                '
+  echo '--moving-mask-dilation    Number of voxels to dilate the moving masks             '
+  echo '--mask-procedure          Method for using the masks:                             '
+  echo '    "restrict"   (DEFAULT) add the masks as --masks in antsRegistration call.     '
+  echo '    "intersect"  Mask inputs prior to antsRegistration call (not used as input in '
+  echo '                 function). Applied mask corresponds to voxels in all of the      '
+  echo '                 masks, or region of maximal overlap.                             '
+  echo '    "union"      Mask inputs prior to antsRegistration call (not used as input in '
+  echo '                 function). Applied mask corresponds to voxels in any of the masks'
+  echo '--dir-template            Directory containing templates, expected directory      '
+  echo '                          structure:                                              '
+  echo '                          DIR_TEMPLATE/template/size/template_size_modality.nii.gz'
+  echo '--template                name of template, e.g., HCPYA                           '
+  echo '--space-source            size of template to use for registration, typically     '
+  echo '                          higher resolution is better, e.g., 700um                '
+  echo '--space-target            desired output size, e.g.:                              '
+  echo '                            fixed = use FIXED image for output size               '
+  echo '                            moving = use MOVING image for output size             '
+  echo '                            reference = use REFERENCE IMAGE for output size       '
+  echo '                                        --ref-image must be provided              '
+  echo '                            1mm (1mm isotropic, 1x1x1);                           '
+  echo '                            700um (700um isotropic, 0.7x0.7x0.7)                  '
+  echo '                            0.5x0.5x1 (anisotropic x y z, in mm)                  '
+  echo '--dimensonality                                                                   '
+  echo '      ANTs Registration: This option forces the image to be treated as a specified'
+  echo '      -dimensional image. If not specified, we try to infer the dimensionality    '
+  echo '      from the input image.                                                       '
+  echo '--save-state                                                                      '
+  echo '      ANTs Registration: Specify the output file for the current state of the     '
+  echo '      registration. The state file is written to an hdf5 composite file. It is    '
+  echo '      specially usefull if we want to save the current state of a SyN             '
+  echo '      registration to the disk, so we can load and restore that later to continue '
+  echo '      the next registration process directly started from the last saved state.   '
+  echo '      The output file of this flag is the same as the write-composite-transform,  '
+  echo '      unless the last transform is a SyN transform. In that case, the inverse     '
+  echo '      displacement field of the SyN transform is also added to the output         '
+  echo '      composite transform. Again notice that this file cannot be treated as a     '
+  echo '      transform, and restore-state option must be used to load the written file by'
+  echo '      this flag.                                                                  '
+  echo '--restore-state                                                                   '
+  echo '      ANTs Registration: Specify the initial state of the registration which get  '
+  echo '      immediately used to directly initialize the registration process. The flag  '
+  echo '      is mutually exclusive with other intialization flags.If this flag is used,  '
+  echo '      none of the initial-moving-transform and initial-fixed-transform cannot be  '
+  echo '      used.                                                                       '
+  echo '--write-composite-transform                                                       '
+  echo '      ANTs Registration: Boolean specifying whether or not the composite transform'
+  echo '      (and its inverse, if it exists) should be written to an hdf5 composite file.'
+  echo '      This is false by default so that only the transform for each stage is       '
+  echo '      written to file.                                                            '
+  echo '--print-similarity-measure-interval                                               '
+  echo '      ANTs Registration: Prints out the CC similarity metric measure between the  '
+  echo '      full-size input fixed and the transformed moving images at each iteration a '
+  echo '      value of 0 (the default) indicates that the full scale computation should   '
+  echo '      not take placeany value greater than 0 represents the interval of full scale'
+  echo '      metric computation.                                                         '
+  echo '--write-internal-volumes                                                          '
+  echo '      ANTs Registration: Writes out the output volume at each iteration. It       '
+  echo '      helps to present the registration process as a short movie a value of 0     '
+  echo '      (the default) indicates that this option should not take placeany value     '
+  echo '      greater than 0 represents the interval between the iterations which         '
+  echo '      outputs are written to the disk.                                            '
+  echo '--collapse-output-transforms                                                      '
+  echo '      ANTs Registration: Collapse output transforms. Specifically, enabling this  '
+  echo '      option combines all adjacent transforms wherepossible. All adjacent linear  '
+  echo '      transforms are written to disk in the forman itk affine transform (called   '
+  echo '      xxxGenericAffine.mat). Similarly, all adjacent displacement field           '
+  echo '      transforms are combined when written to disk (e.g. xxxWarp.nii.gz and       '
+  echo '      xxxInverseWarp.nii.gz (if available)).Also, an output composite transform   '
+  echo '      including the collapsed transforms is written to the disk (called           '
+  echo '      outputCollapsed(Inverse)Composite).                                         '
+  echo '--initialize-transforms-per-stage                                                 '
+  echo '      ANTs Registration: Initialize linear transforms from the previous stage. By '
+  echo '      enabling this option, the current linear stage transform is directly        '
+  echo '      intialized from the previous stages linear transform; this allows multiple '
+  echo '      linear stages to be run where each stage directly updates the estimated     '
+  echo '      linear transform from the previous stage. (e.g. Translation->Rigid->Affine).'
+  echo '--interpolation                                                                   '
+  echo '      ANTs Registration: Linear                                                   '
+  echo '                     NearestNeighbor                                              '
+  echo '                     MultiLabel[<sigma=imageSpacing>,<alpha=4.0>]                 '
+  echo '                     Gaussian[<sigma=imageSpacing>,<alpha=1.0>]                   '
+  echo '                     BSpline[<order=3>]                                           '
+  echo '                     CosineWindowedSinc                                           '
+  echo '                     WelchWindowedSinc                                            '
+  echo '                     HammingWindowedSinc                                          '
+  echo '                     LanczosWindowedSinc                                          '
+  echo '                     GenericLabel[<interpolator=Linear>]                          '
+  echo '      ANTs Registration: Several interpolation options are available in ITK.      '
+  echo '      These have all been made available. Currently the interpolator choice is    '
+  echo '      only used to warp (and possibly inverse warp) the final output image(s).    '
+  echo '--restrict-deformation                                                            '
+  echo '     ANTs Registration: This option allows the user to restrict the optimization  '
+  echo '      of the displacement field, translation, rigid or affine transform on a per- '
+  echo '     component basis. For example, if one wants to limit the deformation or       '
+  echo '      rotation of 3-D volume to the first two dimensions, this is possible by     '
+  echo '      specifying a weight vector of "1x1x0" for a deformation field or            '
+  echo '      "1x1x0x1x1x0" for a rigid transformation. Low-dimensional restriction only  '
+  echo '      works if there are no preceding transformations.All stages up to and        '
+  echo '      including the desired stage must have this option specified,even if they    '
+  echo '      should not be restricted (in which case specify 1x1x1...)                   '
+  echo '--initial-fixed-transform                                                         '
+  echo '      ANTs Registration: initialTransform                                         '
+  echo '                         [initialTransform,<useInverse>]                          '
+  echo '                         [fixedImage,movingImage,initializationFeature]           '
+  echo '      Specify the initial fixed transform(s) which get immediately incorporated   '
+  echo '      into the composite transform. The order of the transforms is stack-esque in '
+  echo '      that the last transform specified on the command line is the first to be    '
+  echo '      applied. In addition to initialization with ITK transforms, the user can    '
+  echo '      perform an initial translation alignment by specifying the fixed and moving '
+  echo '      images and selecting an initialization feature. These features include using'
+  echo '      the geometric center of the images (=0), the image intensities (=1), or the '
+  echo '      origin of the images (=2).                                                  '
+  echo '--initial-moving-transform                                                        '
+  echo '      ANTs Registration: initialTransform                                         '
+  echo '                         [initialTransform,<useInverse>]                          '
+  echo '                         [fixedImage,movingImage,initializationFeature]           '
+  echo '      Specify the initial moving transform(s) which get immediately incorporated  '
+  echo '      into the composite transform. The order of the transforms is stack-esque in '
+  echo '      that the last transform specified on the command line is the first to be    '
+  echo '      applied. In addition to initialization with ITK transforms, the user can    '
+  echo '      perform an initial translation alignment by specifying the fixed and moving '
+  echo '      images and selecting an initialization feature. These features include using'
+  echo '      the geometric center of the images (=0), the image intensities (=1), or the '
+  echo '      origin of the images (=2).                                                  '
+  echo '--metric                                                                          '
+  echo '      ANTs Registration:  FI=Fixed Image                                          '
+  echo '                          MI=Moving Image                                         '
+  echo '                          STRATEGY=None,Regular,Random                            '
+  echo '                          SAMPLE%=0->1                                            '
+  echo '      CC[FI,MI,weight,radius,<STRATEGY>,<SAMPLE%>]                                '
+  echo '      MI[FI,MI,weight,nBins,<STRATEGY>,<SAMPLE%>]                                 '
+  echo '      Mattes[FI,MI,weight,nBins,<STRATEGY>,<SAMPLE%>]                             '
+  echo '      MeanSquares[FI,MI,weight,radius=NA,<STRATEGY>,<SAMPLE%>]                    '
+  echo '      Demons[FI,MI,weight,radius=NA,<STRATEGY>,<SAMPLE%>]                         '
+  echo '      GC[FI,MI,weight,radius=NA,<STRATEGY>,<SAMPLE%>]                             '
+  echo '      ICP[fixedPoints,movingPoints,weight,<SAMPLE%>,<boundaryPointsOnly=0>]       '
+  echo '      PSE[fixedPoints,movingPointst,weight,<SAMPLE%>,<boundaryPointsOnly=0>,\     '
+  echo '          <pointSigma=1>,<kNeighborhood=50>]                                      '
+  echo '      JHCT[fixedPoints,movingPoints,weight,<SAMPLE%>,<boundaryPointsOnly=0>,\     '
+  echo '           <pointSigma=1>,<kNeighborhood=50>,<alpha=1.1>,\                        '
+  echo '           <useAnisotropicCovariances=1>]                                         '
+  echo '      IGDM[FI,MI,weight,fixedMask,movingMask,<neighborhoodRadius=0x0>,\           '
+  echo '           <intensitySigma=0>,<distanceSigma=0>,<kNeighborhood=1>,\               '
+  echo '           <gradientSigma=1>]                                                     '
+  echo '      These image metrics are available-                                          '
+  echo '        CC: ANTS neighborhood cross correlation, MI: Mutual information, Demons:  '
+  echo '        (Thirion), MeanSquares, and GC: Global Correlation. The "metricWeight"    '
+  echo '        variable is used to modulate the per stage weighting of the metrics. The  '
+  echo '        metrics can also employ a sampling strategy defined by a sampling         '
+  echo '        percentage. The sampling strategy defaults to "None" (aka a dense sampling'
+  echo '        of one sample per voxel), otherwise it defines a point set over which to  '
+  echo '        optimize the metric. The point set can be on a regular lattice or a random'
+  echo '        lattice of points slightly perturbed to minimize aliasing artifacts.      '
+  echo '        samplingPercentage defines the fraction of points to select from the      '
+  echo '        domain. In addition, three point set metrics are available: Euclidean     '
+  echo '       (ICP), Point-set expectation (PSE), and Jensen-Havrda-Charvet-Tsallis      '
+  echo '       (JHCT).                                                                    '
+  echo '--transform                                                                       '
+  echo '      ANTs Registration: Several transform options are available. The gradientStep'
+  echo '      or learningRate characterizes the gradient descent optimization and is      '
+  echo '      scaled appropriately for each transform using the shift scales estimator.   '
+  echo '      Subsequent parameters are transform-specific and can be determined from the '
+  echo '      usage. For the B-spline transforms one can also specify the smoothing in    '
+  echo '      terms of spline distance (i.e. knot spacing).                               '
+  echo '        Rigid[gradientStep]                                                       '
+  echo '        Affine[gradientStep]                                                      '
+  echo '        CompositeAffine[gradientStep]                                             '
+  echo '        Similarity[gradientStep]                                                  '
+  echo '        Translation[gradientStep]                                                 '
+  echo '        BSpline[gradientStep,meshSizeAtBaseLevel]                                 '
+  echo '        GaussianDisplacementField[gradientStep,\                                  '
+  echo '                                  updateFieldVarianceInVoxelSpace,\               '
+  echo '                                  totalFieldVarianceInVoxelSpace]                 '
+  echo '        BSplineDisplacementField[gradientStep,\                                   '
+  echo '                                 updateFieldMeshSizeAtBaseLevel,\                 '
+  echo '                                 totalFieldMeshSizeAtBaseLevel,\                  '
+  echo '                                 <splineOrder=3>]                                 '
+  echo '        TimeVaryingVelocityField[gradientStep,\                                   '
+  echo '                                 numberOfTimeIndices,\                            '
+  echo '                                 updateFieldVarianceInVoxelSpace,\                '
+  echo '                                 updateFieldTimeVariance,\                        '
+  echo '                                 totalFieldVarianceInVoxelSpace,\                 '
+  echo '                                 totalFieldTimeVariance]                          '
+  echo '        TimeVaryingBSplineVelocityField[gradientStep,\                            '
+  echo '                                        velocityFieldMeshSize,\                   '
+  echo '                                        <numberOfTimePointSamples=4>,\            '
+  echo '                                        <splineOrder=3>]                          '
+  echo '        SyN[gradientStep,\                                                        '
+  echo '            updateFieldVarianceInVoxelSpace,\                                     '
+  echo '            totalFieldVarianceInVoxelSpace]                                       '
+  echo '        BSplineSyN[gradientStep,\                                                 '
+  echo '                   updateFieldMeshSizeAtBaseLevel,\                               '
+  echo '                   totalFieldMeshSizeAtBaseLevel,\                                '
+  echo '                   <splineOrder=3>]                                               '
+  echo '        Exponential[gradientStep,\                                                '
+  echo '                    updateFieldVarianceInVoxelSpace,\                             '
+  echo '                    velocityFieldVarianceInVoxelSpace,\                           '
+  echo '                    <numberOfIntegrationSteps>]                                   '
+  echo '        BSplineExponential[gradientStep,\                                         '
+  echo '                           updateFieldMeshSizeAtBaseLevel,\                       '
+  echo '                           velocityFieldMeshSizeAtBaseLevel,\                     '
+  echo '                           <numberOfIntegrationSteps>,\                           '
+  echo '                           <splineOrder=3>]                                       '
+  echo '--convergence                                                                     '
+  echo '      ANTs Registration: MxNxO                                                    '
+  echo '          [MxNxO,<convergenceThreshold=1e-6>,<convergenceWindowSize=10>]          '
+  echo '      Convergence is determined from the number of iterations per level and is    '
+  echo '      determined by fitting a line to the normalized energy profile of the last N '
+  echo '      iterations (where N is specified by the window size) and determining the    '
+  echo '      slope which is then compared with the convergence threshold.                '
+  echo '--smoothing-sigmas                                                                '
+  echo '      ANTs Registration: MxNxO...                                                 '
+  echo '      Specify the sigma of gaussian smoothing at each level. Units are given in   '
+  echo '      terms of voxels ("vox") or physical spacing ("mm"). Example usage is        '
+  echo '      "4x2x1mm" and "4x2x1vox" where no units implies voxel spacing.              '
+  echo '--shrink-factors                                                                  '
+  echo '      ANTs Registration: MxNxO...                                                 '
+  echo '      Specify the shrink factor for the virtual  domain (typically the fixed      '
+  echo '      image) at each level.                                                       '
+  echo '--use-histogram-matching                                                          '
+  echo '      ANTs Registration: Histogram match the images before registration.          '
+  echo '--use-estimate-learning-rate-once                                                 '
+  echo '      ANTs Registration: turn on the option that lets you estimate the learning   '
+  echo '      rate step size only at the beginning of each level. * useful as a second    '
+  echo '      stage of fine-scale registration.                                           '
+  echo '--winsorize-image-intensities                                                     '
+  echo '      ANTs Registration: [lowerQuantile,upperQuantile] Winsorize data based on    '
+  echo '      specified quantiles.                                                        '
+  echo '--float                                                                           '
+  echo '      ANTs Registration: Use "float" instead of "double" for computations.        '
+  echo '--random-seed                                                                     '
+  echo '      ANTs Registration: Use a fixed seed for random number generation. By        '
+  echo '      default, the system clock is used to initialize the seeding. The fixed      '
+  echo '      seed can be any nonzero int value.                                          '
+  echo '--prefix                  prefix to append to the output filenames default is the '
+  echo '                          name with the modality, if present, stripped, and coreg '
+  echo '                          append to prep flags                                    '
+  echo '--label-xfm               string for xfm- label, default is name recipe+transform,'
+  echo '                          applied to output transforms                            '
+  echo '--label-from              string for from- label, default is taken from first     '
+  echo '                          moving image filename                                   '
+  echo '--label-to                string for to- label, default is taken from first fixed '
+  echo '                          image filename                                          '
+  echo '--label-reg               string for reg- label, default is RECIPE+TO             '
+  echo '--ref-image               file name for reference image for application of        '
+  echo '                          transform, gives final spacing of output                '
+  echo '--apply-to                additional images to apply transforms to but not include'
+  echo '                          in registration process                                 '
+  echo '--apply-to-name           manually change filename of additional output files     '
+  echo '--keep-fwd-xfm            toggle to disable saving forward transforms             '
+  echo '--keep-inv-xfm            toggle to disable saving inverse transforms             '
+  echo '--dir-save                directory to save warped output                         '
+  echo '--dir-xfm                 directory to save transforms                            '
+  echo '--dir-scratch             scratch directory, deleted on function exit             '
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ "${DRY_RUN}" == "true" ]]; then NO_LOG=true; fi
+if [[ "${VERBOSE}" == "true" ]]; then echo "Running the TKNI coregistration chef"; fi
+
+# locate recipe ----------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>locating coregistration recipe"; fi
+RECIPE_DEFAULT=${TKNIPATH}/lut/coregistration_recipes.json
+PARAMS_DEFAULT=($(jq -r '.coregistration_parameters | keys_unsorted[]?' < ${RECIPE_DEFAULT}))
+if [[ -n ${RECIPE_NAME} ]]; then
+  if [[ -z ${RECIPE_JSON} ]]; then
+    RECIPE_JSON=${RECIPE_DEFAULT}
+  else
+    echo "WARNING [TKNI ${FCN_NAME}] Operating without a coregistration recipe, default values may be insufficient, all variables should be specified"
+  fi
+fi
+if [[ ! -f ${RECIPE_JSON} ]]; then
+  echo "ERROR [TKNI ${FCN_NAME}] Recipe JSON not found. Aborting."
+  exit 1
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# read parameter names from recipe ---------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>reading coregistration parameters"; fi
+if [[ -n ${RECIPE_JSON} ]]; then
+  RECIPES=($(jq -r '.coregistration_recipe | keys_unsorted[]?' < ${RECIPE_JSON}))
+  if [[ " ${RECIPES[@]} " =~ " ${RECIPE_NAME} " ]]; then
+    PARAMS_RECIPE=($(jq -r '.coregistration_recipe.'${RECIPE_NAME}' | keys_unsorted[]?' < ${RECIPE_JSON}))
+  else
+    echo "ERROR [TKNI ${FCN_NAME}] Recipe not in JSON. Aborting."
+    exit 2
+  fi
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# parse inputs and recipe together ---------------------------------------------
+## variable specification order of priority
+## 1. direct input to function
+## 2. specified recipe
+## 3. default values
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>parsing coregistration recipe and loading defaults"; fi
+for (( i=0; i<${#PARAMS_DEFAULT[@]}; i++ )); do
+  unset VAR_NAME PARAM_STATE JQ_STR CHK_VAR
+  VAR_NAME=${PARAMS_DEFAULT[${i}]^^}
+  VAR_NAME=${VAR_NAME//-/_}
+  eval 'if [[ -n ${'${VAR_NAME}'} ]]; then PARAM_STATE="directInput"; else PARAM_STATE="lookup"; fi'
+  if [[ "${PARAM_STATE}" == "lookup" ]] &&\
+     [[ " ${PARAMS_RECIPE[@]} " =~ " ${PARAMS_DEFAULT[${i}]} " ]]; then
+     JQ_STR="'.coregistration_recipe.${RECIPE_NAME}."'"'${PARAMS_DEFAULT[${i}]}'"'"[]?'"
+     #eval ${VAR_NAME}'=($(jq '${JQ_STR}' < '${RECIPE_JSON}'))'
+     eval ${VAR_NAME}'=($(jq -r '${JQ_STR}' < '${RECIPE_JSON}'))'
+  elif [[ "${PARAM_STATE}" == "lookup" ]]; then
+     JQ_STR="'.coregistration_parameters."'"'${PARAMS_DEFAULT[${i}]}'"'"[]?'"
+     #eval ${VAR_NAME}'=($(jq '${JQ_STR}' < '${RECIPE_JSON}'))'
+     eval ${VAR_NAME}'=($(jq -r '${JQ_STR}' < '${RECIPE_JSON}'))'
+  fi
+  eval 'if [[ "${'${VAR_NAME}'}" == "required" ]]; then CHK_VAR="missing"; fi'
+  if [[ "${CHK_VAR}" == "missing" ]]; then
+    echo "ERROR [INC ${FCN_NAME}] ${VAR_NAME} required with no default"
+    exit 3
+  fi
+  eval 'if [[ ${#'${VAR_NAME}'} -eq 1 ]]; then '${VAR_NAME}'=(${'${VAR_NAME}'//;/ }); fi'
+
+  ## add space before square brackets for ANTs parsing change
+  eval 'for (( j=0; j<${#'${VAR_NAME}'[@]}; j++ )); do '${VAR_NAME}'[${j}]=${'${VAR_NAME}'[${j}]//[/[ }; '${VAR_NAME}'[${j}]=${'${VAR_NAME}'[${j}]//]/ ]}; done'
+done
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# parse basic required information about MOVING images -------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>parsing MOVING images"; fi
+MOVING=(${MOVING//,/ })
+for (( i=0; i<${#MOVING[@]}; i++ )); do
+  MOD+=($(getField -i ${MOVING[${i}]} -f modality))
+done
+MOD_STR="${MOD[@]}"
+MOD_STR=${MOD_STR// /+}
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# Set up BIDs compliant variables and workspace --------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>gathering project and participant information"; fi
+#DIR_PROJECT=$(getDir -i ${MOVING[0]})
+#PID=$(getField -i ${MOVING[0]} -f sub)
+#SID=$(getField -i ${MOVING[0]} -f ses)
+#DIRPID=sub-${PID}
+#PIDSTR=sub-${PID}
+#if [[ -n ${SID} ]]; then
+#  DIRPID=${DIRPID}/ses-${SID}
+#  PIDSTR=${PIDSTR}_ses-${SID}
+#fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# set defaults as necessary ----------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>setting default file prefixes"; fi
+if [[ "${PREFIX,,}" == "default" ]]; then
+  PREFIX=$(getBidsBase -s -i ${MOVING[0]})
+  if [[ -n ${PREP} ]]; then
+    PREP="${PREP}+coreg"
+    PREFIX=$(modField -i ${PREFIX} -r -f prep)
+  fi
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# set directories --------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>setting output directories"; fi
+if [[ "${DIR_SAVE,,}" == "default" ]]; then
+  #DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPELINE}/anat/prep/${DIRPID}
+  DIR_SAVE=$(dirname ${MOVING[0]})
+fi
+if [[ "${DIR_XFM,,}" == "default" ]]; then
+  #DIR_XFM=${DIR_PROJECT}/derivatives/${PIPELINE}/xfm/${DIRPID}
+  DIR_XFM=$(dirname ${MOVING[0]})
+fi
+if [[ "${DIR_SCRATCH,,}" == "default" ]]; then
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+fi
+if [[ "${DIR_TEMPLATE,,}" == "default" ]]; then
+  DIR_TEMPLATE=${TKNIPATH}/atlas/adult/${TEMPLATE}
+fi
+if [[ "${MAKE_PNG}" == "true" ]]; then
+  if [[ "${DIR_PNG,,}" == "default" ]]; then
+    #DIR_PNG=${DIR_PROJECT}/derivatives/${PIPELINE}/png/${DIRPID}
+    DIR_PNG=$(dirname ${MOVING[0]})
+  fi
+fi
+
+## make directories 
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]]; then mkdir -p ${DIR_XFM}; fi
+if [[ "${MAKE_PNG}" == "true" ]]; then mkdir -p ${DIR_PNG}; fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# parse fixed ------------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>parsing fixed/template images"; fi
+if [[ "${FIXED}" == "optional" ]]; then
+  unset FIXED
+  for (( i=0; i<${#MOVING[@]}; i++ )); do
+    if [[ -f ${DIR_TEMPLATE}/${TEMPLATE}_${SPACE_SOURCE}_${MOD[${i}]}.nii.gz ]]; then
+      FIXED+=(${DIR_TEMPLATE}/${TEMPLATE}_${SPACE_SOURCE}_${MOD[${i}]}.nii.gz)
+    else
+      FIXED+=(${DIR_TEMPLATE}/${TEMPLATE}_${SPACE_SOURCE}_T1w.nii.gz)
+    fi
+  done
+else
+  FIXED=(${FIXED//,/ })
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# set reference spacing for output ----------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>setting spacing for output"; fi
+if [[ "${SPACE_TARGET}" == "fixed" ]]; then
+  REF_IMAGE=${FIXED[0]}
+  SPACE_REF=$(niiInfo -i ${REF_IMAGE} -f spacing)
+  SPACE_REF="${SPACE_REF// /x}"
+elif [[ "${SPACE_TARGET}" == "moving" ]]; then
+  SPACE_TMP=$(niiInfo -i ${MOVING[0]} -f spacing)
+  SPACE_REF="${SPACE_TMP// /x}"
+  REF_IMAGE=${DIR_SCRATCH}/REFERENCE_IMAGE.nii.gz
+  ResampleImage 3 ${FIXED[0]} ${REF_IMAGE} ${SPACE_REF} 0
+elif [[ "${SPACE_TARGET}" == "reference" ]]; then
+  if [[ "${REF_IMAGE}" == "default" ]]; then
+    echo "ERROR [TKNI:${FCN_NAME}] Reference Image must be provided."
+  else
+    SPACE_TMP=$(niiInfo -i ${REF_IMAGE} -f spacing)
+    SPACE_REF="${SPACE_TMP// /x}"
+    REF_IMAGE=${DIR_SCRATCH}/REFERENCE_IMAGE.nii.gz
+    ResampleImage 3 ${FIXED[0]} ${REF_IMAGE} ${SPACE_REF} 0
+#    SPACE_MOVING=$(niiInfo -i ${MOVING[0]} -f spacing)
+#    SPACE_FIXED=$(niiInfo -i ${FIXED[0]} -f spacing)
+#  if [[ "${SPACE_TARGET}" == "moving" ]]; then
+#    SPACE_REF="${SPACE_MOVING// /x}"
+#  elif [[ "${SPACE_TARGET}" == "fixed" ]]; then
+#    SPACE_REF="${SPACE_FIXED// /x}"
+#  else
+#    SPACE_REF=$(convSpacing -i ${SPACE_TARGET})
+#  fi
+#  SPACE_CHK="${SPACE_FIXED// /x}"
+#  if [[ "${SPACE_REF}" == "${SPACE_CHK}" ]]; then
+#    REF_IMAGE=${FIXED[0]}
+#  else
+#    REF_IMAGE=${DIR_SCRATCH}/REFERENCE_IMAGE.nii.gz
+#    if [[ "${DRY_RUN}" == "false" ]]; then
+#      ResampleImage 3 ${FIXED[0]} ${REF_IMAGE} ${SPACE_REF} 0
+#    fi
+#  fi
+  fi
+else
+  SPACE_REF=$(convSpacing -i ${SPACE_TARGET})
+  REF_IMAGE=${DIR_SCRATCH}/REFERENCE_IMAGE.nii.gz
+  ResampleImage 3 ${FIXED[0]} ${REF_IMAGE} ${SPACE_REF} 0  
+fi
+
+if [[ "${VERBOSE}" == "true" ]]; then echo -e "\t${SPACE_REF} DONE"; fi
+
+# check for histogram matching -------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>set histogram matching"; fi
+if [[ "${USE_HISTOGRAM_MATCHING}" == "default" ]]; then
+  USE_HISTOGRAM_MATCHING=1
+  for (( i=0; i<${#MOVING[@]}; i++ )); do
+    MOVING_MOD=$(getField -i ${MOVING[${i}]} -f modality)
+    FIXED_MOD=$(getField -i ${FIXED[${i}]} -f modality)
+    if [[ "${MOVING_MOD}" != "${FIXED_MOD}" ]]; then
+      USE_HISTOGRAM_MATCHING=0
+      break
+    fi
+  done
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# check masks ------------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>check masks"; fi
+if [[ "${MOVING_MASK[0]}" != "optional" ]]; then
+  MASK_LS=(${MOVING_MASK//,/ })
+  unset MOVING_MASK
+
+  ## Prepare moving masks - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  for (( i=0; i<${#MASK_LS[@]}; i++ )); do
+    if [[ "${MASK_LS[${i}]}" != "NULL" ]]; then
+      if [[ "${DRY_RUN}" == "false" ]]; then
+        ### Threshold masks  -  -  -
+        fslmaths ${MASK_LS[${i}]} -thr ${MOVING_MASK_THRESHOLD} -bin \
+          ${DIR_SCRATCH}/MOVING_MASK_${i}.nii.gz
+
+        ### Dilate masks  -  -  -
+        if [[ ${MOVING_MASK_DILATION} -ne 0 ]]; then
+          ImageMath 3 ${DIR_SCRATCH}/MOVING_MASK_${i}.nii.gz \
+            MD ${DIR_SCRATCH}/MOVING_MASK_${i}.nii.gz ${MOVING_MASK_DILATION}
+        fi
+      fi
+      MASK_LS[${i}]=${DIR_SCRATCH}/MOVING_MASK_${i}.nii.gz
+    else
+      MASK_LS[${i}]=NULL
+    fi
+  done
+
+  if [[ ${#MASK_LS[@]} -eq 1 ]]; then
+    for (( i=0; i<${#TRANSFORM[@]}; i++ )); do
+      MOVING_MASK+=(${MASK_LS[0]})
+    done
+  elif [[ ${#MASK_LS[@]} -eq ${#TRANSFORM[@]} ]]; then
+    MOVING_MASK=($(echo ${MASK_LS[@]}))
+  else
+    echo "ERROR [INC ${FCN_NAME}] number of moving masks must equal 1 or the number of transforms"
+    exit 4
+  fi
+
+  if [[ "${DRY_RUN}" == "false" ]]; then
+    if [[ "${MASK_PROCEDURE,,}" == "intersect" ]] || \
+       [[ "${MASK_PROCEDURE,,}" == "union" ]]; then
+      if [[ ${#MASK_LS[@]} -gt 1 ]]; then
+        MASK_CSV=$(echo ${MASK_LS[@]})
+        MASK_CSV=${MASK_CSV//NULL}
+        MASK_CSV=${MASK_CSV// /,}
+        maskVenn --mask-ls ${MASK_CSV} --dir-save ${DIR_SCRATCH} --prefix MOVING
+        MASK_THRESH=0
+        if [[ "${MASK_PROCEDURE,,}" == "intersect" ]]; then
+          MASK_THRESH=$(fslstats ${DIR_SCRATCH}/MOVING_mask-venn.nii.gz -P 100)
+        fi
+        fslmaths ${DIR_SCRATCH}/MOVING_mask-venn.nii.gz \
+          -thr ${MASK_THRESH} -bin ${DIR_SCRATCH}/MOVING_MASK_APPLY.nii.gz
+      else
+        cp ${MASK_LS[0]} ${DIR_SCRATCH}/MOVING_MASK_APPLY.nii.gz
+      fi
+      for (( i=0; i<${#MOVING[@]}; i++ )); do
+        TMOD=$(getField -i ${MOVING[${i}]} -f modality)
+        fslmaths ${MOVING[${i}]} \
+          -mas ${DIR_SCRATCH}/MOVING_MASK_APPLY.nii.gz \
+          ${DIR_SCRATCH}/MOVING_${i}_${TMOD}.nii.gz
+        MOVING[${i}]=${DIR_SCRATCH}/MOVING_${i}_${TMOD}.nii.gz
+      done
+      unset MASK_LS
+      MOVING_MASK="optional"
+    fi
+  fi
+fi
+
+if [[ "${FIXED_MASK[0]}" != "optional" ]]; then
+  unset MASK_LS
+  MASK_LS=(${FIXED_MASK//,/ })
+  unset FIXED_MASK
+  
+  ## Prepare fixed masks - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  for (( i=0; i<${#MASK_LS[@]}; i++ )); do
+    if [[ "${MASK_LS[${i}]}" != "NULL" ]]; then
+      if [[ "${DRY_RUN}" == "false" ]]; then
+        ### Threshold masks  -  -  -
+        fslmaths ${MASK_LS[${i}]} -thr ${FIXED_MASK_THRESHOLD} -bin \
+          ${DIR_SCRATCH}/FIXED_MASK_${i}.nii.gz
+
+        ### Dilate masks  -  -  -
+        if [[ ${FIXED_MASK_DILATION} -ne 0 ]]; then
+          ImageMath 3 ${DIR_SCRATCH}/FIXED_MASK_${i}.nii.gz \
+            MD ${DIR_SCRATCH}/FIXED_MASK_${i}.nii.gz ${FIXED_MASK_DILATION}
+        fi
+      fi
+      MASK_LS[${i}]=${DIR_SCRATCH}/FIXED_MASK_${i}.nii.gz
+    else
+      MASK_LS[${i}]=NULL
+    fi
+  done
+
+  if [[ ${#MASK_LS[@]} -eq 1 ]]; then
+    for (( i=0; i<${#TRANSFORM[@]}; i++ )); do
+      FIXED_MASK+=(${MASK_LS[0]})
+    done
+  elif [[ ${#MASK_LS[@]} -eq ${#TRANSFORM[@]} ]]; then
+    FIXED_MASK=($(echo ${MASK_LS[@]}))
+  else
+    echo "ERROR [INC ${FCN_NAME}] number of fixed masks must equal 1 or the number of transforms"
+    exit 5
+  fi
+
+  if [[ "${DRY_RUN}" == "false" ]]; then
+    if [[ "${MASK_PROCEDURE,,}" == "intersect" ]] || \
+       [[ "${MASK_PROCEDURE,,}" == "union" ]]; then
+      if [[ ${#MASK_LS[@]} -gt 1 ]]; then
+        MASK_CSV=$(echo ${MASK_LS[@]})
+        MASK_CSV=${MASK_CSV//NULL}
+        MASK_CSV=${MASK_CSV// /,}
+        maskVenn --mask-ls ${MASK_CSV} --dir-save ${DIR_SCRATCH} --prefix FIXED
+        MASK_THRESH=0
+        if [[ "${MASK_PROCEDURE,,}" == "intersect" ]]; then
+          MASK_THRESH=$(fslstats ${DIR_SCRATCH}/FIXED_mask-venn.nii.gz -P 100)
+        fi
+        fslmaths ${DIR_SCRATCH}/FIXED_mask-venn.nii.gz \
+          -thr ${MASK_THRESH} -bin ${DIR_SCRATCH}/FIXED_MASK_APPLY.nii.gz
+      else
+        cp ${MASK_LS[0]} ${DIR_SCRATCH}/FIXED_MASK_APPLY.nii.gz
+      fi
+      for (( i=0; i<${#FIXED[@]}; i++ )); do
+        TMOD=$(getField -i ${FIXED[${i}]} -f modality)
+        fslmaths ${FIXED[${i}]} \
+          -mas ${DIR_SCRATCH}/FIXED_MASK_APPLY.nii.gz \
+          ${DIR_SCRATCH}/FIXED_${i}_${TMOD}.nii.gz
+        FIXED[${i}]=${DIR_SCRATCH}/FIXED_${i}_${TMOD}.nii.gz
+      done
+      unset MASK_LS
+      FIXED_MASK="optional"
+    fi
+  fi
+fi
+
+if [[ "${MOVING_MASK[0]}" != "optional" ]] && \
+   [[ "${FIXED_MASK[0]}" != "optional" ]] && \
+   [[ ${#FIXED_MASK[@]} -ne ${#MOVING_MASK[@]} ]]; then
+  echo "ERROR [INC ${FCN_NAME}] number of fixed and moving masks must match"
+  exit 6
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# generate output names --------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>generate output names"; fi
+PREP=$(getField -i ${PREFIX} -f prep)
+if [[ -n ${PREP} ]]; then PREFIX=$(modField -i ${PREFIX} -r -f prep); fi
+if [[ -z ${RECIPE_NAME} ]]; then RECIPE_NAME=coreg; fi
+if [[ "${LABEL_FROM,,}" == "default" ]]; then LABEL_FROM=$(getSpace -i ${MOVING[0]}); fi
+if [[ "${LABEL_TO,,}" == "default" ]]; then LABEL_TO=$(getSpace -i ${FIXED[0]}); fi
+if [[ "${LABEL_REG,,}" == "default" ]]; then
+  if [[ -n ${PREP} ]]; then
+    LABEL_REG=prep-${PREP}+${RECIPE_NAME}+${LABEL_TO}
+  else
+    LABEL_REG=reg-${RECIPE_NAME}+${LABEL_TO}
+  fi
+fi
+
+for (( i=0; i<${#MOVING[@]}; i++ )); do
+  MOVING_OUTPUT+=(${PREFIX})
+  if [[ -n ${PREP} ]]; then
+    MOVING_OUTPUT[${i}]="${MOVING_OUTPUT[${i}]}_${LABEL_REG}"
+  else
+    MOVING_OUTPUT[${i}]="${MOVING_OUTPUT[${i}]}_${LABEL_REG}"
+  fi
+  TMOD=$(getField -i ${MOVING[${i}]} -f modality)
+  MOVING_OUTPUT[${i}]="${MOVING_OUTPUT[${i}]}_${TMOD}.nii.gz"
+done
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne " MOVING"; fi
+
+APPLY_TO=(${APPLY_TO//,/ })
+if [[ "${APPLY_TO[0]}" != "optional" ]]; then
+  if [[ "${APPLY_TO_NAME[0]}" == "optional" ]]; then
+    for (( i=0; i<${#APPLY_TO[@]}; i++ )); do
+      TSTR=$(getBidsBase -s -i ${APPLY_TO[${i}]})
+      APPLY_OUTPUT+=("${PREFIX}_${LABEL_REG}_${TSTR}")
+    done
+  else
+    APPLY_TO_NAME=(${APPLY_TO_NAME//,/ })
+    for (( i=0; i<${#APPLY_TO[@]}; i++ )); do
+      APPLY_OUTPUT+=("${APPLY_TO_NAME[${i}]}.nii.gz")
+    done
+  fi
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne " EXTRA"; fi
+fi
+
+if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]]; then
+  LABEL_XFM=(${LABEL_XFM//,/ })
+  if [[ "${LABEL_XFM[0]}" == "default" ]]; then
+    if [[ "${TRANSFORM[@],,}" == *"bsplineexponential"* ]]; then
+      LABEL_XFM[0]="bsplineExp"
+    elif [[ "${TRANSFORM[@],,}" == *"exponential"* ]]; then
+      LABEL_XFM[0]="exp"
+    elif [[ "${TRANSFORM[@],,}" == *"bsplinesyn"* ]]; then
+      LABEL_XFM[0]="bsplineSyn"
+    elif [[ "${TRANSFORM[@],,}" == *"syn"* ]]; then
+      LABEL_XFM[0]="syn"
+    elif [[ "${TRANSFORM[@],,}" == *"timevaryingbsplinevelocityfield"* ]]; then
+      LABEL_XFM[0]="timeVaryingBspline"
+    elif [[ "${TRANSFORM[@],,}" == *"timevaryingvelocityfield"* ]]; then
+      LABEL_XFM[0]="timeVarying"
+    elif [[ "${TRANSFORM[@],,}" == *"bsplinedisplacementfield"* ]]; then
+      LABEL_XFM[0]="bsplineDisp"
+    elif [[ "${TRANSFORM[@],,}" == *"gaussiandisplacementfield"* ]]; then
+      LABEL_XFM[0]="displacement"
+    elif [[ "${TRANSFORM[@],,}" == *"bspline"* ]]; then
+      LABEL_XFM[0]="bspline"
+    else
+      LABEL_XFM[0]="none"
+    fi
+    if [[ "${TRANSFORM[@],,}" == *"compositeaffine"* ]]; then
+      LABEL_XFM[1]="affineComposite"
+    elif [[ "${TRANSFORM[@],,}" == *"affine"* ]]; then
+      LABEL_XFM[1]="affine"
+    elif [[ "${TRANSFORM[@],,}" == *"similarity"* ]]; then
+      LABEL_XFM[1]="similarity"
+    elif [[ "${TRANSFORM[@],,}" == *"rigid"* ]]; then
+      LABEL_XFM[1]="rigid"
+    elif [[ "${TRANSFORM[@],,}" == *"translation"* ]]; then
+      LABEL_XFM[1]="translation"
+    else
+      LABEL_XFM[1]="none"
+    fi
+  fi
+fi
+if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]] ; then
+  if [[ "${LABEL_XFM[1]}" != "none" ]]; then
+    AFFINE_OUTPUT=${PREFIX}_mod-${MOD_STR}_from-${LABEL_FROM}_to-${LABEL_TO}_xfm-${LABEL_XFM[1]}.mat
+  fi
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne " XFM"; fi
+fi
+if [[ "${KEEP_FWD_XFM}" == "true" ]]; then
+  if [[ "${LABEL_XFM[0]}" != "none" ]]; then
+    FWD_OUTPUT=${PREFIX}_mod-${MOD_STR}_from-${LABEL_FROM}_to-${LABEL_TO}_xfm-${LABEL_XFM[0]}.nii.gz
+  fi
+fi
+if [[ "${KEEP_INV_XFM}" == "true" ]]; then
+  if [[ "${LABEL_XFM[0]}" != "none" ]]; then
+    INV_OUTPUT=${PREFIX}_mod-${MOD_STR}_from-${LABEL_FROM}_to-${LABEL_TO}_xfm-${LABEL_XFM[0]}+inverse.nii.gz
+  fi
+fi
+if [[ "${MAKE_OVERLAY_PNG}" == "true" ]]; then
+  TNAME=${MOVING_OUTPUT[0]%%.*}
+  PNG_OVERLAY_FILENAME=${TNAME}_overlay
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne " PNG-OVERLAY"; fi
+fi
+if [[ "${MAKE_GRADIENT_PNG}" == "true" ]]; then
+  TNAME=${MOVING_OUTPUT[0]%%.*}
+  PNG_GRAD_FILENAME=${TNAME}_gradientMagDiff
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne " PNG-GRADIENT"; fi
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# show outputs for dry run -----------------------------------------------------
+if [[ "${DRY_RUN}" == "true" ]] || [[ "${VERBOSE}" == "true" ]]; then
+  echo ""
+  echo "PARAMETERS:---------------------------------------------------------------------"
+  for (( i=0; i<${#PARAMS_DEFAULT[@]}; i++ )); do
+    VAR_NAME=${PARAMS_DEFAULT[${i}]^^}
+    VAR_NAME=${VAR_NAME//-/_}
+    eval "echo ${VAR_NAME}="'${'${VAR_NAME}'[@]}'
+  done
+  echo ""
+  echo "OUTPUT:------------------------------------------------------------------"
+  echo "TRANSFORMED IMAGES:"
+  echo -e "\t${DIR_SAVE}"
+  for (( i=0; i<${#MOVING[@]}; i++ )); do echo -e "\t\t${MOVING_OUTPUT[${i}]}"; done
+  if [[ "${APPLY_TO[0]}" != "optional" ]]; then
+    for (( i=0; i<${#APPLY_TO[@]}; i++ )); do echo -e "\t\t${APPLY_OUTPUT[${i}]}"; done
+  fi
+  if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]]; then
+    echo "TRANSFORMS:"
+    echo -e "\t${DIR_XFM}"
+    if [[ -n ${AFFINE_OUTPUT} ]]; then echo -e "\t\t${AFFINE_OUTPUT}"; fi
+    if [[ -n ${FWD_OUTPUT} ]]; then echo -e "\t\t${FWD_OUTPUT}"; fi
+    if [[ -n ${INV_OUTPUT} ]]; then echo -e "\t\t${INV_OUTPUT}"; fi
+  fi
+fi
+
+### write ANTS registration function ===========================================
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>write coregistration function"; fi
+antsCoreg="antsRegistration"
+antsCoreg="${antsCoreg} --dimensionality ${DIMENSIONALITY}"
+antsCoreg="${antsCoreg} --output ${DIR_SCRATCH}/xfm_"
+if [[ "${SAVE_STATE}" != "optional" ]]; then
+  antsCoreg="${antsCoreg} --save-state ${SAVE_STATE}"
+fi
+if [[ "${RESTORE_STATE}" != "optional" ]]; then
+  antsCoreg="${antsCoreg} --restore-state ${RESTORE_STATE}"
+fi
+if [[ "${WRITE_COMPOSITE_TRANSFORM}" == "true" ]]; then
+  antsCoreg="${antsCoreg} --write-composite-transform 1"
+else  
+  antsCoreg="${antsCoreg} --write-composite-transform 0"
+fi
+if [[ ${PRINT_SIMILARITY_MEASURE_INTERVAL} -ne 0 ]]; then
+  antsCoreg="${antsCoreg} --print-similarity-measure-interval ${PRINT_SIMILARITY_MEASURE_INTERVAL}"
+fi
+if [[ ${WRITE_INTERVAL_VOLUMES} -ne 0 ]]; then
+  antsCoreg="${antsCoreg} --write-interval-voumes ${WRITE_INTERVAL_VOLUMES}"
+fi
+if [[ "${COLLAPSE_OUTPUT_TRANSFORMS}" == "true" ]]; then
+  antsCoreg="${antsCoreg} --collapse-output-transforms 1"
+else
+  antsCoreg="${antsCoreg} --collapse-output-transforms 0"
+fi
+if [[ "${INITIALIZE_TRANSFORMS_PER_STAGE}" == "true" ]]; then
+  antsCoreg="${antsCoreg} --initialize-transforms-per-stage 1"
+else
+  antsCoreg="${antsCoreg} --initialize-transforms-per-stage 0"
+fi
+if [[ "${INITIAL_FIXED_TRANSFORM}" == "default" ]]; then
+  antsCoreg="${antsCoreg} --initial-fixed-transform [ ${MOVING[0]},${FIXED[0]},1 ]"
+elif [[ "${INITIAL_FIXED_TRANSFORM}" != "optional" ]]; then
+  INITIAL_FIXED_TRANSFORM=(${INITIAL_FIXED_TRANSFORM//;/ })
+  for (( i=0; i<${#INITIAL_FIXED_TRANSFORM[@]}; i++ )); do
+    antsCoreg="${antsCoreg} --initial-fixed-transform ${INITIAL_FIXED_TRANSFORM[${i}]}"
+  done
+fi
+if [[ "${INITIAL_MOVING_TRANSFORM}" == "default" ]]; then
+  antsCoreg="${antsCoreg} --initial-moving-transform [ ${FIXED[0]},${MOVING[0]},1 ]"
+elif [[ "${INITIAL_MOVING_TRANSFORM}" != "optional" ]]; then
+  INITIAL_MOVING_TRANSFORM=(${INITIAL_MOVING_TRANSFORM//;/ })
+  for (( i=0; i<${#INITIAL_MOVING_TRANSFORM[@]}; i++ )); do
+    antsCoreg="${antsCoreg} --initial-moving-transform ${INITIAL_MOVING_TRANSFORM[${i}]}"
+  done
+fi
+
+if [[ "${MASK_PROCEDURE}" == "restrict" ]] \
+&& [[ "${FIXED_MASK[0]}" != "optional" ]] \
+&& [[ ${#FIXED_MASK[@]} -eq 1 ]]; then
+  antsCoreg="${antsCoreg} --masks [ ${FIXED_MASK[0]},${MOVING_MASK[0]} ]"
+fi
+for (( i=0; i<${#TRANSFORM[@]}; i++ )); do
+  antsCoreg="${antsCoreg} --transform ${TRANSFORM[${i}]}"
+  #METRIC_STR=(${METRIC[${i}]//fixedImage,movingImage/ })
+  for (( j=0; j<${#MOVING[@]}; j++ )); do
+    METRIC_STR=${METRIC[${i}]//fixedImage,movingImage/${FIXED[${j}]},${MOVING[${j}]}}
+    #antsCoreg="${antsCoreg} --metric ${METRIC_STR[0]}${FIXED[${j}]},${MOVING[${j}]}${METRIC_STR[1]}"
+    antsCoreg="${antsCoreg} --metric ${METRIC_STR}"
+  done
+  if [[ "${MASK_PROCEDURE}" == "restrict" ]] \
+  && [[ "${FIXED_MASK[0]}" != "optional" ]] \
+  && [[ ${#FIXED_MASK[@]} -gt 1 ]]; then
+    antsCoreg="${antsCoreg} --masks [ ${FIXED_MASK[${i}]},${MOVING_MASK[${i}]} ]"
+  fi
+  if [[ "${RESTRICT_DEFORMATION}" != "optional" ]]; then
+    antsCoreg="${antsCoreg} --restrict-deformation ${RESTRICT_DEFORMATION[${i}]}"
+  fi
+  antsCoreg="${antsCoreg} --convergence [ ${CONVERGENCE[${i}]} ]"
+  antsCoreg="${antsCoreg} --smoothing-sigmas ${SMOOTHING_SIGMAS[${i}]}"
+  antsCoreg="${antsCoreg} --shrink-factors ${SHRINK_FACTORS[${i}]}"
+done
+antsCoreg="${antsCoreg} --use-histogram-matching ${USE_HISTOGRAM_MATCHING}"
+#if [[ "${USE_ESTIMATE_LEARNING_RATE_ONCE}" == "true" ]]; then
+#  antsCoreg="${antsCoreg} --use-estimate-learning-rate-once 1"
+#else
+#  antsCoreg="${antsCoreg} --use-estimate-learning-rate-once 0"
+#fi
+if [[ "${WINSORIZE_IMAGE_INTENSITIES}" != "optional" ]]; then
+  antsCoreg="${antsCoreg} --winsorize-image-intensities ${WINSORIZE_IMAGE_INTENSITIES}"
+fi
+if [[ "${FLOAT}" == "true" ]]; then
+  antsCoreg="${antsCoreg} --float 1"
+else
+  antsCoreg="${antsCoreg} --float 0"
+fi
+if [[ "${ANTS_VERBOSE}" == "true" ]]; then
+  antsCoreg="${antsCoreg} --verbose 1"
+else
+  antsCoreg="${antsCoreg} --verbose 0"
+fi
+antsCoreg="${antsCoreg} --random-seed ${RANDOM_SEED}"
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+if [[ "${DRY_RUN}" == "true" ]] || [[ "${VERBOSE}" == "true" ]]; then
+  echo -e "\nANTs Coregistration Call -------------------------------------------------------"
+  echo -e "\n${antsCoreg//--/\\n--}\n"
+fi
+if [[ "${DRY_RUN}" == "true" ]]; then
+  exit 0
+fi
+
+# make directories ------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>make output directories"; fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]]; then mkdir -p ${DIR_XFM}; fi
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# run coregistration -----------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>run coregistration"; fi
+#writeScript -d ${DIR_PROJECT} -p ${PIDSTR} -s "${antsCoreg}"
+eval "${antsCoreg}"
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# if intervals are written save to desired directory ===========================
+if [[ ${WRITE_INTERVAL_VOLUMES} -ne 0 ]]; then
+  if [[ -z ${DIR_INTERVAL} ]]; then
+    DIR_INTERVAL=${DIR_SAVE}
+  fi
+  rename "Stage" "${PREFIX}_stage-" ${DIR_SCRATCH}/Stage*
+  mv ${DIR_SCRATCH}/${PREFIX}_stage-* ${DIR_INTERVAL}/
+fi
+
+# apply transforms =============================================================
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>apply transforms to MOVING"; fi
+mkdir -p ${DIR_SAVE}
+for (( i=0; i<${#MOVING[@]}; i++ )); do
+  apply_xfm="antsApplyTransforms -d 3"
+  if [[ "${INTERPOLATION}" == "default" ]]; then
+    apply_xfm="${apply_xfm} -n BSpline[3]"
+  else
+    apply_xfm="${apply_xfm} -n ${INTERPOLATION}"
+  fi
+  apply_xfm="${apply_xfm} -i ${MOVING[${i}]}"
+  apply_xfm="${apply_xfm} -o ${DIR_SCRATCH}/${MOVING_OUTPUT[${i}]}"
+  if [[ -f ${DIR_SCRATCH}/xfm_1Warp.nii.gz ]]; then
+    apply_xfm="${apply_xfm} -t ${DIR_SCRATCH}/xfm_1Warp.nii.gz"
+  fi
+  if [[ -f ${DIR_SCRATCH}/xfm_0GenericAffine.mat ]]; then
+    apply_xfm="${apply_xfm} -t ${DIR_SCRATCH}/xfm_0GenericAffine.mat"
+  fi
+  apply_xfm="${apply_xfm} -r ${REF_IMAGE}"
+  if [[ "${VERBOSE}" == "true" ]]; then
+    echo -e "\t${apply_xfm//--/\n--}\n"
+  fi
+  #writeScript -d ${DIR_PROJECT} -p ${PIDSTR} -s "${apply_xfm}"
+  eval ${apply_xfm}
+  if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+  
+  mv ${DIR_SCRATCH}/${MOVING_OUTPUT[${i}]} ${DIR_SAVE}/${MOVING_OUTPUT[${i}]}
+done
+if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+
+# apply to extra images --------------------------------------------------------
+if [[ "${APPLY_TO[0]}" != "optional" ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>apply transforms to ADDITIONAL IMAGES"; fi
+  for (( i=0; i<${#APPLY_TO[@]}; i++ )); do
+    TMOD=$(getField -i ${APPLY_TO[${i}]} -f modality)
+    apply_xfm="antsApplyTransforms -d 3"
+    if [[ "${INTERPOLATION}" == "default" ]]; then
+      if [[ "${TMOD}" == *"label"* ]]; then
+        apply_xfm="${apply_xfm} -n MultiLabel"
+      elif [[ "${TMOD}" == *"mask"* ]]; then
+        apply_xfm="${apply_xfm} -n GenericLabel"
+      else
+        apply_xfm="${apply_xfm} -n BSpline[3]"
+      fi
+    else
+      apply_xfm="${apply_xfm} -n ${INTERPOLATION}"
+    fi
+    apply_xfm="${apply_xfm} -i ${APPLY_TO[${i}]}"
+    apply_xfm="${apply_xfm} -o ${DIR_SCRATCH}/${APPLY_OUTPUT[${i}]}"
+    if [[ -f ${DIR_SCRATCH}/xfm_1Warp.nii.gz ]]; then
+      apply_xfm="${apply_xfm} -t ${DIR_SCRATCH}/xfm_1Warp.nii.gz"
+    fi
+    if [[ -f ${DIR_SCRATCH}/xfm_0GenericAffine.mat ]]; then
+      apply_xfm="${apply_xfm} -t ${DIR_SCRATCH}/xfm_0GenericAffine.mat"
+    fi
+    apply_xfm="${apply_xfm} -r ${REF_IMAGE}"
+    if [[ "${VERBOSE}" == "true" ]]; then echo -e "${apply_xfm}"; fi
+    #writeScript -d ${DIR_PROJECT} -p ${PIDSTR} -s "${apply_xfm}"
+    eval ${apply_xfm}
+    
+    mv ${DIR_SCRATCH}/${APPLY_OUTPUT[${i}]} ${DIR_SAVE}/${APPLY_OUTPUT[${i}]}
+  done
+  if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+fi
+
+# move results to desired destination ------------------------------------------
+if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>move transforms"; fi
+fi
+if [[ -f ${DIR_SCRATCH}/xfm_0GenericAffine.mat ]]; then
+  mv ${DIR_SCRATCH}/xfm_0GenericAffine.mat ${DIR_XFM}/${AFFINE_OUTPUT}
+fi
+if [[ -f ${DIR_SCRATCH}/xfm_1Warp.nii.gz ]]; then
+  mv ${DIR_SCRATCH}/xfm_1Warp.nii.gz ${DIR_XFM}/${FWD_OUTPUT}
+fi
+if [[ -f ${DIR_SCRATCH}/xfm_1InverseWarp.nii.gz ]]; then
+  mv ${DIR_SCRATCH}/xfm_1InverseWarp.nii.gz ${DIR_XFM}/${INV_OUTPUT}
+fi
+if [[ "${KEEP_FWD_XFM}" == "true" ]] || [[ "${KEEP_INV_XFM}" == "true" ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+fi
+
+# generate PNG -----------------------------------------------------------------
+if [[ "${NO_PNG}" == "false" ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>> make PNGs"; fi
+  for (( i=0; i<${#MOVING_OUTPUT[@]}; i++ )); do
+    make3Dpng \
+      --bg ${DIR_SAVE}/${MOVING_OUTPUT[${i}]} \
+      --bg-threshold "2.5,97.5" \
+      --dir-save ${DIR_SAVE}
+  done
+  if [[ "${APPLY_TO[0]}" != "optional" ]]; then
+    for (( i=0; i<${#APPLY_OUTPUT[@]}; i++ )); do
+        make3Dpng \
+          --bg ${DIR_SAVE}/${APPLY_OUTPUT[${i}]} \
+          --bg-threshold "2.5,97.5" \
+          --dir-save ${DIR_SAVE}
+    done
+  fi
+  make3Dpng \
+    --bg ${FIXED[0]} \
+      --bg-color "timbow:hue=#00FF00:lum=0,100:cyc=1/6" \
+      --bg-threshold "2.5,97.5" \
+    --fg ${DIR_SAVE}/${MOVING_OUTPUT[0]} \
+      --fg-threshold "2.5,97.5" \
+      --fg-color "timbow:hue=#FF00FF:lum=0,100:cyc=1/6" \
+      --fg-alpha 50 \
+      --fg-cbar "false"\
+    --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
+    --filename ${PREFIX}_${LABEL_REG} \
+    --dir-save ${DIR_XFM}
+  if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0

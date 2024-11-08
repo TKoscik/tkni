@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hs: --long string:,dir-log:,help -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+OP=$2
+HW=$3
+KL=$4
+FN=$5
+PS=$6
+PP=$7
+EC=$8
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    --operator) OP="$2" ; shift 2 ;;
+    --hardware) HW="$2" ; shift 2 ;;
+    --kernel) KL="$2" ; shift 2 ;;
+    --fcn-name) FN="$2" ; shift 2 ;;
+    --proc-start) PS="$2" ; shift 2 ;;
+    --proc-stop) PP="$2" ; shift 2 ;;
+    --exit-code) EC="$2" ; shift 2 ;;
+    --dir-log) DIR_LOG="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help           display command help'
+  echo '  --operator            user running function, input #1'
+  echo '  --hardware            hardware used, input #2'
+  echo '  --kernel              kernel used, input #3'
+  echo '  --fcn-name            name of function, input #4'
+  echo '  --proc-start          timestamp of process start, input #5'
+  echo '  --proc-stop           timestamp of process end, input #6'
+  echo '  --exit-code           function exit code, input #7'
+  echo '  --dir-log             specify log directory, default=${TKNI_LOG}'
+  echo '  Log files are automatically created with the filename:'
+  echo '    benchmark_FY<year>Q#.log, e.g., benchmark_FY2024Q1.log'
+  echo ''
+  exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# Start of function
+# ------------------------------------------------------------------------------
+HDR='operator,hardware,kernel,fcn-name,proc-start,proc-stop,exit-code'
+if [[ -z ${DIR_LOG} ]]; then DIR_LOG=${TKNI_LOG}; fi
+FLOG=${DIR_LOG}/benchmark_$(date +FY%Y)Q$((($(date +%-m)-1)/3+1)).log
+if [[ ! -d ${DIR_LOG} ]]; then mkdir -p ${DIR_LOG}; fi
+if [[ ! -f ${FLOG} ]]; then echo -e ${HDR} > ${FLOG}; fi
+echo "${OP},${HW},${KL},${FN},${PS},${PP},${EC}" >> ${FLOG}
+
+# ------------------------------------------------------------------------------
+# End of function
+# ------------------------------------------------------------------------------
+exit 0
+

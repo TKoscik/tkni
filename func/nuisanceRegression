@@ -1,0 +1,214 @@
+#!/bin/bash -e
+#===============================================================================
+# Functional Timeseries -  Nuisance Regression
+# Authors: Timothy R. Koscik
+# Date: 2020-03-27
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvkln --long prefix:,template:,space:,\
+ts-bold:,mask-brain:,pass-lo:,pass-hi:,poly-order:,regressor:,censor:,\
+dir-save:,dir-scratch:,\
+keep,help,verbose,no-log,no-png -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+TS_BOLD=
+MASK_BRAIN=
+PASS_LO=99999
+PASS_HI=0
+POLY_ORDER=1
+REGRESSOR=
+CENSOR=
+TEMPLATE=HCPICBM
+SPACE=2mm
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+KEEP=false
+VERBOSE=0
+HELP=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -k | --keep) KEEP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --ts-bold) TS_BOLD="$2" ; shift 2 ;;
+    --mask-brain) MASK_BRAIN="$2" ; shift 2 ;;
+    --pass-lo) PASS_LO="$2" ; shift 2 ;;
+    --pass-hi) PASS_HI="$2" ; shift 2 ;;
+    --poly-order) POLY_ORDER="$2" ; shift 2 ;;
+    --regressor) REGRESSOR="$2" ; shift 2 ;;
+    --censor) CENSOR="$2" ; shift 2 ;;
+    --template) TEMPLATE="$2" ; shift 2 ;;
+    --space) SPACE="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -c | --dry-run           test run of function'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -k | --keep              keep preliminary processing steps'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix <value>         scan prefix,'
+  echo '                           default: sub-123_ses-1234abcd'
+  echo '  --ts-bold <value>        full path to single, run timeseries'
+  echo '  --mask-brain <value>     full path to brain mask'
+  echo '  --pass-lo <value>        upper passband limit, default=99999'
+  echo '  --pass-hi <value>        lower passband limit, default=0'
+  echo '  --regressor <value>      comma separated list of regressors to use'
+  echo '  --template <value>       name of template to use, default=HCPICBM'
+  echo '  --space <value>          spacing of template to use, default=2mm'
+  echo '  --dir-save <value>       directory to save output, default varies by function'
+  echo '  --dir-scratch <value>    directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# Set up BIDs compliant variables and workspace --------------------------------
+DIR_PROJECT=$(getDir -i ${TS_BOLD})
+PID=$(getField -i ${TS_BOLD} -f sub)
+SID=$(getField -i ${TS_BOLD} -f ses)
+if [[ -z "${PREFIX}" ]]; then
+  PREFIX=$(getBidsBase -s -i ${TS_BOLD})
+fi
+if [[ ! -f "${TS_BOLD}" ]]; then
+  echo "The BOLD file does not exist. aborting."
+  exit 1
+fi
+if [ -z "${DIR_SAVE}" ]; then
+  DIR_SAVE=$(dirname ${TS_BOLD})
+fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# partial out nuisance variance -----------------------------------------------
+TR=$(niiInfo -i ${TS_BOLD} -f tr)
+REGRESSOR=(${REGRESSOR//,/ })
+N_REG=${#REGRESSOR[@]}
+
+AFNI_CALL="3dTproject -input ${TS_BOLD}"
+AFNI_CALL="${AFNI_CALL} -prefix ${DIR_SCRATCH}/resid.nii.gz"
+AFNI_CALL="${AFNI_CALL} -mask ${MASK_BRAIN}"
+
+AFNI_CALL="${AFNI_CALL} -bandpass ${PASS_HI} ${PASS_LO}"
+
+if [[ "${PASS_HI}" != "0" ]] && [[ ${POLY_ORDER} -gt 2 ]]; then
+  echo "You should not combine a high pass filter and a >2nd degree polynomial"
+  echo "POLY_ORDER is set to 2"
+  POLY_ORDER=2
+fi
+if [[ "${POLY_ORDER},," != "null" ]]; then
+  AFNI_CALL="${AFNI_CALL} -polort ${POLY_ORDER}"
+fi
+for (( i=0; i<${N_REG}; i++ )); do
+  AFNI_CALL="${AFNI_CALL} -ort ${REGRESSOR[${i}]}"
+done
+if [[ -n ${CENSOR} ]]; then
+  AFNI_CALL="${AFNI_CALL} -censor ${CENSOR} -cenmode NTRP"
+fi
+AFNI_CALL="${AFNI_CALL} -TR ${TR}"
+
+echo -e ">>>>>>3DTPROJECT CALL: ${AFNI_CALL}"
+eval ${AFNI_CALL}
+
+## export time series
+DIR_RGR=$(dirname ${REGRESSOR[0]})
+3dmaskave -quiet -mask ${MASK_BRAIN} ${DIR_SCRATCH}/resid.nii.gz \
+  > ${DIR_RGR}/${PREFIX}_ts-brain+resid.1D
+
+mv ${DIR_SCRATCH}/resid.nii.gz ${DIR_SAVE}/${PREFIX}_resid.nii.gz
+
+if [[ ${NO_PNG} == "false" ]]; then
+  unset TSLS
+  PFXTMP=$(modField -i ${PREFIX} -r -f reg)
+  echo ">>>>>>>${DIR_RGR}/${PFXTMP}"
+  if [[ -f ${DIR_RGR}/${PFXTMP}_ts-brain+raw.1D ]]; then
+    TSLS+=(${DIR_RGR}/${PFXTMP}_ts-brain+raw.1D)
+  fi
+  if [[ -f ${DIR_RGR}/${PFXTMP}_ts-brain+mocoReg.1D ]]; then
+    TSLS+=(${DIR_RGR}/${PFXTMP}_ts-brain+mocoReg.1D)
+  fi
+  if [[ -f ${DIR_RGR}/${PFXTMP}_ts-brain+censored.1D ]]; then
+    TSLS+=(${DIR_RGR}/${PFXTMP}_ts-brain+censored.1D)
+  fi
+  if [[ -f ${DIR_RGR}/${PREFIX}_ts-brain+resid.1D ]]; then
+    TSLS+=(${DIR_RGR}/${PREFIX}_ts-brain+resid.1D)
+  fi
+  if [[ ${#TSLS} -gt 1 ]]; then
+    fcn_str="paste -d ' '"
+    for (( i=0; i<${#TSLS[@]}; i++ )); do
+      fcn_str="${fcn_str} ${TSLS[${i}]}"
+    done
+    fcn_str="${fcn_str} > ${DIR_RGR}/${PREFIX}_ts-processing.1D"
+    eval ${fcn_str}
+    sed -i 's/  */\t/g' ${DIR_RGR}/${PREFIX}_ts-processing.1D
+    sed -i 's/\t$//g' ${DIR_RGR}/${PREFIX}_ts-processing.1D
+    TOPLOT=${DIR_RGR}/${PREFIX}_ts-processing.1D
+  else
+    TOPLOT=${TSLS}
+  fi
+  echo ">>>>>> ${TOPLOT}"
+  regressorPlot --regressor ${TOPLOT}
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+
+

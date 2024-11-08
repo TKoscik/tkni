@@ -1,0 +1,171 @@
+#!/bin/bash -e
+#===============================================================================
+# Crop and Pad 3D images
+# Authors: Timothy R. Koscik, PhD
+# Date: 2021/08/24
+# CHANGELOG: 
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+HPC_Q=${QUEUE}
+HPC_SLOTS=${NSLOTS}
+KEEP=false
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ "${KEEP}" == "false" ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    unset LOGSTR
+    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
+    writeLog --benchmark --string ${LOGSTR}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hlknv --long prefix:,image:,clip:,pad:,dir-save:,dir-scratch:,\
+help,no-log,keep,no-png,verbose -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+IMAGE=
+CLIP=0.1
+PAD=20
+DIR_SAVE=
+DIR_SCRATCH=${INC_SCRATCH}/${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+NO_PNG=false
+VERBOSE=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -k | --keep) KEEP=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --clip) CLIP="$2" ; shift 2 ;;
+    --pad) PAD="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  -k | --keep              keep mask from processing'
+  echo '  -n | --no-png            disable PNG generation'
+  echo '  --prefix  <optional>     new filename, without extension'
+  echo '  --image                  file to crop and pad'
+  echo '  --clip (default=0.1)     percentile value to use for clipping intensity'
+  echo '                           (AFNIs clip level fraction). smaller values'
+  echo '                           mean bigger masks'
+  echo '  --pad (default=20)       number of voxels to pad each dimension with'
+  echo '  --dir-save               location to save output'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# Set up BIDs compliant variables and workspace --------------------------------
+DIR_PROJECT=$(getDir -i ${IMAGE})
+PID=$(getField -i ${IMAGE} -f sub)
+SID=$(getField -i ${IMAGE} -f ses)
+PIDSTR=sub-${PID}
+if [[ -n ${SID} ]]; then PIDSTR="${PIDSTR}_ses-${SID}"; fi
+DIRPID=sub-${PID}
+if [[ -n ${SID} ]]; then DIRPID="${DIRPID}/ses-${SID}"; fi
+
+if [[ -z ${PREFIX} ]]; then
+  PREFIX=$(getBidsBase -i ${IMAGE} -s)
+  PREFIX=$(modField -i ${PREFIX} -a -f prep -v "clip")
+fi
+
+if [[ -z ${DIR_SAVE} ]]; then
+  FCN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+  FCN_TYPE=(${FCN_DIR//\// })
+  DIR_SAVE=${DIR_PROJECT}/derivatives/inc/${FCN_TYPE[-1]}/prep/${DIRPID}
+fi
+mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SCRATCH}
+
+# body of function here --------------------------------------------------------
+MASK=${DIR_SCRATCH}/${PREFIX}_mask-clip.nii.gz
+MOD=$(getField -i ${IMAGE} -f modality)
+TIMG=${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz
+
+if [[ "${CLIP}" != "0" ]]; then
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo "clipping"; fi
+  export AFNI_NIFTI_TYPE_WARN=NO
+  3dAutomask -q -prefix ${MASK} -clfrac ${CLIP} ${IMAGE}
+  XYZ=($(3dAutobox -noclust -input ${MASK} 2>&1))
+  Z=${XYZ[-1]}; Z=${Z//z=}; Z=(${Z//../ })
+  Y=${XYZ[-2]}; Y=${Y//y=}; Y=(${Y//../ })
+  X=${XYZ[-3]}; X=${X//x=}; X=(${X//../ })
+  fslroi ${IMAGE} ${TIMG} ${X[0]} ${X[1]} ${Y[0]} ${Y[1]} ${Z[0]} ${Z[1]}
+  fslroi ${MASK} ${MASK}  ${X[0]} ${X[1]} ${Y[0]} ${Y[1]} ${Z[0]} ${Z[1]}
+else
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo "not clipping"; fi
+  cp ${IMAGE} ${TIMG}
+fi
+if [[ "${PAD}" != "0" ]]; then
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo "padding"; fi
+  ImageMath 3 ${TIMG} PadImage ${TIMG} ${PAD}
+fi
+mv ${TIMG} ${DIR_SAVE}/
+
+if [[ "${NO_PNG}" == "false" ]]; then
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo "making PNG"; fi
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_${MOD}.nii.gz
+fi
+
+if [[ "${KEEP}" == "true" ]]; then
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo "padding mask"; fi
+  ImageMath 3 ${MASK} PadImage ${MASK} ${PAD}
+  CopyImageHeaderInformation ${DIR_SAVE}/${PREFIX}_${MOD}.nii.gz ${MASK} ${MASK} 1 1 1
+  ConvertImage 3 ${MASK} ${MASK} 5
+  mv ${MASK} ${DIR_SAVE}/
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+

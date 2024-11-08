@@ -1,0 +1,180 @@
+#!/bin/bash -e
+#===============================================================================
+# Wrapper for SAMSEG labelling from FreeSurfer
+# -useful for generating WM hyperintensities
+# -labels useful for generating myelin maps
+# Authors: Timothy R. Koscik, PhD
+# Date: 2020-11-10
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hkl --long prefix:,\
+image:,contrast:,thresh:,\
+pallidum-wm,lesion,wm-anomaly,\
+dir-save:,dir-scratch:,\
+help,keep,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+IMAGE=
+CONTRAST=
+THRESH=0.3
+PALLIDUM_WM=false
+LESION=false
+WM_ANOMALY=false
+DIR_SAVE=
+DIR_SCRATCH=${INC_SCRATCH}/${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+KEEP=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -k | --keep) KEEP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --contrast) CONTRAST="$2" ; shift 2 ;;
+    --thresh) THRESH="$2" ; shift 2 ;;
+    --pallidum-wm) PALLIDUM_WM="true" ; shift ;;
+    --lesion) LESION="true" ; shift ;;
+    --wm-anomaly) WM_ANOMALY="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -k | --keep              keep preliminary processing steps'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix <value>         scan prefix,'
+  echo '                           default: sub-123_ses-1234abcd'
+  echo '  --image <value>          comma-separated list of images'
+  echo '  --contrast <value>       x-separated list of contrasts for each image,'
+  echo '                           indicating direction of abnormality.'
+  echo '                           e.g., for T1w and FLAIR, contrast would be 0,1'
+  echo '                           where 1 indicates WM hyperintensities on FLAIR'
+  echo '                           but no specific direction on T1w'
+  echo '  --thresh <value>         probability do assign voxel as a lesion,'
+  echo '                           default=0.3'
+  echo '  --pallidum-wm            whether or not to try and process pallidum'
+  echo '                           separately or treat as a WM structure. Useful'
+  echo '                           when input images have sufficient contrast in'
+  echo '                           pallidal regions'
+  echo '  --lesion                 whether or not to segment WM lesions'
+  echo '  --wm-anomaly             whether or not to include a mask of WM'
+  echo '                           hyper- (or hypo-) intensities in output'
+  echo '  --dir-save <value>       directory to save output'
+  echo '  --dir-scratch <value>    directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+IMAGE=(${IMAGE//,/ })
+N_IMAGE=${#IMAGE[@]}
+
+# Set up BIDs compliant variables and workspace --------------------------------
+if [[ -z "${PREFIX}" ]]; then PREFIX=$(getBidsBase -s -i ${IMAGE[0]}); fi
+if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=$(dirname ${IMAGE[0]}); fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# Set up contrasts if not specified --------------------------------------------
+if [[ "${LESION}" == "true" ]] || [[ "${WM_ANOMALY}" == "true" ]]; then
+  if [[ -z ${CONTRAST} ]]; then
+    for (( i=0; i<${N_IMAGE}; i++ )); do
+      unset MOD
+      MOD=$(getField -i ${IMAGE[${i}]} -f modality)
+      if [[ "${MOD,,}" == "flair" ]] || [[ "${MOD,,}" == "t2w" ]]; then
+        CONTRAST+=(1)
+      elif [[ "${MOD,,}" == "t2starw" ]] || [[ "${MOD,,}" == "t2star" ]]; then
+        CONTRAST+=(-1)
+      else
+        echo "Contrast for ${MOD} not specified using value 0"
+        CONTRAST+=(0)
+      fi
+    done
+  else
+    CONTRAST=(${CONTRAST//,/ })
+  fi
+fi
+
+# Run SAMSEG -------------------------------------------------------------------
+samseg_fcn="run_samseg --input ${IMAGE[@]}"
+if [[ "${PALLIDUM_WM}" == "true" ]]; then
+  samseg_fcn="${samseg_fcn} --pallidum-separate"
+fi
+if [[ "${LESION}" == "true" ]] || [[ "${WM_ANOMALY}" == "true" ]]; then
+  samseg_fcn="${samseg_fcn} --lesion"
+  samseg_fcn="${samseg_fcn} --lesion-mask-pattern ${CONTRAST[@]//x/ }"
+  samseg_fcn="${samseg_fcn} --threshold ${THRESH}"
+fi
+samseg_fcn="${samseg_fcn} --output ${DIR_SCRATCH}"
+#echo ${samseg_fcn}
+eval ${samseg_fcn}
+
+# Convert and save segmentation output -----------------------------------------
+mri_convert ${DIR_SCRATCH}/seg.mgz ${DIR_SAVE}/${PREFIX}_label-samseg.nii.gz
+
+# Output WM Anomaly map if requested ------------------------------------
+if [[ "${WM_ANOMALY}" == "true" ]]; then
+  fslmaths ${DIR_SAVE}/${PREFIX}_label-samseg.nii.gz \
+    -thr 99 -uthr 99 -bin \
+    ${DIR_SAVE}/${PREFIX}_label-anomalyWM.nii.gz
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+

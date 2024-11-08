@@ -1,0 +1,199 @@
+#!/bin/bash -e
+#===============================================================================
+# Wrapper for generating resting state functional connectivity measures using
+# AFNIs 3dRSFC
+# Authors: Timothy Koscik, PhD
+# Date: 2021-07-22
+#
+#  If you use this program, please reference the introductory/description
+#  paper for the FATCAT toolbox:
+#        Taylor PA, Saad ZS (2013).  FATCAT: (An Efficient) Functional
+#        And Tractographic Connectivity Analysis Toolbox. Brain 
+#        Connectivity 3(5):523-535.
+#
+# CHANGELOG: <description of major changes to functionality>
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvln --long prefix:,ts:,mask:,\
+lo:,hi:,transients,detrend,despike,normalize,\
+dir-save:,dir-scratch:,\
+help,no-log,no-png,verbose -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+TS=
+MASK=
+LO=0
+HI=99999
+TRANS=false
+DETREND=false
+DESPIKE=false
+NORM=false
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) HELP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --ts) TS="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
+    --lo) LO="$2" ; shift 2 ;;
+    --hi) HI="$2" ; shift 2 ;;
+    --trans) TRANS=true ; shift ;;
+    --detrend) DETREND=true ; shift ;;
+    --despike) DESPIKE=true ; shift ;;
+    --normalize) NORM=true ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           print AFNI verbose output'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix                 filename, without extension to use for file'
+  echo '  --ts                     time-series, e.g., BOLD time-series, re-fMRI'
+  echo '  --lo                     lower boundary for bandpass filter, default 0'
+  echo '  --hi                     upper boundary for bandpass filter, default 999999'
+  echo '  --transients             toggle transients check, default off'
+  echo '  --detrend                toggle detrending of time-series, default off'
+  echo '  --despike                toggle time-series despiking, default off'
+  echo '  --normalize              toggle L2 norm=1, i.e., all sum of sq. = 1,'
+  echo '                           default off'
+  echo '  --dir-save               location to save output'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# Set up BIDs compliant variables and workspace --------------------------------
+#DIR_PROJECT=$(getDir -i ${TS})
+#PID=$(getField -i ${TS} -f sub)
+#SID=$(getField -i ${TS} -f ses)
+#PIDSTR=sub-${PID}
+#DIRPID=sub-${PID}
+#if [[ -n ${SID} ]]; then PIDSTR="${PIDSTR}_ses-${SID}"; fi
+#if [[ -n ${SID} ]]; then DIRPID="${DIRPID}/ses-${SID}"; fi
+if [[ -z ${PREFIX} ]]; then PREFIX=$(getBidsBase -i ${TS} -s); fi
+if [[ -z ${DIR_SAVE} ]]; then
+#  SPACE_LABEL=$(getSpace -i ${TS})
+  DIR_SAVE="$(dirname ${TS})/rsfc_parameters"
+fi
+mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SCRATCH}
+
+# calculate vars ---------------------------------------------------------------
+fcn_str="3dRSFC"
+if [[ "${VERBOSE}" == "false" ]]; then
+  fcn_str="${fcn_str} -quiet"
+fi
+if [[ "${TRANSIENTS}" == "false" ]]; then
+  fcn_str="${fcn_str} -notrans"
+fi
+if [[ "${DETREND}" == "false" ]]; then
+  fcn_str="${fcn_str} -nodetrend"
+fi
+if [[ "${DESPIKE}" == "true" ]]; then
+  fcn_str="${fcn_str} -despike"
+fi
+if [[ "${NORM}" == "true" ]]; then
+  fcn_str="${fcn_str} -norm"
+fi
+if [[ -n ${MASK} ]]; then
+  if [[ "${MASK,,}" == "auto" ]]; then
+    fcn_str="${fcn_str} -automask"
+  fi
+  fcn_str="${fcn_str} -mask ${MASK}"
+fi
+fcn_str="${fcn_str} -prefix ${DIR_SCRATCH}/${PREFIX}"
+fcn_str="${fcn_str} ${LO} ${HI} ${TS}"
+echo ${fcn_str}
+eval ${fcn_str}
+
+# convert HEAD/BRIK to NIFTI ---------------------------------------------------
+ls ${DIR_SCRATCH}
+FLS=($(ls ${DIR_SCRATCH}/*.HEAD))
+for (( i=0; i<${#FLS[@]}; i++ )); do
+  unset MOD
+  MOD=$(getField -i ${FLS[${i}]} -f modality)
+  3dAFNItoNIFTI -prefix ${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz ${FLS[${i}]}
+done
+rename 's/\+orig//g' ${DIR_SCRATCH}/*
+
+# move to output directory -----------------------------------------------------
+mv ${DIR_SCRATCH}/*.nii.gz ${DIR_SAVE}/
+
+if [[ "${NO_PNG}" == "false" ]]; then
+  CH=$(ezMath -x "0.3*0" -d 1)
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_ALFF.nii.gz --bg-color "cubehelix,start,${CH}"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_LFF.nii.gz --bg-color "cubehelix,start,${CH}"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_RSFA.nii.gz --bg-color "cubehelix,start,${CH}"
+  CH=$(ezMath -x "0.3*1" -d 1)
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_fALFF.nii.gz --bg-color "cubehelix,start,${CH}"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_fRSFA.nii.gz --bg-color "cubehelix,start,${CH}"
+  CH=$(ezMath -x "0.3*2" -d 1)
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_mALFF.nii.gz --bg-color "cubehelix,start,${CH}"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_mRSFA.nii.gz --bg-color "cubehelix,start,${CH}"
+fi
+ 
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+

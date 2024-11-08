@@ -1,0 +1,371 @@
+#!/bin/bash -e
+#===============================================================================
+# Convert DICOM to NIfTI1, designed to work with automatic XNAT downloads
+# Authors: Timothy R. Koscik, PhD
+# Date: 2021-01-21
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+HPC_Q=${QUEUE}
+HPC_SLOTS=${NSLOTS}
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ "${NO_LOG}" == "false" ]]; then
+    unset LOGSTR
+    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
+    writeLog --benchmark --string ${LOGSTR}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long \
+dir-input:,lut-json:,skip:,dir-project:,\
+id:,\
+help,verbose,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+DIR_INPUT=
+LUT_JSON=${TKNI_LUT}/series_description.json
+SKIP="cal,loc"
+DIR_PROJECT=
+IDPFX=
+HELP=false
+VERBOSE=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --id) IDPFX="$2" ; shift 2 ;;
+    --dir-input) DIR_INPUT="$2" ; shift 2 ;;
+    --lut-json) LUT_JSON="$2" ; shift 2 ;;
+    --skip) SKIP="$2" ; shift 2 ;;
+    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -v | --verbose           add verbose output to log file'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --dir-input <value>      directory containing converted dicoms'
+  echo '  --lut-json <value>       directory listing for json look up table of '
+  echo '                           series descriptions. Formatted such that'
+  echo '                           objects specifying the BIDS-compliant rawdata'
+  echo '                           sub-directory, contain arrays with names'
+  echo '                           corresponding to the file suffix (e.g.,'
+  echo '                           acq-ACQ_modality), which each contain strings'
+  echo '                           stripped of non-alphanumeric characters that'
+  echo '                           correspond to all known series descriptions.'
+  echo '                           Default: DIR_INC/lut/series_description.json'
+  echo '  --dir-project <value>    project directory'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# Check if identifiers are given -----------------------------------------------
+if [[ -z ${IDPFX} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] Participant ID Prefix must be specified"
+  exit 1
+fi
+
+# Check ID ---------------------------------------------------------------------
+if [[ -z ${IDPFX} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] ID Prefix must be provided"
+  exit 1
+fi
+if [[ -z ${IDDIR} ]]; then
+  TSUB=$(getField -i ${IDPFX} -f sub)
+  TSES=$(getField -i ${IDPFX} -f ses)
+  IDDIR=sub-${TSUB}
+  if [[ -n ${TSES} ]]; then
+    IDDIR="${IDDIR}/ses-${TSES}"
+  fi
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e "\tID:\t${IDPFX}"
+  echo -e "\tDIR_SUBJECT:\t${IDDIR}"
+fi
+
+# initialize variables ---------------------------------------------------------
+NII_LS=($(ls ${DIR_INPUT}/*.nii.gz))
+JSON_LS=($(ls ${DIR_INPUT}/*.nii.gz))
+
+N_NII=${#NII_LS[@]}
+N_JSON=${#JSON_LS[@]}
+
+if [[ ${N_NII} -ne ${N_JSON} ]]; then
+  echo "WARNING [TKNI:${FCN_NAME}] There are unequal numbers of NII and JSON Files"
+  echo "    NII files without JSON sidecars will be added to the unk directory"
+  echo "    unless the can be identified from the filename only"
+fi
+
+unset FNAME
+for (( i=0; i<${N_NII}; i++ )); do
+  unset BNAME
+  BNAME=$(basename ${NII_LS[${i}]})
+  FNAME[${i}]=${BNAME%%.*}
+done
+
+# pull information from JSON FILES ---------------------------------------------
+unset SERIES_DESC SERIES_NUM ECHO DIRECTION
+for (( i=0; i<${N_NII}; i++ )); do
+  JSON="${DIR_INPUT}/${FNAME[${i}]}.json"
+  SERIES_DESC+=($(jq ".SeriesDescription" < ${JSON} | tr -d '[],\n'))
+  SERIES_NUM+=($(jq ".SeriesNumber" < ${JSON} | tr -d '[],\n'))
+  ECHO+=($(jq ".EchoNumber" < ${JSON} | tr -d '[],\n'))
+done
+
+# Get info from series description look up table -------------------------------
+unset SUBDIR SUFFIX
+for (( i=0; i<${N_NII}; i++ )); do
+  unset LUT_DESC
+  CHK_DESC=$(echo "${SERIES_DESC[${i}]}" | sed 's/[^a-zA-Z0-9]//g')
+  LUT_FCN='LUT_DESC=($(cat '${LUT_JSON}
+  LUT_FCN="${LUT_FCN} | jq 'to_entries[]"
+  LUT_FCN=${LUT_FCN}' | {"key1": .key, "key2": .value'
+  LUT_FCN=${LUT_FCN}' | to_entries[] | select( .value | index("'${CHK_DESC}'")) '
+  LUT_FCN="${LUT_FCN} | .key }"
+  LUT_FCN="${LUT_FCN} | [.key1, .key2]'"
+  LUT_FCN="${LUT_FCN} | tr -d ' [],"'"'"'))"
+  eval ${LUT_FCN}
+  echo -e "SRC: ${SERIES_DESC[${i}]}\t\tSUBDIR: ${LUT_DESC[0]}\tSUFFIX: ${LUT_DESC[1]}"
+  if [[ -z ${LUT_DESC[0]} ]]; then
+    SUBDIR=unk
+    SUFFIX=unk
+  else
+    SUBDIR+=(${LUT_DESC[0]})
+    SUFFIX+=(${LUT_DESC[1]})
+  fi
+done
+
+# set autoname -----------------------------------------------------------------
+## if ECHO is not null add echo flag
+## if flow, then check series description for direction and add flag if found
+unset F_AUTO NBOLD
+for (( i=0; i<${N_NII}; i++ )); do
+  unset FTMP
+  FTMP="${IDPFX}_${SUFFIX[${i}]}"
+  # add echo if present in JSON - - - - - - - - - - - - - - - - - - - - - - - -
+  if [[ "${ECHO[${i}],,}" != "null" ]]; then
+    FTMP=$(modField -i ${FTMP} -a -f echo -v ${ECHO[${i}]})
+  fi
+  
+  ## modality specific processing below: = = = = = = = = = = = = = = = = = = = =
+  MOD=$(getField -i ${FTMP} -f modality)
+  echo "FTMP=${FTMP}: MOD=${MOD}"
+  
+  ### add direction flags for 4D Flow images - - - - - - - - - - - - - - - - - -
+  ### remove echo flags from these
+  if [[ "${MOD,,}" == "flow" ]]; then
+    if [[ "${SERIES_DESC[${i}]}" == *"_LR_"* ]]; then
+      FTMP=$(modField -i ${FTMP} -a -f dir -v LR)
+      FTMP=$(modField -i ${FTMP} -r -f echo)
+    elif [[ "${SERIES_DESC[${i}]}" == *"_AP_"* ]]; then
+      FTMP=$(modField -i ${FTMP} -a -f dir -v AP)
+      FTMP=$(modField -i ${FTMP} -r -f echo)
+    elif [[ "${SERIES_DESC[${i}]}" == *"_SI_"* ]]; then
+      FTMP=$(modField -i ${FTMP} -a -f dir -v SI)
+      FTMP=$(modField -i ${FTMP} -r -f echo)
+    fi
+  fi
+  
+  ### fix TB1TFL - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  if [[ "${MOD}" == "TB1TFL" ]]; then
+    echo "TFL"
+    if [[ -z ${TFL_TYPE} ]] || [[ ${TFL_TYPE} == "famp" ]]; then
+      TFL_TYPE="anat"
+    else      
+      TFL_TYPE="famp"
+    fi
+    FTMP=$(modField -i ${FTMP} -a -f acq -v ${TFL_TYPE})
+  fi
+  
+  ### add direction to FUNC, fields, and dwi - - - - - - - - - - - - - - - - - -
+  if [[ "${MOD,,}" == "fieldmap" ]]\
+  || [[ "${MOD,,}" == "spinecho" ]]\
+  || [[ "${MOD,,}" == "bold" ]]\
+  || [[ "${MOD,,}" == "dwi" ]]; then
+    CHKDIR=$(getField -i ${FTMP} -f dir)
+    if [[ -z ${CHKDIR} ]]; then
+      TDIRE=($(jq ".PhaseEncodingDirection" < ${F_ORIG[${i}]%%.*}.json | tr -d '[],\n'))
+      TDIRE=${TDIRE//\"}
+      if [[ "${TDIRE}" == "j" ]]; then
+        FTMP=$(modField -i ${FTMP} -a -f dir -v fwd)
+      elif [[ "${TDIRE}" == "j-" ]]; then
+        FTMP=$(modField -i ${FTMP} -a -f dir -v rev)
+      else
+        TDIRE=${TDIRE//-/minus}
+        FTMP=$(modField -i ${FTMP} -a -f dir -v ${TDIRE})
+      fi
+    fi
+  fi
+  ### add run to bold by default
+  if [[ "${MOD,,}" == "bold" ]]; then
+    NBOLD=$((${NBOLD}+1))
+    FTMP=$(modField -i ${FTMP} -a -f run -v ${NBOLD})
+  fi
+  
+  ## save new file name to array - - - - - - - - - - - - - - - - - - - - - - - -
+  F_AUTO+=(${FTMP})
+  echo ${F_AUTO[${i}]}
+done
+
+# match bold derivatives to parent run -----------------------------------------
+for (( i=0; i<${N_NII}; i++ )); do
+  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
+  if [[ "${MOD}" == "bold" ]]; then
+    PROC=$(getField -i ${F_AUTO[${i}]} -f proc)
+    if [[ "${PROC}" == "mean" ]]\
+    || [[ "${PROC}" == "z" ]]; then
+      SNTMP=${SERIES_NUM[${i}]}
+      SNTMP=${SNTMP:0:1}
+      unset IDX
+      for (( j=0; j<${NF}; j++ )); do
+        if [[ ${SNTMP} -eq ${SERIES_NUM[${j}]} ]]; then
+          IDX=${j}
+          break
+        fi
+      done
+      TASK=$(getField -i ${F_AUTO[${IDX}]} -f task)
+      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f task -v ${TASK})
+      RUN=$(getField -i ${F_AUTO[${IDX}]} -f run)
+      if [[ -n "${RUN}" ]]; then
+        F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f run -v ${RUN})
+      fi
+    fi
+    echo ${F_AUTO[${i}]}
+  fi
+done
+
+# check auto name for duplicates, add run --------------------------------------
+for (( i=0; i<${N_NII}; i++ )); do
+  unset SAMEIDX
+  SAMEIDX=${i}
+  F1=${F_AUTO[${i}]}
+  CHK=$((${i}+1))
+  for (( j=${CHK}; j<${N_NII}; j++ )); do
+    F2=${F_AUTO[${j}]}
+    if [[ "${F1}" == "${F2}" ]]; then
+      SAMEIDX+=(${j})
+    fi
+  done
+  if [[ ${#SAMEIDX[@]} -gt 1 ]]; then
+    for (( j=0; j<${#SAMEIDX[@]}; j++ )); do
+      RUN=$((${j}+1))
+      F_AUTO[${SAMEIDX[${j}]}]=$(modField -i ${F_AUTO[${SAMEIDX[${j}]}]} -a -f run -v ${RUN})
+      echo ${F_AUTO[${SAMEIDX[${j}]}]}
+    done
+  fi
+done
+
+# add shell information to dwi --------------------------------------------------
+for (( i=0; i<${N_NII}; i++ )); do
+  unset MOD BSTR
+  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
+  if [[ ${MOD} == "dwi" ]]; then
+    BVAL=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
+    BTAB=($((IFS=$'\n'; sort <<< "${BVAL[*]}") | uniq -c))
+
+    for (( j=0; j<${#BTAB[@]}; j+=2 )); do
+      j2=$((${j}+1))
+      BLS+=("${BTAB[${j2}]}")
+      VLS+=("${BTAB[${j}]}")
+    done
+
+    if [[ ${#BLS[@]} -eq 1 ]]; then
+      ACQSTR="b${BLS[0]}"
+    else
+      HASB0="false"
+      for (( k=0; k<${#BLS[@]}; k++ )); do
+        if [[ ${BLS[${k}]} -ne 0 ]]; then
+          BOUT+=(${BLS[${k}]})
+        fi
+      done
+      if [[ ${#BOUT[@]} -gt 1 ]]; then
+        ACQSTR="multishell"
+      else
+        ACQSTR=${BOUT}
+      fi
+    fi
+    F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -m -f acq -v ${ACQSTR})
+  fi
+done
+
+# final Autonames --------------------------------------------------------------
+for (( i=0; i<${N_NII}; i++ )); do
+  echo -e "ORIG:\t${FNAME[${i}]}"
+  echo -e "NEW:\t${F_AUTO[${i}]}\n"
+done
+
+# rename output files --------------------------------------------------------
+SKIP_LS=(${SKIP//,/ })
+if [[ "${VERBOSE}" == "true" ]]; then echo -e "\tauto-renaming files"; fi
+for (( i=0; i<${N_NII}; i++ )); do
+  unset DIR_SAVE
+  DIR_SAVE=${DIR_PROJECT}/rawdata/${IDDIR}/${SUBDIR[${i}]}
+  CHKSUB="\<${SUBDIR[${i}]}\>"
+  if [[ ${SKIP_LS[@]} =~ ${CHKSUB} ]]; then
+    echo "Skipping Copy of ${SUBDIR[${i}]}"
+  else
+    mkdir -p ${DIR_SAVE}
+
+    unset MOD
+    MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
+    if [[ ${MOD} == "dwi" ]]; then
+      ### add shell information to dwi
+      BVALS=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
+      B0ALL="true"
+      for (( j=0; j<${#BVALS[@]}; j++ )); do
+        if [[ ${BVALS[${j}]} -ne 0 ]]; then
+          B0ALL="false"
+        fi
+      done
+      if [[ "${B0ALL}" == "true" ]]; then
+        F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v b0)
+      else
+        F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v multishell)
+      fi
+      cp ${DIR_INPUT}/${FNAME[${i}]}.bval ${DIR_SAVE}/${F_AUTO[${i}]}.bval
+      cp ${DIR_INPUT}/${FNAME[${i}]}.bvec ${DIR_SAVE}/${F_AUTO[${i}]}.bvec
+    fi
+
+    cp ${DIR_INPUT}/${FNAME[${i}]}.nii.gz ${DIR_SAVE}/${F_AUTO[${i}]}.nii.gz
+    cp ${DIR_INPUT}/${FNAME[${i}]}.json ${DIR_SAVE}/${F_AUTO[${i}]}.json
+  fi
+done
+
+#===============================================================================
+# End of Function
+#===============================================================================
+if [[ "${VERBOSE}" == "true" ]]; then echo -e "DONE"; fi
+exit 0
+
+

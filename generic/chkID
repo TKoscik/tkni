@@ -1,0 +1,119 @@
+#!/bin/bash -e
+
+OPTS=$(getopt -o h --long pi:,project:,dir-project:,\
+pidstr:,help -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values ----------------------------------------------------------
+PI=
+PROJECT=
+DIR_PROJECT=
+ID=
+HELP=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    --pi) PI="$2" ; shift 2 ;;
+    --project) PROJECT="$2" ; shift 2 ;;
+    --pidstr) PIDSTR="$2" ; shift 2 ;;
+    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TK_BRAINLab: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help        display command help'
+  echo '  -v | --verbose     add verbose output to log file'
+  echo '  -n | --no-png      disable generating pngs of output'
+  echo '  --pi               folder name for PI, no underscores'
+  echo '  --project          project name, preferrable camel case'
+  echo '  --id-flags         Comma-separated string identifying the BIDS format'
+  echo '                     flags used in the filename in the order that they'
+  echo '                     should appear in filenames, DEFAULT="pid,sid"'
+  echo '  --id-values        Flag values for selected participant,'
+  echo '                     in same as id-flags order'
+  echo '  --id-cols          comma-separated values indicating the'
+  echo '                     names of the columns in the participant.tsv file'
+  echo '  --dir-project      project directory'
+  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z ${DIR_PROJECT} ]]; then
+  DIR_PROJECT="/data/x/projects/${PI}/${PROJECT}"
+fi
+if [[ ! -d ${DIR_PROJECT} ]]; then
+  echo "PROJECT DIRECTORY does not exist"
+  exit 0
+fi
+
+# extract flag value pairs -----------------------------------------------------
+FLAGPAIR=(${PIDSTR//_/ })
+for (( i=0; i<${#FLAGPAIR[@]}; i++ )); do
+  TMP=(${FLAGPAIR[${i}]//-/ })
+  if [[ ${#TMP[@]} -eq 2 ]]; then
+    FLAG+=(${TMP[0]})
+    VALUE+=(${TMP[1]})
+  else
+    FLAG+=("modality")
+    VALUE+=(${TMP[0]})
+  fi
+done
+
+# Check Unique individual identifier -------------------------------------------
+PIDLS=("sub" "pid" "uid")
+PIDCHK="false"
+for (( i=0; i<${#PIDLS[@]}; i++ )); do
+  if [[ "${FLAG[0]}" == "${PIDLS[${i}]}" ]]; then PIDCHK="true"; fi
+done
+if [[ ${PIDCHK} == "false" ]]; then
+  echo "NO Unique Identifier"
+  exit 0
+fi
+
+# Check if supplied PIDSTR matches the columns of the participant.tsv file
+PXCOLS=($(head -n 1 ${DIR_PROJECT}/participants.tsv))
+if [[ ${#FLAG[@]} -ne ${#PXCOLS[@]} ]]; then
+  echo "ID flags do not match participants.tsv"
+  exit 0
+fi
+
+# check if participant exists --------------------------------------------------
+NPX=$(cat ${DIR_PROJECT}/participants.tsv | wc -l)
+for (( i=1; i<${NPX}; i++ )); do
+  for (( j=0; j<${#PXCOLS[@]}; j++ )); do
+    TCOL=($(getColumn -i ${DIR_PROJECT}/participants.tsv -f ${PXCOLS[${j}]}))
+    TVALUE=${TCOL[${i}]}
+    if [[ ${j} -eq 0 ]]; then
+      CHKID="${FLAG[${j}]}-${TVALUE}"
+    else
+      CHKID="${CHKID}_${FLAG[${j}]}-${TVALUE}"
+    fi
+  done
+  if [[ ${CHKID} == ${PIDSTR} ]]; then
+    echo "ID Exists"
+    exit 0
+  fi
+done
+
+#===============================================================================
+# End of Function
+#===============================================================================
+echo "ID GOOD"
+exit 0

@@ -1,0 +1,144 @@
+#!/bin/bash -e
+
+OPTS=$(getopt -o hnmslucdopf --long help,\
+n-colors:,method:,hue:,saturation:,\
+luminosity:,cycles:,direction:,order:,\
+floor-color:,preset:,\
+dir-save:,filename:,\
+help -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+N_COLORS=11
+METHOD="timbow"
+HUE="#FF0000"
+SATURATION=100
+LUMINOSITY=35,65
+CYCLES="5/6"
+DIRECTION="increasing"
+FLOOR=
+
+DIR_SAVE=
+FNAME=
+
+HELP="false"
+
+while true; do
+  case "$1" in
+    -h | --help) HELP="true" ; shift ;;
+    -n | --n-colors) N_COLORS="$2" ; shift 2 ;;
+    -m | --method) METHOD="$2" ; shift 2 ;;
+    -e | --hue) HUE="$2" ; shift 2 ;;
+    -s | --saturation) SATURATION="$2" ; shift 2 ;;
+    -l | --luminosity) LUMINOSITY="$2" ; shift 2 ;;
+    -c | --cycles) CYCLES="$2" ; shift 2 ;;
+    -d | --direction) DIRECTION="$2" ; shift 2 ;;
+    -o | --order) ORDER="$2" ; shift 2 ;;
+    -f | --floor-color) FLOOR="$2" ; shift 2 ;;
+    -p | --preset) PRESET="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --filename) FNAME="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help       display command help'
+
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(pwd); fi
+if [[ -z ${FNAME} ]]; then FNAME="colorbar.png"; fi
+
+
+if [[ ${METHOD} == "grayscale" ]]; then
+  METHOD="gradient"
+  HUE="#000000,#FFFFFF"
+fi
+if [[ ${METHOD} == "plasma" ]]; then
+  METHOD="timbow"
+  HUE="#0000FF"
+  DIRECTION="increasing"
+  CYCLES="1/2"
+fi
+if [[ ${METHOD} == "virid-esque" ]] || [[ ${METHOD} == "viridis" ]]; then
+  METHOD="timbow"
+  HUE="#0000FF"
+  DIRECTION="decreasing"
+  CYCLES="1/2"
+fi
+if [[ ${METHOD} == "hot" ]]; then
+  METHOD="timbow"
+  HUE="#FF0000"
+  CYCLES="1/6"
+  DIRECTION="increasing"
+fi
+if [[ ${METHOD} == "cold" ]]; then
+  METHOD="timbow"
+  HUE="#0000FF"
+  CYCLES="1/6"
+  DIRECTION="decreasing"
+fi
+if [[ ${METHOD} == "rainbow" ]]; then
+  METHOD="timbow"
+  HUE="#ff0000"
+  CYCLES="5/6"
+  DIRECTION="increasing"
+fi
+if [[ ${METHOD} == "cubehel-esque" ]] || [[ ${METHOD} == "cubehelix" ]]; then
+  if [[ ${N_COLORS} -lt 12 ]]; then N_COLORS=12; fi
+  METHOD="timbow"
+  HUE="#0000FF"
+  CYCLES="11/6"
+  LUMINOSITY=15,100
+fi
+
+# Generate color palette from timbow() in R ------------------------------------
+LUMINOSITY=(${LUMINOSITY//,/ })
+if [[ ${METHOD,,} == "timbow" ]]; then
+  CPAL=($(Rscript /usr/local/tkni/R/getTimbow.R \
+    "n.colors" "${N_COLORS}" \
+    "start.hue" "${HUE}" \
+    "saturation" "${SATURATION}" \
+    "luminosity.lo" "${LUMINOSITY[0]}" \
+    "luminosity.hi" "${LUMINOSITY[1]}" \
+    "n.cycles" "${CYCLES}" \
+    "direction" "${DIRECTION}"))
+elif [[ ${METHOD,,} == "gradient" ]]; then
+  CLS='"'${HUE//,/\",\"}'"'
+  CPAL=($(Rscript -e 'X=colorRampPalette(c('${CLS}'))('${N_COLORS}'); cat(X)'))
+fi
+
+# randomize order if requested -------------------------------------------------
+if [[ ${METHOD,,} == *"random"* ]]; then CPAL=($(shuf -e "${CPAL[@]}")); fi
+
+# Convert to PNG palette for ImageMagick use -----------------------------------
+tmpfcn="convert -size 30x600 gradient: -interpolate Bicubic \( +size"
+for (( i=1; i<=${#CPAL[@]}; i++ )); do
+  tmpfcn="${tmpfcn} xc:\"${CPAL[-${i}]}\""
+done
+if [[ -n ${FLOOR} ]]; then tmpfcn="${tmpfcn} xc:\"${FLOOR}\""; fi
+tmpfcn="${tmpfcn} +append \) -clut ${DIR_SAVE}/${FNAME}"
+eval $tmpfcn
+
+#-------------------------------------------------------------------------------
+# End of Function
+#-------------------------------------------------------------------------------
+exit 0
+
+
