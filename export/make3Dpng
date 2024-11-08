@@ -580,15 +580,15 @@ ZLIM=(9999 0)
 if [[ -n "${LIM_CHK}" ]]; then
   for (( i=0; i<${#LIM_CHK[@]}; i++ )); do
     unset BB_STR BB
-    if [[ "${LIM_CHK[${i}]}" == ${FG_MASK} ]] \
-    || [[ "${LIM_CHK[${i}]}" == ${BG_MASK} ]] \
-    || [[ "${LIM_CHK[${i}]}" == "${ROI}" ]]; then
+  #  if [[ "${LIM_CHK[${i}]}" == ${FG_MASK} ]] \
+  #  || [[ "${LIM_CHK[${i}]}" == ${BG_MASK} ]] \
+  #  || [[ "${LIM_CHK[${i}]}" == "${ROI}" ]]; then
       3dAutobox -extent_ijk_to_file ${DIR_SCRATCH}/ijk.txt \
         -noclust -input ${LIM_CHK[${i}]} > /dev/null
-    else
-      3dAutobox -extent_ijk_to_file ${DIR_SCRATCH}/ijk.txt \
-        -input ${LIM_CHK[${i}]} > /dev/null
-    fi
+  #  else
+  #    3dAutobox -extent_ijk_to_file ${DIR_SCRATCH}/ijk.txt \
+  #      --input ${LIM_CHK[${i}]} > /dev/null
+  #  fi
     BB=($(cat ${DIR_SCRATCH}/ijk.txt))
     if [[ ${BB[0]} -lt ${XLIM[0]} ]]; then XLIM[0]=${BB[0]}; fi
     if [[ ${BB[1]} -gt ${XLIM[1]} ]]; then XLIM[1]=${BB[1]}; fi
@@ -753,22 +753,25 @@ eval ${clrfcn}
 
 ## generate slice PNGs ---------------------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>generate background slices"; fi
-HILO=(${BG_THRESH//,/ })
+BG_THRESH=(${BG_THRESH//,/ })
 if [[ ${NX} -gt 0 ]]; then
   c3d ${BG} \
-    -clip ${HILO[0]}% ${HILO[1]}% -stretch ${HILO[0]}% ${HILO[1]}% 0 255 \
+    -clip ${BG_THRESH[0]}% ${BG_THRESH[1]}% \
+    -stretch ${BG_THRESH[0]}% ${BG_THRESH[1]}% 0 255 \
     -type uchar -slice x ${XSLICE} \
     -oo ${DIR_SCRATCH}/X_BG_%0d.png
 fi
 if [[ ${NY} -gt 0 ]]; then
   c3d ${BG} \
-    -clip ${HILO[0]}% ${HILO[1]}% -stretch ${HILO[0]}% ${HILO[1]}% 0 255 \
+    -clip ${BG_THRESH[0]}% ${BG_THRESH[1]}% \
+    -stretch ${BG_THRESH[0]}% ${BG_THRESH[1]}% 0 255 \
     -type uchar -slice y ${YSLICE} \
     -oo ${DIR_SCRATCH}/Y_BG_%0d.png
 fi
 if [[ ${NZ} -gt 0 ]]; then
   c3d ${BG} \
-    -clip ${HILO[0]}% ${HILO[1]}% -stretch ${HILO[0]}% ${HILO[1]}% 0 255 \
+    -clip ${BG_THRESH[0]}% ${BG_THRESH[1]}% \
+    -stretch ${BG_THRESH[0]}% ${BG_THRESH[1]}% 0 255 \
     -type uchar -slice z ${ZSLICE} \
     -oo ${DIR_SCRATCH}/Z_BG_%0d.png
 fi
@@ -862,7 +865,10 @@ if [[ "${BG_CBAR}" == "true" ]]; then
     ${DIR_SCRATCH}/LABEL_LO_BG.png \
     -tile 1x -geometry +0+0 -gravity center -background ${COLOR_PANEL} \
     ${DIR_SCRATCH}/CBAR_BG.png
+  convert ${DIR_SCRATCH}/CBAR_BG.png \
+    -resize "x${MAX_PIXELS}" ${DIR_SCRATCH}/CBAR_BG.png
 fi
+
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>BG slice PNGS generated"; fi
 
 # Add Foreground Overlays ======================================================

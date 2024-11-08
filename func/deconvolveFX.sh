@@ -1,22 +1,12 @@
 #!/bin/bash -e
 #===============================================================================
 # Deconvolution for Task fMRI
-#   Results in F-statistics
+#  Results in Beta Coefficients, F-statistics, and R-squared values for each
+#  effect
 # Authors: Lauren Hopkins, Timothy R. Koscik
-# Date: 2021-03-10
+# Date: 2024-11/08
 # CHANGELOG:
-# - Need LSA/LSS method options (needs to go to 3dLSS, and I don't see it,
-#   perhaps thats been deprecated in AFNI?). should default to LSA (no extra
-#   3dLSS).
-# - need -x1d output for 3dLSS
-# - Can we simplify inputs to default saving what is need for LSS, set toggles
-#   appropriately
-# - for multi-run tasks need function to merge time series and onset files
-#   appropriately?
-# - stim-times-im does not appear to be implemented, but is necessary?
-# - is using stim-times compatable with stim-times-im (and 3dLSS which can
-#   use only 1)
-#   - maybe break into separate functions? deconvolve and deconvolveSTBs
+# - simplified to a less flexible approach from prior deconvolution function
 #===============================================================================
 PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
 FCN_NAME=($(basename "$0"))
@@ -50,10 +40,11 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvklnd --long prefix:,\
-dimension:,image:,mask:,model:,shrink:,patch:,search:,\
+OPTS=$(getopt -o hvlp --long prefix:,\
+ts:,mask:,fx-onset:,fx-name:,\
+hrf:,poly:,goforit:,\
 dir-save:,dir-scratch:,\
-help,fcn-verbose,verbose,keep,no-log,no-png -n 'parse-options' -- "$@")
+help,verbose,no-log,no-png -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -62,63 +53,171 @@ eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
 PREFIX=
-
 TS=
 MASK=
-STIM_ONSET=
-STIM_NAME=
-RMODEL="SPMG1"
-HNULL_POLY="A"
+FX_ONSET=
+FX_NAME=
+HRF="SPMG1"
+POLY="A"
 GOFORIT=0
 
-3dDeconvolve -input ${TS} \
-  -polort ${HNULL_POLY} \
-  -num_stimts ${STIM_N} \
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 
-  -stim_times_FSL ${i} ${STIM_ONSET[${i}]} '${RMODEL}' \  # these two lines need to be
-    -stim_label ${i} ${STIM_NAME[${i}]} \                 # looped based on the # of conditions
-  -x1D ${DIR_SCRATCH}/${PREFIX}_xmat.1D" \
-    -xjpeg ${DIR_SCRATCH}/${PREFIX}_xmat.png \
-  -mask ${MASK} \
-  -GOFORIT ${GOFORIT} \
-  -fout \
-  -rout \
-  -cbucket ${DIR_SCRATCH}/${PREFIX}_coefficients.nii.gz
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -p | --no-png) NO_PNG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --ts) TS="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
+    --fx-onset) FX_ONSET="$2" ; shift 2 ;;
+    --fx-name) FX_NAME="$2" ; shift 2 ;;
+    --hrf) HRFL="$2" ; shift 2 ;;
+    --poly) POLY="$2" ; shift 2 ;;
+    --goforit) GOFORIT="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
 
-
-
-decon_fcn="3dDeconvolve"
-decon_fcn="${decon_fcn} -input ${BOLD_TS}"
-decon_fcn="${decon_fcn} -polort ${POLORT}"
-decon_fcn="${decon_fcn} -num_stimts ${N_STIM}"
-if [[ "${STIM_TIMES_IM}" == "false" ]]; then
-  if [[ "${FSL_STIMS}" == "true" ]]; then
-    for (( i=0; i<${N_STIM}; i++ )); do
-      STIM_NUM=`expr $i + 1`
-      decon_fcn="${decon_fcn} -stim_times_FSL ${STIM_NUM} ${STIMULI[${i}]} 'dmUBLOCK(1)' -stim_label ${STIM_NUM} ${STIM_NAMES[${i}]}"
-    done
-  elif [[ "${CONVERT_FSL}" == "true" ]]; then
-    for (( i=0; i<${N_STIM}; i++ )); do
-      STIM_NUM=`expr $i + 1`
-      decon_fcn="${decon_fcn} -stim_times ${STIM_NUM} ${STIMULI[${i}]} 'BLOCK(2,1)' -stim_label ${STIM_NUM} ${STIM_NAMES[${i}]}"
-    done
-  fi
-  decon_fcn="${decon_fcn} -x1D ${DIR_SCRATCH}/${PREFIX}_x1D"
-else
-# stim_times_IM
-# IMPORTANT NOTE: cant do stim_times and stim_times_IM in same 3ddeconvolve call
-  if [[ "${FSL_STIMS}" == "true" ]]; then
-    for (( i=0; i<${N_STIM}; i++ )); do
-      IM_NUM=`expr $i + 1`
-      decon_fcn="${decon_fcn} -stim_times_IM ${IM_NUM} ${STIMULI[${i}]} 'dmUBLOCK(1)' -stim_label ${IM_NUM} ${STIM_NAMES[${i}]}_IM"
-    done
-  else
-    for (( i=0; i<${N_STIM}; i++ )); do
-      IM_NUM=`expr $i + 1`
-      decon_fcn="${decon_fcn} -stim_times_IM ${IM_NUM} ${STIMULI[${i}]} 'BLOCK(2,1)' -stim_label ${IM_NUM} ${STIM_NAMES[${i}]}_IM"
-    done
-  fi
-  decon_fcn="${decon_fcn} -x1D ${DIR_SCRATCH}/${PREFIX}_x1D_IM"
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix  <optional>     filename, without extension to use for file'
+  echo '  --other                  other inputs as needed'
+  echo '  --dir-save               location to save output'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  NO_LOG=true
+  exit 0
 fi
 
-decon_fcn="${decon_fcn} -jobs ${JOBS}"
+#===============================================================================
+# Start of Function
+#===============================================================================
+
+# check if input files exist ---------------------------------------------------
+if [[ -z ${TS} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] TS must be specified. ABORTING"
+  exit 1
+fi
+if [[ ! -f ${TS} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] TS does not exist. ABORTING"
+  exit 2
+fi
+
+if [[ -n ${MASK} ]]; then
+  if [[ ! -f ${MASK} ]]; then
+    echo "ERROR [TKNI:${FCN_NAME}] MASK does not exist. ABORTING"
+    exit 3
+  fi
+fi
+
+# setup output file prefix and directories -------------------------------------
+if [[ -z "${PREFIX}" ]]; then PREFIX=$(getBidsBase -s -i ${TS}); fi
+if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=$(dirname ${TS}); fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# parse onsets -----------------------------------------------------------------
+FX_ONSET=(${FX_ONSET//,/ })
+N_FX=${#FX_ONSET[@]}
+for (( i=0; i<${N_FX}; i++ )); do
+  if [[ ! -f ${FX_ONSET[${i}]} ]]; then
+    echo "ERROR [TKNI:${FCN_NAME}] ONSET file, ${FX_ONSET[${i}]} does not exist. ABORTING"
+    exit 4
+  fi
+done
+
+if [[ -n ${FX_NAME} ]]; then
+echo "wtf"
+  FX_NAME=(${FX_NAME//,/ })
+  if [[ ${N_FX} -gt 1 ]]; then
+    if [[ ${#FX_NAME[@]} -eq 1 ]]; then
+      for (( i=1; i<${N_FX}; i++ )); do
+        FX_NAME[${i}]=${FX_NAME[0]}
+      done
+    fi
+  fi
+else
+  for (( i=0; i<${N_FX}; i++ )); do
+    FX_NAME[${i}]="FX${i}"
+  done
+fi
+
+# Write 3dDeconvolve Function --------------------------------------------------
+DCONV_FCN="3dDeconvolve"
+DCONV_FCN="${DCONV_FCN} -input ${TS}"
+DCONV_FCN="${DCONV_FCN} -polort ${POLY}"
+DCONV_FCN="${DCONV_FCN} -num_stimts ${N_FX}"
+for (( i=0; i<${N_FX}; i++ )); do
+  N=$((${i} + 1))
+  DCONV_FCN="${DCONV_FCN} -stim_times_FSL ${N} ${FX_ONSET[${i}]} '${HRF}'"
+  DCONV_FCN="${DCONV_FCN} -stim_label ${N} ${FX_NAME[${i}]}"
+done
+DCONV_FCN="${DCONV_FCN} -x1D ${DIR_SCRATCH}/${PREFIX}_xmat.1D"
+DCONV_FCN="${DCONV_FCN} -xjpeg ${DIR_SCRATCH}/${PREFIX}_xmat.png"
+if [[ -n ${MASK} ]]; then
+  DCONV_FCN="${DCONV_FCN} -mask ${MASK}"
+fi
+if [[ ${GOFORIT} -gt 0 ]]; then
+  DCONV_FCN="${DCONV_FCN} -GOFORIT ${GOFORIT}"
+fi
+DCONV_FCN="${DCONV_FCN} -fout -rout -bucket ${DIR_SCRATCH}/bucket.nii.gz"
+echo ${DCONV_FCN}
+
+# run 3dDeconvolve function -----------------------------------------------------
+eval ${DCONV_FCN}
+
+## split bucket into rationally named files
+3dTsplit4D -prefix ${DIR_SCRATCH}/tmp.nii.gz ${DIR_SCRATCH}/bucket.nii.gz
+TLS=($(ls ${DIR_SCRATCH}/tmp.*.nii.gz))
+mv ${TLS[0]} ${DIR_SCRATCH}/${PREFIX}_full_R2.nii.gz
+mv ${TLS[1]} ${DIR_SCRATCH}/${PREFIX}_full_F.nii.gz
+for (( i=0; i<${N_FX}; i++ )); do
+  unset NC NR NF
+  NC=$(echo "scale=0; (${i} * 3) + 2" | bc -l)
+  NR=$((${NC} + 1))
+  NF=$((${NC} + 2))
+  mv ${TLS[${NC}]} ${DIR_SCRATCH}/${PREFIX}_effect-${FX_NAME[${i}]}_coef.nii.gz
+  mv ${TLS[${NR}]} ${DIR_SCRATCH}/${PREFIX}_effect-${FX_NAME[${i}]}_R2.nii.gz
+  mv ${TLS[${NF}]} ${DIR_SCRATCH}/${PREFIX}_effect-${FX_NAME[${i}]}_F.nii.gz
+done
+
+# make pngs of resulting coefficients ------------------------------------------
+if [[ "${NO_PNG}" == "false" ]]; then
+  for (( i=0; i<${N_FX}; i++ )); do
+    niimath ${DIR_SCRATCH}/${PREFIX}_effect-${FX_NAME[${i}]}_coef.nii.gz \
+      -uthr 0 ${DIR_SCRATCH}/coef_neg.nii.gz
+    niimath ${DIR_SCRATCH}/${PREFIX}_effect-${FX_NAME[${i}]}_coef.nii.gz \
+      -thr 0 ${DIR_SCRATCH}/coef_pos.nii.gz
+    make3Dpng --bg ${DIR_SCRATCH}/coef_neg.nii.gz \
+      --bg-color "timbow:hue=#0000FF:lum=85,0:cyc=0:" \
+      --bg-cbar \
+      --fg ${DIR_SCRATCH}/coef_pos.nii.gz \
+      --fg-color "timbow:hue=#FF0000:lum=0,85:cyc=0:" \
+      --fg-alpha 50 \
+      --layout "9:z;9:z;9:z" \
+      --edge-clip 0 \
+      --filename ${PREFIX}_effect-${FX_NAME[${i}]}_coef
+  done
+fi
+
+# save output to appropriate location ------------------------------------------
+mv ${DIR_SCRATCH}/${PREFIX}_* ${DIR_SAVE}/
+
+#-------------------------------------------------------------------------------
+# End of Function
+#-------------------------------------------------------------------------------
+exit 0
+

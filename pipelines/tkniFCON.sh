@@ -410,8 +410,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # coregistration
   echo '## Connectivity {.tabset}' >> ${RMD}
   unset TPNG TCSV
-  TCSV=($(ls ${DIR_SAVE}/connectivity/${IDPPFX}*.csv))
-  TPNG=($(ls ${DIR_SAVE}/connectivity/${IDPPFX}*.png))
+  TCSV=($(ls ${DIR_SAVE}/connectivity/${IDPFX}*.csv))
+  TPNG=($(ls ${DIR_SAVE}/connectivity/${IDPFX}*.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[${i}]})
     BNAME=${BNAME//${IDPFX}_}

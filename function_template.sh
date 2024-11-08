@@ -11,17 +11,14 @@ DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
 OPERATOR=$(whoami)
 KERNEL="$(uname -s)"
 HARDWARE="$(uname -m)"
-HPC_Q=${QUEUE}
-HPC_SLOTS=${NSLOTS}
-KEEP=false
 NO_LOG=false
 umask 007
 
-# actions on exit, write to logs, clean scratch
+# actions on exit, write to logs, clean scratch --------------------------------
 function egress {
   EXIT_CODE=$?
   PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
-  if [[ "${KEEP}" == "false" ]]; then
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
     if [[ -n ${DIR_SCRATCH} ]]; then
       if [[ -d ${DIR_SCRATCH} ]]; then
         if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
@@ -33,9 +30,8 @@ function egress {
     fi
   fi
   if [[ "${NO_LOG}" == "false" ]]; then
-    unset LOGSTR
-    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
-    writeLog --benchmark --string ${LOGSTR}
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
   fi
 }
 trap egress EXIT
@@ -60,8 +56,9 @@ VERBOSE=false
 while true; do
   case "$1" in
     -h | --help) HELP=true ; shift ;;
-    -l | --no-log) NO_LOG=true ; shift ;;
     -v | --verbose) VERBOSE=1 ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -p | --no-png) NO_PNG=true ; shift ;;
     -k | --keep) KEEP=true ; shift ;;
     --prefix) PREFIX="$2" ; shift 2 ;;
     --other) OTHER="$2" ; shift 2 ;;
@@ -76,7 +73,7 @@ done
 if [[ "${HELP}" == "true" ]]; then
   echo ''
   echo '------------------------------------------------------------------------'
-  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo "TKNI: ${FCN_NAME}"
   echo '------------------------------------------------------------------------'
   echo '  -h | --help              display command help'
   echo '  -l | --no-log            disable writing to output log'
