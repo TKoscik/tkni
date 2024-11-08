@@ -182,7 +182,7 @@ fi
 # make pngs of resulting coefficients ------------------------------------------
 if [[ "${NO_PNG}" == "false" ]]; then
   for (( i=0; i<${N_FX}; i++ )); do
-*********************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
+*********************
   NB=($(cat ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bval))
   N10=$((${#NB[@]} / 10))
   N1=$(($((${#NB[@]} % 10)) - 1))
