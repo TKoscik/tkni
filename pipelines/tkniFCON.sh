@@ -207,12 +207,12 @@ if [[ ${REQUIRES} != "null" ]]; then
     REQ=${REQUIRES[${i}]}
     FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
-      echo "ERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
+      echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
     fi
   done
   if [[ ${ERROR_STATE} -eq 1 ]]; then
-    echo "Aborting."
+    echo -e "\tABORTING [${PIPE}:${FLOW}]"
     exit 1
   fi
 fi
@@ -225,11 +225,11 @@ fi
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo "WARNING [${PIPE}:${FLOW}] This pipeline has been run."
+  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
-    echo "Re-running ${PIPE}${FLOW}"
+    echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
-    echo "ABORTING. Use the '--force' option to re-run"
+    echo -e "\tABORTING [${PIPE}:${FLOW}] use the '--force' option to re-run"
     exit 1
   fi
 fi
