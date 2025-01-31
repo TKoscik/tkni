@@ -17,16 +17,24 @@ save.table=TRUE
 save.mask=TRUE
 do.pos <- TRUE
 do.neg <- TRUE
+nii.mask <- NULL
+dir.scratch <- sprintf("/scratch/tkni_clusterEffect_%s", format(Sys.time(), "%Y%m%dT%H%M%S"))
 
 for (i in seq(1,length(args))) {
   if (args[i] %in% c("nii.coef", "coef", "estimate", "beta")) {
     nii.coef <- args[i+1]
   } else if (args[i] %in% c("nii.test", "test", "t", "f")) {
-    nii.test <- as.numeric(args[i+1])
+    nii.test <- args[i+1]
   } else if (args[i] %in% c("nii.pval", "pval", "p")) {
-    nii.pval <- as.numeric(args[i+1])
+    nii.pval <- args[i+1]
   } else if (args[i] %in% c("nii.mask", "mask", "roi")) {
-    nii.mask <- as.numeric(args[i+1])
+    nii.mask <- args[i+1]
+  } else if (args[i] %in% c("effect.volume", "effect.vol")) {
+    effect.volume <- as.numeric(args[i+1])
+  } else if (args[i] %in% c("mask.volume", "mask.vol")) {
+    mask.volume <- as.numeric(args[i+1])
+  } else if (args[i] %in% c("effect", "effect.name")) {
+    effect.name <- args[i+1]
   } else if (args[i] %in% c("roi.thresh", "roi.threshold")) {
     roi.thresh <- as.numeric(args[i+1])
   } else if (args[i] %in% c("peak.thresh", "peak.threshold")) {
@@ -36,7 +44,7 @@ for (i in seq(1,length(args))) {
   } else if (args[i] %in% c("connectivity", "con")) {
     connectivity <- as.numeric(args[i+1])
   } else if (args[i] %in% c("no.cluster")) {
-    save.cluster <- FALSE
+    save.clusters <- FALSE
   } else if (args[i] %in% c("no.table")) {
     save.table <- FALSE
   } else if (args[i] %in% c("no.mask")) {
@@ -46,30 +54,33 @@ for (i in seq(1,length(args))) {
   } else if (args[i] %in% c("no.neg", "no.negative")) {
     do.neg <- FALSE
   } else if (args[i] %in% c("dir.save", "save.dir", "save")) {
-    dir.save <- as.numeric(args[i+1])
+    dir.save <- args[i+1]
   } else if (args[i] %in% c("dir.scratch", "scratch.dir", "dir.tmp", "tmp.dir")) {
-    dir.scratch <- as.numeric(args[i+1])
+    dir.scratch <- args[i+1]
   }
 }
 
-# clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
-#                           effect.volume, mask.volume,
-#                           roi.thresh, peak.thresh,
-#                           cluster.size, connectivity=NULL,
-#                           save.clusters=TRUE, save.table=TRUE, save.mask=TRUE,
-#                           dir.save, dir.scratch) {
+# Show input values ------------------------------------------------------------
+# print(nii.coef)
+# print(nii.test)
+# print(nii.pval)
+# print(nii.mask)
+# print(effect.volume)
+# print(mask.volume)
+# print(effect.name)
+# print(roi.thresh)
+# print(peak.thresh)
+# print(cluster.size)
+# print(connectivity)
+# print(save.clusters)
+# print(save.table)
+# print(save.mask)
+# print(do.pos)
+# print(do.neg)
+# print(dir.save)
+# print(dir.scratch)
 
-## DEBUG ------------------------
-# nii.coef <- "/data/x/projects/xou/geglowing/derivatives/tkni/analyses/model-mom_mainEffect-fatTotalT1_dv-fa_20241217/coef_Estimate.nii.gz"
-# nii.test <- "/data/x/projects/xou/geglowing/derivatives/tkni/analyses/model-mom_mainEffect-fatTotalT1_dv-fa_20241217/coef_tvalue.nii.gz"
-# nii.pval <- "/data/x/projects/xou/geglowing/derivatives/tkni/analyses/model-mom_mainEffect-fatTotalT1_dv-fa_20241217/coef_Prt.nii.gz"
-# volume <- 2
-# roi.thresh <- 0.05 ## DEFINES HOW CLUSTERS ARE GENERATED
-# peak.thresh <- 0.001 ## EXCLUDES CLUSTERS WITHOUT HIGH PEAK
-# cluster.size <- 25
-# effect.name <- "testName"
-# dir.save <- "/data/x/projects/xou/geglowing/derivatives/tkni/analyses/model-mom_mainEffect-fatTotalT1_dv-fa_20241217"
-
+# cluster function -------------------------------------------------------------
 cluster.func <- function(bin.array, dimensions, connectivity=26) {
   cdim <- cumprod(c(1, dimensions[1:3][-3]))
   neighborhood <- switch(
@@ -111,13 +122,10 @@ cluster.func <- function(bin.array, dimensions, connectivity=26) {
   return(connected)
 }
 
-# make scratch directory -----------------------------------------------------
-if (missing(dir.scratch)) {
-  dir.scratch <- sprintf("/scratch/tkni_clusterEffect_%s", format(Sys.time(), "%Y%m%dT%H%M%S"))
-}
+# make scratch directory -------------------------------------------------------
 dir.create(dir.scratch, showWarnings = F, recursive = F)
 
-# copy files to scratch ------------------------------------------------------
+# copy files to scratch --------------------------------------------------------
 ## or unzip in scratch
 tfext <- file_ext(nii.coef)
 if (tfext == "gz") {
@@ -143,7 +151,7 @@ if (tfext == "gz") {
 }
 nii.pval <- sprintf("%s/pval.nii", dir.scratch)
 
-if (!missing(nii.mask)) {
+if (!is.null(nii.mask)) {
   tfext <- file_ext(nii.mask)
   if (tfext == "gz") {
     gunzip(filename=nii.mask, destname=sprintf("%s/mask.nii", dir.scratch), remove=F)
@@ -152,28 +160,28 @@ if (!missing(nii.mask)) {
   }
   nii.mask<- sprintf("%s/mask.nii", dir.scratch)
 }
-# Load image dimensions and orientation --------------------------------------
+# Load image dimensions and orientation ----------------------------------------
 img.dims <- info.nii(nii.coef, "dims")
 pixdim <- info.nii(nii.coef, "pixdim")
 orient <- info.nii(nii.coef, "orient")
 
-# load mask (if given) -------------------------------------------------------
+# load mask (if given) ---------------------------------------------------------
 mask <- array(1,dim=img.dims[1:3])
-if (!missing(nii.mask)) { mask <- read.nii.volume(nii.mask, mask.volume) }
+if (!is.null(nii.mask)) { mask <- read.nii.volume(nii.mask, mask.volume) }
 
-# Coefficient Estimates -----------------------------------------------------
+# Coefficient Estimates --------------------------------------------------------
 coef <- read.nii.volume(nii.coef, effect.volume)
 coef.na <- is.na(coef) * 1
 coef[coef.na == 1] <- 0
 coef <- coef * mask
 
-# Statistical Tests ----------------------------------------------------------
+# Statistical Tests ------------------------------------------------------------
 test <- read.nii.volume(nii.test, effect.volume)
 test.na <- is.na(coef) * 1
 test[test.na == 1] <- 0
 test <- test * mask
 
-# P-values -------------------------------------------------------------------
+# P-values ---------------------------------------------------------------------
 pval <- read.nii.volume(nii.pval, effect.volume)
 pval.na <- is.na(pval) * 1
 pval[pval.na == 1] <- 0
@@ -192,10 +200,12 @@ pval <- pval * mask
 ## 9. output nifti clusters, mask, and table
 for (i in 1:2) {
   if (do.pos & i==1) {
-    tpfx <- sprintf("%s/effect-%s_dir-pos_p-%0.0g_cl-%d", dir.save, effect.name, p.threshold, cluster.size)
+    tpfx <- sprintf("%s/effect-%s_dir-pos_p-%0.0g_peak-%0.0g_cl-%d",
+                    dir.save, effect.name, roi.thresh, peak.thresh, cluster.size)
     sig <- (pval < roi.thresh) * (coef > 0) * 1
   } else if (do.neg & i==2) {
-    tpfx <- sprintf("%s/effect-%s_dir-neg_p-%0.0g_cl-%d", dir.save, effect.name, p.threshold, cluster.size)
+    tpfx <- sprintf("%s/effect-%s_dir-neg_p-%0.0g_peak-%0.0g_cl-%d",
+                    dir.save, effect.name, roi.thresh, peak.thresh, cluster.size)
     sig <- (pval < roi.thresh) * (coef < 0) * 1
   }
   clusters <- cluster.func(sig, img.dims, connectivity)
@@ -219,22 +229,24 @@ for (i in 1:2) {
   cluster.map <- array(0, dim=img.dims[1:3])
   for (i in 1:nrow(cluster.table)) { cluster.map[which(clusters==cluster.table$clusters[i])] <- i }
   if (save.clusters) {
-    fname <- sprintf("%s/%s_cluster.nii", dir.save, tfx)
+    fname <- sprintf("%s_cluster.nii", tpfx)
     init.nii(new.nii=fname, dims=img.dims, pixdim=pixdim, orient=orient)
     write.nii.volume(fname, 1, cluster.map)
+    gzip(fname)
   }
   if (save.mask) {
-    fname <- sprintf("%s/%s_mask.nii", dir.save, tfx)
+    fname <- sprintf("%s_mask.nii", tpfx)
     init.nii(new.nii=fname, dims=img.dims, pixdim=pixdim, orient=orient)
     write.nii.volume(fname, 1, (cluster.map>0)*1)
+    gzip(fname)
   }
   if (save.table) {
-    fname <- sprintf("%s/%s_cluster.csv", dir.save, tfx)
+    fname <- sprintf("%s_cluster.csv", tpfx)
     write.table(cluster.table, fname, sep=",", quote=F, row.names=F, col.names=T)
   }
 }
 
-# clear scratch --------------------------------------------------------------
+# clear scratch ----------------------------------------------------------------
 invisible(file.remove(list.files(dir.scratch, full.names=T)))
 invisible(file.remove(dir.scratch))
 
