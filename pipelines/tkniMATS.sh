@@ -107,11 +107,12 @@ FLOW=MATS
 REQUIRES="tkniDICOM,tkniAINIT"
 FORCE=false
 ROIS=("gm" "gmDeep" "wm" "csf")
-CBARS=("#000000,#7b0031,#6a5700,#008a3c,#00a7b2,#b9afff"\
-       "#000000,#1c4400,#006360,#0075e7,#ff49d9,#ffa277"\
-       "#000000,#003f5f,#9e009f,#e32f00,#a19b00,#00d292"\
-       "#000000,#4c3900,#036700,#008587,#7e8eff,#ff97d8")
-CLABS=("#000000,#FF0000,#00FF00,#0000FF,#FFFF00")
+HUE=("#FF0000" "#00FF00" "#0000FF" "#FFFF00" "#00FFFF" "#FF00FF")
+#CBARS=("#000000,#7b0031,#6a5700,#008a3c,#00a7b2,#b9afff"\
+#       "#000000,#1c4400,#006360,#0075e7,#ff49d9,#ffa277"\
+#       "#000000,#003f5f,#9e009f,#e32f00,#a19b00,#00d292"\
+#       "#000000,#4c3900,#036700,#008587,#7e8eff,#ff97d8")
+#CLABS=("#000000,#FF0000,#00FF00,#0000FF,#FFFF00")
 
 # gather input options ---------------------------------------------------------
 while true; do
@@ -228,12 +229,12 @@ if [[ ${REQUIRES} != "null" ]]; then
     REQ=${REQUIRES[${i}]}
     FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
-      echo "ERROR [${PIPE}${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
+      echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
     fi
   done
   if [[ ${ERROR_STATE} -eq 1 ]]; then
-    echo "Aborting."
+    echo -e "\tABORTING [${PIPE}:${FLOW}]"
     exit 1
   fi
 fi
@@ -245,12 +246,13 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo "WARNING [${PIPE}:${FLOW}] This pipeline has been run."
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
-    echo "Re-running ${PIPE}${FLOW}"
+    echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
-    echo "ABORTING. Use the '--force' option to re-run"
+    echo -e "\tABORTING [${PIPE}:${FLOW}] use the '--force' option to re-run"
     exit 1
   fi
 fi
@@ -352,8 +354,8 @@ if [[ ${METHOD^^} == *"ANTS"* ]]; then
         make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz \
           --fg ${TDIR}/${IDPFX}_posterior-${ROI}+${TM}.nii.gz \
           --fg-mask ${TDIR}/mask-png-fg.nii.gz \
-          --fg-color ${CBARS[${i}]} --fg-cbar "true" --fg-alpha 50 \
-          --layout "9:z;9:z;9:z" --offset "0,0,0" \
+          --fg-color "timbow:hue=${HUE[${i}]}:lum=0,85" --fg-cbar "true" --fg-alpha 50 \
+          --layout "9:z;9:z;9:z" \
           --filename ${IDPFX}_posterior-${ROI}+${TM} \
           --dir-save ${TDIR}
       done
@@ -361,8 +363,9 @@ if [[ ${METHOD^^} == *"ANTS"* ]]; then
         -bin ${TDIR}/mask-png-fg.nii.gz -odt char
       make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz\
         --fg ${TDIR}/${IDPFX}_label-tissue+${TM}.nii.gz \
-        --fg-color ${CLABS} --fg-cbar "false" --fg-alpha 75 --fg-discrete \
-        --layout "9:z;9:z;9:z" --offset "0,0,0" \
+        --fg-color "timbow:hue=#FF0000;lum=65,65:cyc=4/6" \
+        --fg-cbar "false" --fg-alpha 75 \
+        --layout "9:z;9:z;9:z" \
         --filename ${IDPFX}_label-tissue+${TM} \
           --dir-save ${TDIR}
     fi
@@ -411,8 +414,9 @@ if [[ ${METHOD^^} == *"5TT"* ]]; then
         make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz \
           --fg ${TDIR}/${IDPFX}_posterior-${ROI}+${TM}.nii.gz \
           --fg-mask ${TDIR}/mask-png-fg.nii.gz \
-          --fg-color ${CBARS[${i}]} --fg-cbar "true" --fg-alpha 50 \
-          --layout "9:z;9:z;9:z" --offset "0,0,0" \
+          --fg-color "timbow:hue=${HUE[${i}]}:lum=0,85" \
+          --fg-cbar "true" --fg-alpha 50 \
+          --layout "9:z;9:z;9:z" \
           --filename ${IDPFX}_posterior-${ROI}+${TM} \
           --dir-save ${TDIR}
       done
@@ -420,8 +424,9 @@ if [[ ${METHOD^^} == *"5TT"* ]]; then
         -bin ${TDIR}/mask-png-fg.nii.gz -odt char
       make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz\
         --fg ${TDIR}/${IDPFX}_label-tissue+${TM}.nii.gz \
-        --fg-color ${CLABS} --fg-cbar "false" --fg-alpha 75 --fg-discrete \
-        --layout "9:z;9:z;9:z" --offset "0,0,0" \
+        --fg-color "timbow:hue=#FF0000;lum=65,65:cyc=4/6" \
+        --fg-cbar "false" --fg-alpha 75 \
+        --layout "9:z;9:z;9:z" \
         --filename ${IDPFX}_label-tissue+${TM} \
           --dir-save ${TDIR}
     fi
@@ -494,8 +499,9 @@ if [[ ${METHOD^^} == *"SYNTH"* ]]; then
         make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz \
           --fg ${TDIR}/${IDPFX}_posterior-${ROI}+${TM}.nii.gz \
           --fg-mask ${TDIR}/mask-png-fg.nii.gz \
-          --fg-color ${CBARS[${i}]} --fg-cbar "true" --fg-alpha 50 \
-          --layout "9:z;9:z;9:z" --offset "0,0,0" \
+          --fg-color "timbow:hue=${HUE[${i}]}:lum=0,85" \
+          --fg-cbar "true" --fg-alpha 50 \
+          --layout "9:z;9:z;9:z" \
           --filename ${IDPFX}_posterior-${ROI}+${TM} \
           --dir-save ${TDIR}
       done
@@ -503,8 +509,9 @@ if [[ ${METHOD^^} == *"SYNTH"* ]]; then
         -bin ${TDIR}/mask-png-fg.nii.gz -odt char
       make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz\
         --fg ${TDIR}/${IDPFX}_label-tissue+${TM}.nii.gz \
-        --fg-color ${CLABS} --fg-cbar "false" --fg-alpha 75 --fg-discrete \
-        --layout "9:z;9:z;9:z" --offset "0,0,0" \
+        --fg-color "timbow:hue=#FF0000;lum=65,65:cyc=4/6" \
+        --fg-cbar "false" --fg-alpha 75 \
+        --layout "9:z;9:z;9:z" \
         --filename ${IDPFX}_label-tissue+${TM} \
           --dir-save ${TDIR}
     fi
@@ -513,6 +520,9 @@ fi
 
 ## Combine Posteriors ----------------------------------------------------------
 ### Weighted Average Posterior - - - - - - - - - - - - - - - - - - - - - - - - -
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> weighting posteriors"
+fi
 TCLASS=("csf" "gm" "gmDeep" "wm")
 TWEIGHT=$(($((${WEIGHT_ANTS} + ${WEIGHT_5TT})) + ${WEIGHT_SYNTH}))
 POST_C=(${DIR_SCRATCH}/${IDPFX}_posterior-csf.nii.gz \
@@ -550,15 +560,24 @@ if [[ ${METHOD^^} == *"SYNTH"* ]]; then
 fi
 
 ### Most Likely Label - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> most likely label"
+fi
 LABEL_C=${DIR_SCRATCH}/${IDPFX}_label-tissue.nii.gz
 ImageMath 3 ${LABEL_C} MostLikely ${PTHRESH} ${POST_C[@]}
 
 ### Median Filter - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if [[ ${FMED} -gt 0 ]]; then
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> applying median filter"
+  fi
   niimath ${LABEL_C} -kernel boxv ${FMED} -fmedian ${LABEL_C} -odt char
 fi
 
 ### Merge into multi-volume posterior file -------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> merge into multivolume posterior"
+fi
 DIR_POSTERIOR=${DIR_ANAT}/posterior
 mkdir -p ${DIR_POSTERIOR}
 ImageMath 4 ${DIR_POSTERIOR}/${IDPFX}_posterior-tissue.nii.gz \
@@ -570,6 +589,9 @@ ImageMath 4 ${DIR_POSTERIOR}/${IDPFX}_posterior-tissue.nii.gz \
 
 ## generate PNGs ---------------------------------------------------------------
 if [[ ${NO_PNG} == "false" ]]; then
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> generating PNGs"
+  fi
   for (( i=0; i<${#ROIS[@]}; i++ )); do
     ROI=${ROIS[${i}]}
     niimath ${DIR_SCRATCH}/${IDPFX}_posterior-${ROI}.nii.gz \
@@ -577,22 +599,26 @@ if [[ ${NO_PNG} == "false" ]]; then
     make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz \
       --fg ${DIR_SCRATCH}/${IDPFX}_posterior-${ROI}.nii.gz \
       --fg-mask ${DIR_SCRATCH}/mask-png-fg.nii.gz \
-      --fg-color ${CBARS[${i}]} --fg-cbar "true" --fg-alpha 50 \
-      --layout "9:z;9:z;9:z" --offset "0,0,0" \
+      --fg-color "timbow:hue=${HUE[${i}]}:lum=0,85" \
+      --fg-cbar "true" --fg-alpha 50 \
+      --layout "9:z;9:z;9:z" \
       --filename ${IDPFX}_posterior-${ROI}
   done
   niimath ${DIR_SCRATCH}/${IDPFX}_label-tissue.nii.gz \
     -bin ${DIR_SCRATCH}/mask-png-fg.nii.gz -odt char
   make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz --bg-threshold 2.5,97.5 \
     --fg ${DIR_SCRATCH}/${IDPFX}_label-tissue.nii.gz \
-    --fg-color ${CLABS} \
+    --fg-color "timbow:hue=#FF0000;lum=65,65:cyc=4/6" \
     --fg-cbar "true" --fg-alpha 75 \
-    --layout "9:z;9:z;9:z" --offset "0,0,0" \
+    --layout "9:z;9:z;9:z" \
     --filename ${IDPFX}_label-tissue
 fi
 
 ## Deformation based cortical thickness ----------------------------------------
 if [[ ${NO_THICKNESS} == "false" ]]; then
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> calculating cortical thickness"
+  fi
   KellyKapowski -d 3 --verbose ${ANTS_VERBOSE} \
     -s [ ${LABEL_C},2,4 ] \
     -g ${POST_C[1]} -w ${POST_C[3]} \
@@ -606,7 +632,7 @@ if [[ ${NO_THICKNESS} == "false" ]]; then
       --fg ${DIR_SCRATCH}/${IDPFX}_thickness.nii.gz \
       --fg-mask ${DIR_SCRATCH}/mask-png-fg.nii.gz \
       --fg-color "hot" --fg-cbar "true" --fg-alpha 50 \
-      --layout "9:z;9:z;9:z" --offset "0,0,0" \
+      --layout "9:z;9:z;9:z" \
       --filename ${IDPFX}_thickness \
       --dir-save ${DIR_SCRATCH}
   fi
@@ -614,6 +640,9 @@ fi
 
 ## Refine Labels if requested --------------------------------------------------
 if [[ -n ${REFINE} ]]; then
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> refine existing labels"
+  fi
   LABELS=(${REFINE//,/ })
   for (( i=0; i<${#LABELS[@]}; i++ )); do
     TLABEL=${LABELS[${i}]}
@@ -632,6 +661,9 @@ if [[ -n ${REFINE} ]]; then
 fi
 
 ## Move results to OUTPUT folder -----------------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> copy output"
+fi
 mkdir -p ${DIR_ANAT}/label/MATS
 if [[ ${KEEP_PARTS} == "true" ]]; then
   if [[ ${METHOD^^} == *"ANTS"* ]]; then mkdir -p ${DIR_POSTERIOR}/ANTS; fi
@@ -842,6 +874,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
+  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
     echo -e "\t${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"

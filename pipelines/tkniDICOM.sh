@@ -20,7 +20,7 @@ umask 007
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvn --long pi:,project:,dir-project:,\
 id:,dir-id:,input-dcm:,dir-scratch:,\
-help,verbose,no-png -n 'parse-options' -- "$@")
+help,verbose,no-png,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -39,6 +39,7 @@ HELP=false
 VERBOSE=false
 NO_PNG=false
 NO_RMD=false
+FORCE="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
@@ -49,6 +50,7 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
+    --force) FORCE=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
@@ -106,8 +108,6 @@ if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${PI}_${PROJECT}_${DATE_SUFFIX}
 fi
 
-
-
 # Check ID ---------------------------------------------------------------------
 if [[ -z ${IDPFX} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] ID Prefix must be provided"
@@ -147,8 +147,9 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
     echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
@@ -193,7 +194,7 @@ dicomAutoname --id ${IDPFX} --dir-input ${DIR_SCRATCH} --dir-project ${DIR_PROJE
 
 # Copy MRS as needed -----------------------------------------------------------
 if [[ -d ${DIR_PROJECT}/rawdata/${IDDIR}/mrs ]]; then
-  MRS_DAT=$(find ${DIR_SCRATCH}/ -name '*.dat' -type f)
+  MRS_DAT=($(find ${DIR_SCRATCH}/ -name '*.dat' -type f))
   mkdir -p ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/
   for ((i=0; i<${#MRS_DAT[@]}; i++ )); do
     cp ${MRS_DAT[${i}]} ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/
@@ -204,7 +205,7 @@ rm -rf ${DIR_SCRATCH}/dicom
 # generate PNGs for QC ---------------------------------------------------------
 if [[ "${NO_PNG}" == "false" ]]; then
   DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}
-  DLS=(anat dwi fmap func)
+  DLS=(anat dwi fmap func perf)
   for j in "${DLS[@]}"; do
     if [[ -d ${DIR_RAW}/${j} ]]; then
       unset FLS
@@ -293,12 +294,13 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### Click to View ->' >> ${RMD}
   echo '#### File Tree' >> ${RMD}
   echo '```{bash}' >> ${RMD}
-  echo 'tree -P "'${IDPFX}'*" -Rn --prune '${DIR_RAW} >> ${RMD}
+#  echo 'tree -P "'${IDPFX}'*" -Rn --prune '${DIR_RAW} >> ${RMD}
+  echo 'tree -P "*" -Rn --prune '${DIR_RAW} >> ${RMD}
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
 
   echo '### Raw Data {.tabset}' >> ${RMD}
-  MOD_RAW=("anat" "dwi" "func" "fmap")
+  MOD_RAW=("anat" "dwi" "func" "fmap" "perf")
   for (( j=0; j<${#MOD_RAW[@]}; j++ )); do
     TDIR=${DIR_RAW}/${MOD_RAW[${j}]}
     if [[ -d ${TDIR} ]]; then

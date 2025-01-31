@@ -300,9 +300,9 @@ echo "fg=${DIR_SAVE}/${FILENAME}"
 echo "filename=${FILENAME//\.nii\.gz}"
   make3Dpng --bg ${ANAT} \
     --fg ${DIR_SAVE}/${FILENAME} \
-      --fg-color "timbow" --fg-order random --fg-discrete \
+      --fg-color "timbow" \
       --fg-cbar "false" --fg-alpha 50 \
-    --layout "7:x;7:x;7:y;7:y;7:z;7:z" --offset "0,0,0" \
+    --layout "7:x;7:x;7:y;7:y;7:z;7:z" \
     --filename ${FILENAME//\.nii\.gz} \
     --dir-save ${DIR_SAVE}
 fi

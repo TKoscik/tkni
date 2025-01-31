@@ -68,7 +68,8 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,dir-anat:,dir-dwi:,dir-xfm:,\
-image-dwi:,image-ap:,image-pa:,image-anat:,mask-brain:,dir-scratch:,requires:,\
+image-dwi:,image-ap:,image-pa:,image-anat:,mask-brain:,mask-b0-method:,rpenone,\
+dir-scratch:,requires:,\
 help,verbose,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -93,6 +94,8 @@ IMAGE_PA=
 IMAGE_ANAT=
 MASK_BRAIN=
 MASK_DIL=2
+MASK_BO_METHOD="mrtrix"
+RPENONE="false"
 
 PIPE=tkni
 FLOW=DPREP
@@ -121,6 +124,8 @@ while true; do
     --image-anat) IMAGE_ANAT="$2" ; shift 2 ;;
     --mask-brain) MASK_BRAIN="$2" ; shift 2 ;;
     --mask-dil) MASK_DIL="$2" ; shift 2 ;;
+    --mask-b0-method) MASK_B0_METHOD="$2" ; shift 2 ;;
+    --rpenone) RPENONE="true" ; shift ;;
     --dir-anat) DIR_ANAT="$2" ; shift 2 ;;
     --dir-dwi) DIR_DWI="$2" ; shift 2 ;;
     --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
@@ -230,8 +235,9 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
     echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
@@ -367,6 +373,12 @@ if [[ -n ${AP} ]] && [[ -n ${PA} ]]; then
     -scratch ${DIR_SCRATCH}/dwifslpreproc-tmp \
     -nocleanup -pe_dir j -rpe_pair -se_epi ${TMP_DWI}/b0_pair.mif \
     -eddy_options " --slm=linear --data_is_shelled"
+elif [[ "${RPENONE}" == "true" ]]; then
+  dwifslpreproc ${TMP_DWI}/dwi_den_unr.mif \
+    ${TMP_DWI}/dwi_den_unr_preproc.mif \
+    -scratch ${DIR_SCRATCH}/dwifslpreproc-tmp \
+    -nocleanup -rpe_none -pe_dir \
+    -eddy_options " --slm=linear --data_is_shelled"
 else
   dwifslpreproc ${TMP_DWI}/dwi_den_unr.mif \
     ${TMP_DWI}/dwi_den_unr_preproc.mif \
@@ -392,15 +404,28 @@ dwibiascorrect ants ${TMP_DWI}/dwi_den_unr_preproc.mif \
   ${TMP_DWI}/dwi_den_unr_preproc_unbiased.mif \
   -bias ${TMP_DWI}/bias.mif
 
-# Brain Mask Estimation --------------------------------------------------------
-dwi2mask ${TMP_DWI}/dwi_den_unr_preproc_unbiased.mif \
-  ${TMP_DWI}/mask_den_unr_preproc_unb.mif
-
-# Anatomical Coregistration ----------------------------------------------------
-## extract B0
+## extract B0 ------------------------------------------------------------------
 dwiextract -bzero ${TMP_DWI}/dwi_den_unr_preproc_unbiased.mif ${TMP_DWI}/b0_all.mif
 mrmath ${TMP_DWI}/b0_all.mif mean ${TMP_DWI}/b0_mean.mif -axis 3
 mrconvert ${TMP_DWI}/b0_mean.mif ${TMP_NII}/b0_mean.nii.gz
+
+# Brain Mask Estimation --------------------------------------------------------
+MASK_B0_METHOD=(${MASK_B0_METHOD//,/ })
+if [[ ${MASK_B0_METHOD[0],,} == "afni" ]] || [[ ${MASK_B0_METHOD[0],,} == "automask" ]]; then
+  if [[ ${#MASK_B0_METHOD[@]} -gt 0 ]]; then
+    CLFRAC=${MASK_B0_METHOD[1]}
+  else
+    CLFRAC=0.65
+  fi
+  3dAutomask -clfrac ${CLFRAC} -prefix ${TMP_NII}/b0_mask.nii.gz ${TMP_NII}/b0_mean.nii.gz
+  mrconvert ${TMP_NII}/b0_mask.nii.gz ${TMP_DWI}/mask_den_unr_preproc_unb.mif -force
+else
+  dwi2mask ${TMP_DWI}/dwi_den_unr_preproc_unbiased.mif \
+    ${TMP_DWI}/mask_den_unr_preproc_unb.mif
+fi
+
+
+# Anatomical Coregistration ----------------------------------------------------
 MOVING=${TMP_NII}/b0_mean.nii.gz
 
 ## extract brain
@@ -454,10 +479,10 @@ antsApplyTransforms -d 3 -n Linear \
   -t ${TMP_XFM}/xfm_1Warp.nii.gz \
   -t ${TMP_XFM}/xfm_0GenericAffine.mat \
   -r ${REF_IMG}
-mrconvert ${TMP_NII}/b0_mean_coreg.nii.gz ${TMP_DWI}/b0_mean_coreg.mif
+mrconvert ${TMP_NII}/b0_mean_coreg.nii.gz ${TMP_DWI}/b0_mean_coreg.mif -force
 
 ## apply transforms to B0 mask
-mrconvert ${TMP_DWI}/mask_den_unr_preproc_unb.mif ${TMP_NII}/b0_mask.nii.gz
+mrconvert ${TMP_DWI}/mask_den_unr_preproc_unb.mif ${TMP_NII}/b0_mask.nii.gz -force
 antsApplyTransforms -d 3 -n GenericLabel \
   -i ${TMP_NII}/b0_mask.nii.gz \
   -o ${TMP_NII}/b0_mask_coreg.nii.gz \
@@ -465,12 +490,12 @@ antsApplyTransforms -d 3 -n GenericLabel \
   -t ${TMP_XFM}/xfm_1Warp.nii.gz \
   -t ${TMP_XFM}/xfm_0GenericAffine.mat \
   -r ${REF_IMG}
-mrconvert ${TMP_NII}/b0_mask_coreg.nii.gz ${TMP_DWI}/b0_mask_coreg.mif
+mrconvert ${TMP_NII}/b0_mask_coreg.nii.gz ${TMP_DWI}/b0_mask_coreg.mif -force
 
 ## apply transforms to preprocessed DWI data
 mrconvert ${TMP_DWI}/dwi_den_unr_preproc_unbiased.mif \
   ${TMP_NII}/dwi_preproc.nii.gz \
-  -export_grad_fsl ${TMP_NII}/dwi_preproc.bvec ${TMP_NII}/dwi_preproc.bval
+  -export_grad_fsl ${TMP_NII}/dwi_preproc.bvec ${TMP_NII}/dwi_preproc.bval -force
 antsApplyTransforms -d 3 -e 3 -n Linear \
   -i ${TMP_NII}/dwi_preproc.nii.gz \
   -o ${TMP_NII}/dwi_preproc_coreg.nii.gz \
@@ -480,7 +505,7 @@ antsApplyTransforms -d 3 -e 3 -n Linear \
   -r ${REF_IMG}
 mrconvert ${TMP_NII}/dwi_preproc_coreg.nii.gz \
   ${TMP_DWI}/dwi_preproc_coreg.mif \
-  -fslgrad ${TMP_NII}/dwi_preproc.bvec ${TMP_NII}/dwi_preproc.bval
+  -fslgrad ${TMP_NII}/dwi_preproc.bvec ${TMP_NII}/dwi_preproc.bval -force
 
 ## save cleaned nifti format to tkni folders -----------------------------------
 mkdir -p ${DIR_DWI}/preproc/dwi
@@ -531,27 +556,20 @@ if [[ ${NO_PNG} == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
   TLAYOUT="10"
   for (( i=1; i<${N10}; i++ )) { TLAYOUT="${TLAYOUT};10"; }
   if [[ ${N1} -gt 0 ]]; then TLAYOUT="${TLAYOUT};${N1}"; fi
-  echo 1
   make4Dpng --fg ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz \
     --fg-mask ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz \
     --fg-color "timbow" --fg-alpha 100 --fg-thresh "2.5,97.5" --layout "${TLAYOUT}"
-echo 2
-  make3Dpng --bg ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz \
+  make3Dpng --bg ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz -v \
     --fg ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz \
-    --fg-color "timbow:random" --fg-alpha 25 --fg-cbar false \
+    --fg-color "timbow:random" --fg-alpha 25 --fg-cbar "false" \
     --layout "10:x;10:y;10:z" \
-    --filename ${IDPFX}_mask-brain+b0 --dir-save ${DIR_DWI}/preproc/mask
-echo 3
+    --filename "${IDPFX}_mask-brain+b0" --dir-save ${DIR_DWI}/preproc/mask
   make3Dpng --bg ${DIR_DWI}/preproc/qc/${IDPFX}_bias.nii.gz --bg-color "plasma"
-echo 4
   make3Dpng --bg ${DIR_DWI}/preproc/qc/${IDPFX}_noise.nii.gz --bg-color "virid-esque"
-echo 5
   make4Dpng --fg ${DIR_DWI}/preproc/qc/${IDPFX}_residual.nii.gz \
     --layout 5x5 --fg-color grayscale
-echo 6
-    make4Dpng --fg ${DIR_DWI}/preproc/qc/${IDPFX}_residualUnring.nii.gz \
+  make4Dpng --fg ${DIR_DWI}/preproc/qc/${IDPFX}_residualUnring.nii.gz \
     --layout 5x5 --fg-color grayscale
-echo 7
   make3Dpng \
     --bg ${DIR_ANAT}/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz \
       --bg-color "timbow:hue=#00FF00:lum=0,100:cyc=1/6" --bg-thresh "2.5,97.5" \
@@ -561,7 +579,6 @@ echo 7
     --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
     --filename ${IDPFX}_from-b0_to-native_overlay \
     --dir-save ${DIR_DWI}/preproc/qc
-echo 8
 fi
 
 # generate HTML QC report ------------------------------------------------------

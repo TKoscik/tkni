@@ -260,8 +260,9 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
     echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else

@@ -77,7 +77,7 @@ if [[ "${FIELD,,}" == "modality" ]]; then
 else
   for (( i=0; i<${#PARTS[@]}; i++ )); do
     FLAG=(${PARTS[${i}]//-/ })
-    if [[ "${FLAG[0]}" == "${FIELD,,}" ]]; then
+    if [[ "${FLAG[0],,}" == "${FIELD,,}" ]]; then
       OUTPUT=${FLAG[1]}
       break
     fi

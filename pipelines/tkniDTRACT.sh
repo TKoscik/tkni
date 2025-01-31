@@ -45,10 +45,10 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,dir-mrtrix:,\
-image-dwi:,posterior-5tt:,image-t1-dwi:,image-t1-native:,\
+image-dwi:,posterior-5tt:,image-t1-dwi:,image-t1-native:,mask-brain-native:,\
 label:,lut-orig:,lut-sort:,\
 keep-10mil,no-afd,no-tract,\
-dir-scratch:,dir-save:,requires:,\
+dir-scratch:,dir-save:,requires:,force,\
 help,verbose -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -69,6 +69,7 @@ IMAGE_DWI=
 POST_5TT=
 IMAGE_T1_DWI=
 IMAGE_T1_NATIVE=
+MASK_BRAIN_NATIVE=
 
 KEEP_10MIL="false"
 NO_AFD="false"
@@ -87,6 +88,7 @@ FORCE=false
 HELP=false
 VERBOSE=false
 LOQUACIOUS=false
+FORCE=false
 NO_PNG=false
 NO_RMD=false
 
@@ -95,6 +97,7 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
+    --force) FORCE=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -104,6 +107,7 @@ while true; do
     --posterior-5tt) POST_5TT="$2" ; shift 2 ;;
     --image-t1-dwi) IMAGE_T1_DWI="$2" ; shift 2 ;;
     --image-t1-native) IMAGE_T1_NATIVE="$2" ; shift 2 ;;
+    --mask-brain-native) MASK_BRAIN_NATIVE="$2" ; shift 2 ;;
     --label) LABEL="$2" ; shift 2 ;;
     --lut-orig) LUT_ORIG="$2" ; shift 2 ;;
     --lut-sort) LUT_SORT="$2" ; shift 2 ;;
@@ -224,8 +228,9 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
     echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
@@ -297,43 +302,44 @@ mtnormalise ${TMP_FOD}/wmfod.mif ${TMP_FOD}/wmfod_norm.mif \
 
 # Calculate AFD and Dispersion -------------------------------------------------
 if [[ "${NO_AFD}" == "false" ]]; then
+  mkdir -p ${TMP_FOD}/wmfixel
+  mkdir -p ${TMP_FOD}/gmfixel
   fod2fixel -fmls_no_thresholds ${TMP_FOD}/wmfod_norm.mif ${TMP_FOD}/wmfixel \
-    -afd wm_afd.mif -disp wm_disp.mif
+    -afd wm_afd.mif -disp wm_disp.mif -force
   fod2fixel -fmls_no_thresholds ${TMP_FOD}/gmfod_norm.mif ${TMP_FOD}/gmfixel \
-    -afd ${TMP_FOD}/gmfixel/gm_afd.mif \
-    -disp ${TMP_FOD}/gmfixel/gm_disp.mif
+    -afd gm_afd.mif -disp gm_disp.mif -force
   ## convert FIXEL to NIFTI
   mkdir -p ${DIR_SAVE}/scalar/AFD
   mkdir -p ${DIR_SAVE}/scalar/Dispersion
   fixel2voxel -weighted ${TMP_FOD}/wmfixel/wm_afd.mif \
     ${TMP_FOD}/wmfixel/wm_afd.mif mean \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.nii.gz
+    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/wmfixel/wm_afd.mif \
     ${TMP_FOD}/wmfixel/wm_afd.mif complexity \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.nii.gz
+    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/wmfixel/wm_disp.mif \
     ${TMP_FOD}/wmfixel/wm_disp.mif mean \
-    ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.nii.gz
+    ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/gmfixel/gm_afd.mif \
     ${TMP_FOD}/gmfixel/gm_afd.mif mean \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.nii.gz
+    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/gmfixel/gm_afd.mif \
     ${TMP_FOD}/gmfixel/gm_afd.mif complexity \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.nii.gz
+    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/gmfixel/gm_disp.mif \
     ${TMP_FOD}/gmfixel/gm_disp.mif mean \
-    ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.nii.gz
-  make3dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.nii.gz \
+    ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.nii.gz -force
+  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.nii.gz \
     --bg-color "timbow:hue=#FF0000" --layout "9:z;9:z;9:z"
-  make3dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.nii.gz \
+  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.nii.gz \
     --bg-color "timbow:hue=#00FF00" --layout "9:z;9:z;9:z"
-  make3dpng --bg ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.nii.gz \
+  make3Dpng --bg ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.nii.gz \
     --bg-color "timbow:hue=#0000FF" --layout "9:z;9:z;9:z"
-  make3dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.nii.gz \
+  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.nii.gz \
     --bg-color "timbow:hue=#FF0000" --layout "9:z;9:z;9:z"
-  make3dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.nii.gz \
+  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.nii.gz \
     --bg-color "timbow:hue=#00FF00" --layout "9:z;9:z;9:z"
-  make3dpng --bg ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.nii.gz \
+  make3Dpng --bg ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.nii.gz \
     --bg-color "timbow:hue=#0000FF" --layout "9:z;9:z;9:z"
 fi
 
@@ -354,7 +360,8 @@ if [[ "${NO_TRACT}" == "false" ]]; then
       rm ${TMP_ANAT}/tvol*.nii.gz
     fi
   else
-    mrconvert ${IMAGE_T1_NATIVE}/T1_roi-brain.nii.gz ${TMP_ANAT}/T1_raw.mif
+    niimath ${IMAGE_T1_NATIVE} -mas ${MASK_BRAIN_NATIVE} ${TMP_ANAT}/T1_roi-brain.nii.gz
+    mrconvert ${TMP_ANAT}/T1_roi-brain.nii.gz ${TMP_ANAT}/T1_raw.mif
     5ttgen fsl ${TMP_ANAT}/T1_raw.mif ${TMP_ANAT}/5tt.mif -premasked
     mrconvert ${TMP_ANAT}/5tt.mif ${TMP_ANAT}/5tt.nii.gz
   fi
@@ -450,7 +457,12 @@ if [[ "${NO_TRACT}" == "false" ]]; then
   mkdir -p ${DIR_SAVE}/connectome
   cp ${DIR_SCRATCH}/connectome.csv ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
   mkdir -p ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/* ${DIR_MRTRIX}/CON
+  cp ${DIR_SCRATCH}/assignments.csv ${DIR_MRTRIX}/CON
+  cp ${DIR_SCRATCH}/connectome.csv ${DIR_MRTRIX}/CON
+  cp ${DIR_SCRATCH}/exemplar.tck ${DIR_MRTRIX}/CON
+  cp ${DIR_SCRATCH}/labels_mesh.obj ${DIR_MRTRIX}/CON
+  cp ${DIR_SCRATCH}/labels.mif ${DIR_MRTRIX}/CON
+  cp ${DIR_SCRATCH}/labels.nii.gz ${DIR_MRTRIX}/CON
 
   Rscript ${TKNIPATH}/R/connectivityPlot.R \
     ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
@@ -480,7 +492,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   TSTR="DWI"
   if [[ "${NO_AFD}" == "false" ]]; then TSTR="${TSTR}, Apparent Fiber Density"; fi
-  if [[ "${NO_AFD}" == "false" ]]; then TSTR="${TSTR}, Tractography and Connectogram"; fi
+  if [[ "${NO_TRACT}" == "false" ]]; then TSTR="${TSTR}, Tractography and Connectogram"; fi
   echo '## '${PIPE}${FLOW}': '${TSTR} >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
 
@@ -519,7 +531,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '' >> ${RMD}
 
     echo "#### WM Dispersion" >> ${RMD}
-    TPNG=${DIR_SAVE}/Dispersion/AFD/${IDPFX}_roi-wm_Dispersion.png
+    TPNG=${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.png
     echo '![]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
 
@@ -534,7 +546,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '' >> ${RMD}
 
     echo "#### GM Dispersion" >> ${RMD}
-    TPNG=${DIR_SAVE}/Dispersion/AFD/${IDPFX}_roi-gm_Dispersion.png
+    TPNG=${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.png
     echo '![]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
   fi

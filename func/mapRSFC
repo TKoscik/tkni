@@ -180,16 +180,13 @@ rename 's/\+orig//g' ${DIR_SCRATCH}/*
 mv ${DIR_SCRATCH}/*.nii.gz ${DIR_SAVE}/
 
 if [[ "${NO_PNG}" == "false" ]]; then
-  CH=$(ezMath -x "0.3*0" -d 1)
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_ALFF.nii.gz --bg-color "cubehelix,start,${CH}"
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_LFF.nii.gz --bg-color "cubehelix,start,${CH}"
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_RSFA.nii.gz --bg-color "cubehelix,start,${CH}"
-  CH=$(ezMath -x "0.3*1" -d 1)
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_fALFF.nii.gz --bg-color "cubehelix,start,${CH}"
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_fRSFA.nii.gz --bg-color "cubehelix,start,${CH}"
-  CH=$(ezMath -x "0.3*2" -d 1)
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_mALFF.nii.gz --bg-color "cubehelix,start,${CH}"
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_mRSFA.nii.gz --bg-color "cubehelix,start,${CH}"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_ALFF.nii.gz --bg-color "timbow:hue=#FF0000:cyc=11/12:lum=15,85"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_LFF.nii.gz --bg-color "timbow:hue=#00FF00:cyc=11/12:lum=15,85"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_RSFA.nii.gz --bg-color "timbow:hue=#0000FF:cyc=11/12:lum=15,85"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_fALFF.nii.gz --bg-color "timbow:hue=#FFFF00:cyc=11/12:lum=15,85"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_fRSFA.nii.gz --bg-color "timbow:hue=#00FFFF:cyc=11/12:lum=15,85"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_mALFF.nii.gz --bg-color "timbow:hue=#FF00FF:cyc=11/12:lum=15,85"
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_mRSFA.nii.gz --bg-color "timbow:hue=#FF0000:cyc=11/12:lum=15,85"
 fi
  
 #===============================================================================

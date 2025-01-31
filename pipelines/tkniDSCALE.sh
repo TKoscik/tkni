@@ -85,6 +85,7 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
+    --force) FORCE=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -210,8 +211,9 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
     echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
@@ -240,17 +242,25 @@ if [[ ! -f ${IMAGE_DWI} ]]; then
   echo "ERROR [TKNI: ${FCN_NAME}] DWI image not found."
   exit 1
 fi
+
+# Extract Diffusion Scalars ====================================================
+mkdir -p ${DIR_SCRATCH}
+
+## setup brain mask ------------------------------------------------------------
 if [[ -z ${MASK_ROI} ]]; then
   MASK_ROI=${DIR_MRTRIX}/b0_mask_coreg.mif
+else
+  TX=(${MASK_ROI//\./ })
+  if [[ "${TX[-1]}" == "nii" ]] || [[ "${TX[-2]}" == "nii" ]]; then
+     mrconvert ${MASK_ROI} ${DIR_SCRATCH}/mask_roi.mif
+     MASK_ROI=${DIR_SCRATCH}/mask_roi.mif
+  fi
 fi
 if [[ ! -f ${MASK_ROI} ]]; then
   echo "ERROR [TKNI: ${FCN_NAME}] ROI MASK image not found. calculating over whole image"
 fi
 
-# Extract Diffusion Scalars ====================================================
-## Need to figure out what volumes correspond to what tensors, and pull out the
-## desired values.
-mkdir -p ${DIR_SCRATCH}
+## Extract Tensor --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/tensor
 
 TMPFCN="dwi2tensor -force"

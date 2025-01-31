@@ -20,7 +20,8 @@
         "ORIGCORFSPGRBRAVOUNTILPROMO","ORIGCORMPRAGEPROMO","ORIGCorFSPGRBRAVO",
         "ORIGSAGFSPGRBRAVO","ORIGSAGMPRAGEPROMO","ORIGCORFSPGRBRAVOe1",
         "ORIGCORFSPGRBRAVOe2","ORIGCORFSPGRBRAVOe3","ORIG3DSagT1MPRAGE","ORIGT1weighted"],
-        "T2w": ["3DSAGCUBET2","AXT2FRFSE","CorCUBET2","CORCUBET2","CORCUBET2PROMO",
+        "T2w": ["anatt2w",
+        "3DSAGCUBET2","AXT2FRFSE","CorCUBET2","CORCUBET2","CORCUBET2PROMO",
         "CORCubeT2PROMO","CORHIPPOT2OBL","CORT2CubePROMO","CUBET2CORONAL",
         "CUBET2SagittalTE65","CUBET2Sagittal","DRTT2SAGLO","DRTT2AXLO",
         "DRTT2CORLO","DRTT2AXHI","PUCORCUBET2","PUCORCubeT2PROMO",
@@ -50,7 +51,6 @@
         "T2MAPe4","T2MAPe5","AxT2MAPe1","AxT2MAPe2","AxT2MAPe3",
         "AxT2MAPe4","AxT2MAPe5","AxT2MAPe6","AxT2MAPe7",
         "AxT2MAPe8","AxT2MAPe9","AxT2MAPe10"],
-        "TOF": ["SNR3DTFL","3DTOF3SLABMTFSFA25","3DTOF3SLABMTFSFA25"],
         "T2star": ["T2STARMAP","T2STARMAPe1","T2STARMAPe2","T2STARMAPe3","T2STARMAPe4"],
         "FLAIR": ["7TOptFLAIR","7TFLAIRCV164000","PUSagCUBEFLAIR","SagCUBEFLAIR",
         "T2FLAIRSAG","SCSagCUBEFLAIR","7TOptFLAIRETL160","7TOptFLAIRFS","SAGT2FLAIRSPACE"],
@@ -139,8 +139,8 @@
         "proc-dwi_dir-PA_ColFA": ["dwidirPAColFA"]
     },
     "loc": {
-        "loc": ["LocalizerquietND","Localizerquiet","Localizerquiet",
-        "anatt1wNav",
+        "loc": ["LocalizerquietND","Localizerquieta","Localizerquiet",
+        "anatt1wNav", "anatt2wNav",
         "3PlaneLocSSFSE","3PlaneLocSSFSEi00004","3PlaneLocSSFSEi00007",
         "3PlaneLocFGRE","ASSETcalibration","3PlaneLocSSFSEi00006","HOS",
         "HOS2cm","HOS28usingGRE","loc","localizer","LOCALIZER","LOCFORSPECT",
@@ -227,7 +227,8 @@
         "acq-mrsLoc+cor+nd_T2w": ["anatt2wdescmrsLocCorND"]
     },
     "perf": {
-        "asl": ["3DASL","3DASLNOMUSIC","CBF","CerebralBloodFlow"],
+        "asl": ["3DASL","3DASLNOMUSIC","CBF","CerebralBloodFlow", "asl3dtrap2"],
+        "pwi": ["PerfusionWeighted"],
         "flow": ["Ax4DFLOW3slab80VENCPreview","Ax4DFLOW3slab80VENCLRFlow",
         "Ax4DFLOW3slab80VENCSIFlow","Ax4DFLOW3slab80VENCAPFlow"],
         "acq-preview_flow": ["Ax4DFLOW3slab80VENCPreviewe1","Ax4DFLOW3slab80VENCPreviewe2",
@@ -235,7 +236,16 @@
         "acq-anatomy_flow": ["Ax4DFLOW3slab80VENCAnatomy"],
         "dir-LR_flow": ["Ax4DFLOW3slab80VENCLRFlowe2"],
         "dir-SI_flow": ["Ax4DFLOW3slab80VENCSIFlowe4"],
-        "dir-AP_flow": ["Ax4DFLOW3slab80VENCAPFlowe3"]
+        "dir-AP_flow": ["Ax4DFLOW3slab80VENCAPFlowe3"],
+        "TOF": ["SNR3DTFL","3DTOF3SLABMTFSFA25","3DTOF3SLABMTFSFA25", "toffl3dtra"],
+        "acq-MIP+sag_TOF": ["toffl3dtraMIPSAG"],
+        "acq-MIP+cor_TOF": ["toffl3dtraMIPCOR"],
+        "acq-MIP+axi_TOF": ["toffl3dtraMIPTRA"],
+        "acq-MIP+radials_TOF": ["toffl3dtraMIPRadials"],
+        "acq-vesselScout_TOF": ["vesselscouthead"],
+        "acq-vesselScout+MSUM_TOF": ["vesselscoutheadMSUM"],
+        "acq-vesselScout+MSUM+sag_TOF": ["vesselscoutheadMSUMMIPSAG"],
+        "acq-vesselScout+MSUM+cor_TOF": ["vesselscoutheadMSUMMIPCOR"]
     },
     "qsm": {
         "qsm": ["QSMe1","QSMe2","QSMe3","QSMe4","QSMe5","QSMe6","QSMe7","QSMe8","QSMe9"]

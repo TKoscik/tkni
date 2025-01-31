@@ -224,8 +224,9 @@ fi
 # Check if has already been run, and force if requested ------------------------
 FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
-  echo -e "${IDPFX}\n\tWARNING [${PIPE}:${FLOW}] already run"
+  echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
   if [[ "${FORCE}" == "true" ]]; then
     echo -e "\tRERUN [${PIPE}:${FLOW}]"
   else
@@ -458,6 +459,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
+  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
     echo -e "\t${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"

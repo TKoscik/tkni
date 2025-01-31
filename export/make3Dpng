@@ -352,6 +352,17 @@ if [[ ${FG_N} -gt 1 ]]; then
     done
   fi
 fi
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo "  >FG File(s): ${FG[@]}"
+  echo "  >FG volume(s): ${FG_VOL[@]}"
+  echo "  >FG mask(s): ${FG_MASK[@]}"
+  echo "  >FG mask volume(s): ${FG_MASK_VOL[@]}"
+  echo "  >FG threshold: ${FG_THRESH[@]}"
+  echo "  >FG color(s): ${FG_COLOR[@]}"
+  echo "  >FG order: ${FG_ORDER[@]}"
+  echo "  >FG cbar: ${FG_CBAR[@]}"
+  echo "  >FG n: ${FG_N[@]}"
+fi
 
 # Get image information -------------------------------------------------------
 unset DIMS PIXDIM ORIGIN ORIENT
@@ -649,7 +660,7 @@ if [[ ${NX} -gt 0 ]]; then
     XSLICE="${X0}:${XS}:${XN}"
   else
     XS=$(echo "scale=0; (${XN} - ${X0}) / (${NX} - 1)" | bc -l)
-    XX=$(echo "scale=0; (${XN} - ${X0} - (${XS} * ${NX})) / 2" | bc -l)
+    XX=$(echo "scale=0; (${XN} - ${X0} - (${XS} * (${NX} - 1))) / 2" | bc -l)
     X0=$((${X0} + ${XX}))
     XN=$((${XN} - ${XX}))
     XSLICE="${X0}:${XS}:${XN}"
@@ -673,7 +684,7 @@ if [[ ${NY} -gt 0 ]]; then
     YSLICE="${Y0}:${YS}:${YN}"
   else
     YS=$(echo "scale=0; (${YN} - ${Y0}) / (${NY} - 1)" | bc -l)
-    YY=$(echo "scale=0; (${YN} - ${Y0} - (${YS} * ${NY})) / 2" | bc -l)
+    YY=$(echo "scale=0; (${YN} - ${Y0} - (${YS} * (${NY} - 1))) / 2" | bc -l)
     Y0=$((${Y0} + ${YY}))
     YN=$((${YN} - ${YY}))
     YSLICE="${Y0}:${YS}:${YN}"
@@ -697,7 +708,7 @@ if [[ ${NZ} -gt 0 ]]; then
     ZSLICE="${Z0}:${ZS}:${ZN}"
   else
     ZS=$(echo "scale=0; (${ZN} - ${Z0}) / (${NZ} - 1)" | bc -l)
-    ZZ=$(echo "scale=0; (${ZN} - ${Z0} - (${ZS} * ${NZ})) / 2" | bc -l)
+    ZZ=$(echo "scale=0; (${ZN} - ${Z0} - (${ZS} * (${NZ} - 1))) / 2" | bc -l)
     Z0=$((${Z0} + ${ZZ}))
     ZN=$((${ZN} - ${ZZ}))
     ZSLICE="${Z0}:${ZS}:${ZN}"
