@@ -736,7 +736,7 @@ done
 ## generate color bar ----------------------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>make BG color bar"; fi
 ## parse color input -----------------------------------------------------------
-unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_FLR CLR_RND
+unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_RND
 TCLR=(${BG_COLOR//:/ })
 CLR_METHOD=${TCLR[0]}
 if [[ ${#TCLR[@]} -gt 1 ]]; then
@@ -747,6 +747,7 @@ if [[ ${#TCLR[@]} -gt 1 ]]; then
       sat | saturation) CLR_SAT=${TMP[1]} ;;
       lum | luminosity) CLR_LUM=${TMP[1]} ;;
       cyc | cycles) CLR_CYC=${TMP[1]} ;;
+      dir | direction) CLR_DIR=${TMP[1]} ;;
       flr | floor) CLR_FLR=${TMP[1]} ;;
       rnd | random) CLR_RND="true" ;;
       *) echo "Unknown color specification" ;;
@@ -758,6 +759,7 @@ if [[ -n ${CLR_HUE} ]]; then clrfcn="${clrfcn} --hue \"${CLR_HUE}\""; fi
 if [[ -n ${CLR_SAT} ]]; then clrfcn="${clrfcn} --saturation ${CLR_SAT}"; fi
 if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
 if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
+if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
 if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
 if [[ -n ${CLR_RND} ]]; then clrfcn="${clrfcn} --order random"; fi
 clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_BG.png"
@@ -941,7 +943,7 @@ if [[ -n ${FG} ]]; then
     ## COLORIZE and RESIZE foreground slices ---------------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize FG ${i} slices"; fi
     ### parse color input -----------------------------------------------------------
-    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_FLR CLR_RND
+    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_RND
     TCLR=(${FG_COLOR[${i}]//:/ })
     CLR_METHOD=${TCLR[0]}
     if [[ ${#TCLR[@]} -gt 1 ]]; then
@@ -952,6 +954,7 @@ if [[ -n ${FG} ]]; then
           sat | saturation) CLR_SAT=${TMP[1]} ;;
           lum | luminosity) CLR_LUM=${TMP[1]} ;;
           cyc | cycles) CLR_CYC=${TMP[1]} ;;
+          dir | direction) CLR_DIR=${TMP[1]} ;;
           flr | floor) CLR_FLR=${TMP[1]} ;;
           rnd | random) CLR_RND="true" ;;
           *) echo "Unknown color specification" ;;
@@ -963,6 +966,7 @@ if [[ -n ${FG} ]]; then
     if [[ -n ${CLR_SAT} ]]; then clrfcn="${clrfcn} --saturation ${CLR_SAT}"; fi
     if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
     if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
+    if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
     if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
     if [[ -n ${CLR_RND} ]]; then clrfcn="${clrfcn} --order random"; fi
     clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_FG_${i}.png"
@@ -1101,7 +1105,7 @@ if [[ -n ${ROI} ]]; then
     ## COLORIZE and RESIZE background slices -----------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>make ROI color mapping"; fi
     ### parse color input ----------------------------------------------------
-    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_FLR CLR_RND
+    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_RND
     TCLR=(${ROI_COLOR[${i}]}//:/ })
     if [[ ${TCLR[0],,} != "lut" ]]; then
       CLR_METHOD=${TCLR[0]}
@@ -1113,6 +1117,7 @@ if [[ -n ${ROI} ]]; then
             sat | saturation) CLR_SAT=${TMP[1]} ;;
             lum | luminosity) CLR_LUM=${TMP[1]} ;;
             cyc | cycles) CLR_CYC=${TMP[1]} ;;
+            dir | direction) CLR_DIR=${TMP[1]} ;;
             flr | floor) CLR_FLR=${TMP[1]} ;;
             rnd | random) CLR_RND="true" ;;
             *) echo "Unknown color specification" ;;
@@ -1125,6 +1130,7 @@ if [[ -n ${ROI} ]]; then
       if [[ -n ${CLR_SAT} ]]; then clrfcn="${clrfcn} --saturation ${CLR_SAT}"; fi
       if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
       if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
+      if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
       if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
       if [[ -n ${CLR_RND} ]]; then clrfcn="${clrfcn} --order random"; fi
       clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_FG_${i}.png"
