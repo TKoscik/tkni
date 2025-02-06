@@ -1,9 +1,10 @@
 args <- commandArgs(trailingOnly = TRUE)
 
-input.tsv <- args[1]
-input.stats <- args[2]
-input.pixdim <- args[3]
-input.lut <- args[4]
+input.pfx <- args[1]
+input.tsv <- args[2]
+input.stats <- args[3]
+input.pixdim <- args[4]
+input.lut <- args[5]
 
 library(tools)
 
@@ -47,8 +48,12 @@ for (i in which.stats) {
 }
 
 #Concatenate output with subject and session identifiers, date/time, and measure
-df <- data.frame(participant_id = rep(unlist(strsplit(unlist(strsplit(basename(input.tsv),"_"))[1],"-"))[2], length(which.stats)),
-                 session_id = rep(unlist(strsplit(unlist(strsplit(basename(input.tsv),"_"))[2],"-"))[2], length(which.stats)),
+#df <- data.frame(participant_id = rep(unlist(strsplit(unlist(strsplit(basename(input.tsv),"_"))[1],"-"))[2], length(which.stats)),
+#                 session_id = rep(unlist(strsplit(unlist(strsplit(basename(input.tsv),"_"))[2],"-"))[2], length(which.stats)),
+#                 summary_date = rep(strftime(as.POSIXct(Sys.time(), "%Y-%m-%dT%H:%M:%S"), "%Y-%m-%dT%H:%M:%S%z"), length(which.stats)),
+#                 measure = stats.label[which.stats],
+#                 out.mx)
+df <- data.frame(participant_id = rep(input.pfx, length(which.stats)),
                  summary_date = rep(strftime(as.POSIXct(Sys.time(), "%Y-%m-%dT%H:%M:%S"), "%Y-%m-%dT%H:%M:%S%z"), length(which.stats)),
                  measure = stats.label[which.stats],
                  out.mx)

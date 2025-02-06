@@ -419,7 +419,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   if [[ ${NO_SCALAR} == "false" ]]; then
     echo '### Scalars {.tabset}' >> ${RMD}
     SLS=("fa" "adc" "ad" "rd")
-    SLAB=("Fraction Anisotropy" "Apparent Diffusivity Coefficient (Mean Diffusivity)" "Axial Diffusivity" "Radial Diffusivity")
+    SLAB=("Fractional Anisotropy" "Apparent Diffusivity Coefficient (Mean Diffusivity)" "Axial Diffusivity" "Radial Diffusivity")
     for i in {0..3}; do
       echo "#### ${SLAB[${i}]}" >> ${RMD}
       TPNG=${DIR_SAVE}/scalar/${IDPFX}_scalar-${SLS[${i}]}.png

@@ -159,6 +159,7 @@ PIXDIM="${pixdimTemp[0]}x${pixdimTemp[1]}x${pixdimTemp[2]}"
 
 # Summarize stats according to look up table -----------------------------------
 Rscript ${TKNIPATH}/R/summarize3D.R \
+  ${PREFIX} \
   ${DIR_SCRATCH}/${PREFIX}_tempSummary.tsv \
   ${STATS_LS} \
   ${PIXDIM} \
@@ -181,7 +182,7 @@ HEADER=(${HEADER///})
 HEADER=("${HEADER[@]:1}")
 HDR_STR=$(echo ${HEADER[@]})
 HDR_STR=${HDR_STR// /\\t}
-HDR_STR="participant_id\tsession_id\tsummary_date\tmeasure\t${HDR_STR[@]}"
+HDR_STR="participant_id\tsummary_date\tmeasure\t${HDR_STR[@]}"
 
 if [[ "${APPEND}" == "true" ]] || [[ "${APPEND}" == "both" ]]; then
   if [[ -z ${APPEND_TO} ]]; then

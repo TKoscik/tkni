@@ -21,6 +21,7 @@ LUMINOSITY=35,65
 CYCLES="5/6"
 DIRECTION="increasing"
 FLOOR=
+ORDER=
 
 DIR_SAVE=
 FNAME=
@@ -125,7 +126,14 @@ elif [[ ${METHOD,,} == "gradient" ]]; then
 fi
 
 # randomize order if requested -------------------------------------------------
-if [[ ${METHOD,,} == *"random"* ]]; then CPAL=($(shuf -e "${CPAL[@]}")); fi
+if [[ ${ORDER,,} == *"random"* ]]; then CPAL=($(shuf -e "${CPAL[@]}")); fi
+if [[ ${ORDER,,} == *"reverse"* ]]; then
+  TPAL=
+  for (( i=1; i<=${#CPAL[@]}; i++)) {
+    TPAL+=(${CPAL[-${i}]})
+  }
+  CPAL=(${TPAL[@]})
+fi
 
 # Convert to PNG palette for ImageMagick use -----------------------------------
 tmpfcn="convert -size 30x600 gradient: -interpolate Bicubic \( +size"

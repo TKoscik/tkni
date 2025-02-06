@@ -331,6 +331,11 @@ if [[ ${FG_N} -gt 1 ]]; then
       FG_VOL[${i}]=${FG_VOL[0]}
     done
   fi
+  if [[ ${#FG_MASK[@]} -eq 1 ]]; then
+    for (( i=0; i<${FG_N}; i++ )); do
+      FG_MASK[${i}]=${FG_MASK[0]}
+    done
+  fi
   if [[ ${#FG_MASK_VOL[@]} -eq 1 ]]; then
     for (( i=0; i<${FG_N}; i++ )); do
       FG_MASK_VOL[${i}]=${FG_MASK_VOL[0]}
@@ -420,10 +425,12 @@ if [[ ${TV} -gt 1 ]]; then
     exit 2
   else
     WHICH_VOL=$((${BG_VOL}-1))
-    3dcalc -a ${BG}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/BG.nii.gz > /dev/null
-    BG=${DIR_SCRATCH}/BG.nii.gz
+    3dcalc -a ${BG}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/BG_ORIG.nii.gz > /dev/null
   fi
+else
+  cp ${BG} ${DIR_SCRATCH}/BG_ORIG.nii.gz
 fi
+BG=${DIR_SCRATCH}/BG_ORIG.nii.gz
 
 if [[ -n ${BG_MASK} ]]; then
   TV=$(niiInfo -i ${BG_MASK} -f vols)
@@ -433,10 +440,12 @@ if [[ -n ${BG_MASK} ]]; then
       exit 3
     else
       WHICH_VOL=$((${BG_MASK_VOL}-1))
-      3dcalc -a ${BG_MASK}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/BG_MASK.nii.gz > /dev/null
-      BG_MASK=${DIR_SCRATCH}/BG_MASK.nii.gz
+      3dcalc -a ${BG_MASK}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/BG_MASK_ORIG.nii.gz > /dev/null
     fi
+  else
+    cp ${BG_MASK} ${DIR_SCRATCH}/BG_MASK_ORIG.nii.gz
   fi
+  BG_MASK=${DIR_SCRATCH}/BG_MASK_ORIG.nii.gz
 fi
 
 if [[ -n ${FG} ]]; then
@@ -448,10 +457,12 @@ if [[ -n ${FG} ]]; then
         exit 4
       else
         WHICH_VOL=$((${FG_VOL[${i}]}-1))
-        3dcalc -a ${FG[${i}]}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/FG_${i}.nii.gz > /dev/null
-        FG[${i}]=${DIR_SCRATCH}/FG_${i}.nii.gz
+        3dcalc -a ${FG[${i}]}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/FG_${i}_ORIG.nii.gz > /dev/null
       fi
+    else
+      cp ${FG[${i}]} ${DIR_SCRATCH}/FG_${i}_ORIG.nii.gz
     fi
+    FG[${i}]=${DIR_SCRATCH}/FG_${i}_ORIG.nii.gz
   done
 fi
 
@@ -464,10 +475,12 @@ if [[ -n ${FG_MASK} ]]; then
       else
         WHICH_VOL=$((${FG_MASK_VOL[${i}]}-1))
         3dcalc -a ${FG_MASK[${i}]}[${WHICH_VOL}] -expr a \
-          -prefix ${DIR_SCRATCH}/FG_MASK_${i}.nii.gz > /dev/null
-        FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}.nii.gz
+          -prefix ${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz > /dev/null
       fi
+    else
+      cp ${FG_MASK[${i}]} ${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
     fi
+    FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
   done
 fi
 
@@ -479,71 +492,66 @@ if [[ -n ${ROI} ]]; then
       exit 3
     else
       WHICH_VOL=$((${ROI_VOL}-1))
-      3dcalc -a ${ROI}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/ROI.nii.gz > /dev/null
-      ROI=${DIR_SCRATCH}/ROI.nii.gz
+      3dcalc -a ${ROI}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/ROI_ORIG.nii.gz > /dev/null
     fi
+  else
+    cp ${ROI} ${DIR_SCRATCH}/ROI_ORIG.nii.gz
   fi
+  ROI=${DIR_SCRATCH}/ROI_ORIG.nii.gz
 fi
 
-# check if all images in same space --------------------------------------------
-## Push all to RAS orientation
+# PUSH all images to the BG space ----------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>check if images in same space, if not try forcing"; fi
 FIELD_CHK="dim,pixdim,quatern_b,quatern_c,quatern_d,qoffset_x,qoffset_y,qoffset_z,srow_x,srow_y,srow_z"
-
-if [[ "${BG}" != "${DIR_SCRATCH}/BG.nii.gz" ]]; then
-  cp ${BG} ${DIR_SCRATCH}/BG.nii.gz
-  BG=${DIR_SCRATCH}/BG.nii.gz
-fi
-3dresample -orient RAS -overwrite -prefix ${BG} -input ${BG}
-
 if [[ -n ${BG_MASK} ]]; then
-  cp ${BG_MASK} ${DIR_SCRATCH}/BG_mask.nii.gz
-  BG_MASK="${DIR_SCRATCH}/BG_mask.nii.gz"
   unset SPACE_CHK
   SPACE_CHK=$(niiCompare -i ${BG} -j ${BG_MASK} -f ${FIELD_CHK})
-  if [[ "${SPACE_CHK}" == "false" ]]; then
-    antsApplyTransforms -d 3 -n GenericLabel \
-      -i ${BG_MASK} -o ${BG_MASK} -r ${BG}
+  if [[ "${SPACE_CHK}" == "true" ]]; then
+    antsApplyTransforms -d 3 -n GenericLabel -i ${BG_MASK} -o ${BG_MASK} -r ${BG}
   fi
+fi
+if [[ -n ${FG} ]]; then
+  for (( i=0; i<${#FG[@]}; i++ )); do
+    unset SPACE_CHK
+    SPACE_CHK=$(niiCompare -i ${BG} -j ${FG[${i}]} -f ${FIELD_CHK})
+    if [[ "${SPACE_CHK}" == "true" ]]; then
+      antsApplyTransforms -d 3 -n Linear -i ${FG[${i}]} -o ${FG[${i}]} -r ${BG}
+    fi
+  done
+fi
+if [[ -n ${FG_MASK} ]]; then
+  for (( i=0; i<${#FG_MASK[@]}; i++ )); do
+    unset SPACE_CHK
+    SPACE_CHK=$(niiCompare -i ${FG[${i}]} -j ${FG_MASK[${i}]} -f ${FIELD_CHK})
+    if [[ "${SPACE_CHK}" == "true" ]]; then
+      antsApplyTransforms -d 3 -n GenericLabel -i ${FG_MASK[${i}]} -o ${FG_MASK[${i}]} -r ${BG}
+    fi
+  done
+fi
+if [[ -n ${ROI} ]]; then
+  unset SPACE_CHK
+  SPACE_CHK=$(niiCompare -i ${ROI} -j ${BG} -f ${FIELD_CHK})
+  if [[ "${SPACE_CHK}" == "true" ]]; then
+    antsApplyTransforms -d 3 -n MultiLabel -i ${ROI} -o ${ROI}.nii.gz -r ${BG}
+  fi
+fi
+
+## Push all to RAS orientation -------------------------------------------------
+3dresample -orient RAS -overwrite -prefix ${BG} -input ${BG}
+if [[ -n ${BG_MASK} ]]; then
   3dresample -orient RAS -overwrite -prefix ${BG_MASK} -input ${BG_MASK}
 fi
 if [[ -n ${FG} ]]; then
   for (( i=0; i<${#FG[@]}; i++ )); do
-    if [[ ! -f ${DIR_SCRATCH}/FG_${i}.nii.gz ]]; then
-      cp ${FG[${i}]} ${DIR_SCRATCH}/FG_${i}.nii.gz
-	fi
-    FG[${i}]="${DIR_SCRATCH}/FG_${i}.nii.gz"
-    unset SPACE_CHK
-    SPACE_CHK=$(niiCompare -i ${BG} -j ${FG[${i}]} -f ${FIELD_CHK})
-    if [[ "${SPACE_CHK}" == "false" ]]; then
-      antsApplyTransforms -d 3 -n GenericLabel \
-        -i ${FG[${i}]} -o ${FG[${i}]} -r ${BG[${i}]}
-    fi
     3dresample -orient RAS -overwrite -prefix ${FG[${i}]} -input ${FG[${i}]}
   done
 fi
 if [[ -n ${FG_MASK} ]]; then
   for (( i=0; i<${#FG_MASK[@]}; i++ )); do
-    cp ${FG_MASK[${i}]} ${DIR_SCRATCH}/FG_mask-${i}.nii.gz
-    FG_MASK[${i}]="${DIR_SCRATCH}/FG_mask-${i}.nii.gz"
-    unset SPACE_CHK
-    SPACE_CHK=$(niiCompare -i ${FG[${i}]} -j ${FG_MASK[${i}]} -f ${FIELD_CHK})
-    if [[ "${SPACE_CHK}" == "false" ]]; then
-      antsApplyTransforms -d 3 -n GenericLabel \
-        -i ${FG_MASK[${i}]} -o ${FG_MASK[${i}]} -r ${BG}
-    fi
     3dresample -orient RAS -overwrite -prefix ${FG_MASK[${i}]} -input ${FG_MASK[${i}]}
   done
 fi
 if [[ -n ${ROI} ]]; then
-  cp ${ROI} ${DIR_SCRATCH}/ROI.nii.gz
-  ROI=${DIR_SCRATCH}/ROI.nii.gz
-  unset SPACE_CHK
-  SPACE_CHK=$(niiCompare -i ${ROI} -j ${BG} -f ${FIELD_CHK})
-  if [[ "${SPACE_CHK}" == "false" ]]; then
-    antsApplyTransforms -d 3 -n MultiLabel \
-      -i ${ROI} -o ${ROI}.nii.gz -r ${BG}
-  fi
   3dresample -orient RAS -overwrite -prefix ${ROI} -input ${ROI}
 fi
 
@@ -573,7 +581,6 @@ else
 fi
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>>>>using ${MSG}"; fi
 
-
 ## calculate slices in each plane ----------------------------------------------
 ## (1) find bounding box within image
 ## (2) add in desired offset
@@ -592,15 +599,8 @@ ZLIM=(9999 0)
 if [[ -n "${LIM_CHK}" ]]; then
   for (( i=0; i<${#LIM_CHK[@]}; i++ )); do
     unset BB_STR BB
-  #  if [[ "${LIM_CHK[${i}]}" == ${FG_MASK} ]] \
-  #  || [[ "${LIM_CHK[${i}]}" == ${BG_MASK} ]] \
-  #  || [[ "${LIM_CHK[${i}]}" == "${ROI}" ]]; then
-      3dAutobox -extent_ijk_to_file ${DIR_SCRATCH}/ijk.txt \
-        -noclust -input ${LIM_CHK[${i}]} > /dev/null
-  #  else
-  #    3dAutobox -extent_ijk_to_file ${DIR_SCRATCH}/ijk.txt \
-  #      --input ${LIM_CHK[${i}]} > /dev/null
-  #  fi
+    3dAutobox -extent_ijk_to_file ${DIR_SCRATCH}/ijk.txt \
+      -noclust -input ${LIM_CHK[${i}]} > /dev/null
     BB=($(cat ${DIR_SCRATCH}/ijk.txt))
     if [[ ${BB[0]} -lt ${XLIM[0]} ]]; then XLIM[0]=${BB[0]}; fi
     if [[ ${BB[1]} -gt ${XLIM[1]} ]]; then XLIM[1]=${BB[1]}; fi
@@ -637,17 +637,6 @@ fi
 ## -convert to percentage of image extent
 
 ## calculate X slices - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#SLICE_PCT="10%:20%:90%"
-#  X0=$(echo "scale=3; (${XLIM[0]} + ${EDGE_CLIP}) / ${DIMS[0]} * 100" | bc -l)
-#  XN=$(echo "scale=3; (${XLIM[1]} - ${EDGE_CLIP}) / ${DIMS[0]} * 100" | bc -l)
-#  if [[ ${NX} == 1 ]]; then
-#    XSLICE="$(echo "scale=3; (${XN} + ${X0}) / 2" | bc -l)%"
-#  else
-#    XS=$(echo "scale=3; (${XN} - ${X0}) / (${NX} - 1)" | bc -l)
-#    # reduces likelihood that edges and rounding will alter the number of slices
-#    XN=$(echo "scale=3; ${XN} + 0.001" | bc -l)
-#    XSLICE="${X0}%:${XS}%:${XN}%"
-#  fi
 if [[ ${NX} -gt 0 ]]; then
   unset X0 XN XS XSLICE
   X0=$((${XLIM[0]} + ${EDGE_CLIP}))
@@ -736,7 +725,7 @@ done
 ## generate color bar ----------------------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>make BG color bar"; fi
 ## parse color input -----------------------------------------------------------
-unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_RND
+unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
 TCLR=(${BG_COLOR//:/ })
 CLR_METHOD=${TCLR[0]}
 if [[ ${#TCLR[@]} -gt 1 ]]; then
@@ -749,7 +738,8 @@ if [[ ${#TCLR[@]} -gt 1 ]]; then
       cyc | cycles) CLR_CYC=${TMP[1]} ;;
       dir | direction) CLR_DIR=${TMP[1]} ;;
       flr | floor) CLR_FLR=${TMP[1]} ;;
-      rnd | random) CLR_RND="true" ;;
+      rev | reverse) CLR_ORD="reverse" ;;
+      rnd | random) CLR_ORD="random" ;;
       *) echo "Unknown color specification" ;;
     esac
   done
@@ -761,7 +751,7 @@ if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
 if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
 if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
 if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
-if [[ -n ${CLR_RND} ]]; then clrfcn="${clrfcn} --order random"; fi
+if [[ -n ${CLR_ORD} ]]; then clrfcn="${clrfcn} --order ${CLR_ORD}"; fi
 clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_BG.png"
 eval ${clrfcn}
 
@@ -882,7 +872,6 @@ if [[ "${BG_CBAR}" == "true" ]]; then
   convert ${DIR_SCRATCH}/CBAR_BG.png \
     -resize "x${MAX_PIXELS}" ${DIR_SCRATCH}/CBAR_BG.png
 fi
-
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>BG slice PNGS generated"; fi
 
 # Add Foreground Overlays ======================================================
@@ -894,29 +883,33 @@ if [[ -n ${FG} ]]; then
     HILO=(${FG_THRESH[${i}]//,/ })
     if [[ "${HILO[0]}" == "0" ]]; then HILO[0]=0.001; fi
     if [[ "${HILO[1]}" == "100" ]]; then HILO[1]=99.999; fi
+
+    3dROIstats -mask ${FG_MASK[${i}]} -minmax -nomeanout ${FG[${i}]} > ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv
+    LO=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Min_1))
+    HI=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Max_1))
+    LO=${LO[1]}
+    HI=${HI[1]}
+
     if [[ ${NX} -gt 0 ]]; then
       c3d ${FG[${i}]} \
-        -clip ${HILO[0]}% ${HILO[1]}% -stretch ${HILO[0]}% ${HILO[1]}% 0 255 \
+        -clip ${LO} ${HI} -stretch ${LO} ${HI} 0 255 \
         -type uchar -slice x ${XSLICE} \
         -oo ${DIR_SCRATCH}/X_FG${i}_%0d.png
     fi
     if [[ ${NY} -gt 0 ]]; then
       c3d ${FG[${i}]} \
-        -clip ${HILO[0]}% ${HILO[1]}% -stretch ${HILO[0]}% ${HILO[1]}% 0 255 \
+        -clip ${LO} ${HI} -stretch ${LO} ${HI} 0 255 \
         -type uchar -slice y ${YSLICE} \
         -oo ${DIR_SCRATCH}/Y_FG${i}_%0d.png
     fi
     if [[ ${NZ} -gt 0 ]]; then
       c3d ${FG[${i}]} \
-        -clip ${HILO[0]}% ${HILO[1]}% -stretch ${HILO[0]}% ${HILO[1]}% 0 255 \
+        -clip ${LO} ${HI} -stretch ${LO} ${HI} 0 255 \
         -type uchar -slice z ${ZSLICE} \
         -oo ${DIR_SCRATCH}/Z_FG${i}_%0d.png
     fi
 
     ## Generate FG masks ---------------------------------------------------
-    TRANGE=($(3dBrickStat -perclist 2 ${HILO[0]} ${HILO[1]} ${FG[${i}]}))
-    LO=${TRANGE[1]}
-    HI=${TRANGE[3]}
     if [[ -z ${FG_MASK[${i}]} ]] || [[ "${FG_MASK[${i}]}" == "null" ]]; then
       FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}.nii.gz
       niimath ${FG[${i}]} -thr ${LO} -uthr ${HI} -bin ${FG_MASK[${i}]} -odt char
@@ -943,7 +936,7 @@ if [[ -n ${FG} ]]; then
     ## COLORIZE and RESIZE foreground slices ---------------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize FG ${i} slices"; fi
     ### parse color input -----------------------------------------------------------
-    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_RND
+    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
     TCLR=(${FG_COLOR[${i}]//:/ })
     CLR_METHOD=${TCLR[0]}
     if [[ ${#TCLR[@]} -gt 1 ]]; then
@@ -956,7 +949,8 @@ if [[ -n ${FG} ]]; then
           cyc | cycles) CLR_CYC=${TMP[1]} ;;
           dir | direction) CLR_DIR=${TMP[1]} ;;
           flr | floor) CLR_FLR=${TMP[1]} ;;
-          rnd | random) CLR_RND="true" ;;
+          rev | reverse) CLR_ORD="reverse" ;;
+          rnd | random) CLR_ORD="random" ;;
           *) echo "Unknown color specification" ;;
         esac
       done
@@ -968,7 +962,7 @@ if [[ -n ${FG} ]]; then
     if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
     if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
     if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
-    if [[ -n ${CLR_RND} ]]; then clrfcn="${clrfcn} --order random"; fi
+    if [[ -n ${CLR_ORD} ]]; then clrfcn="${clrfcn} --order ${CLR_ORD}"; fi
     clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_FG_${i}.png"
     eval ${clrfcn}
 
@@ -1105,7 +1099,7 @@ if [[ -n ${ROI} ]]; then
     ## COLORIZE and RESIZE background slices -----------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>make ROI color mapping"; fi
     ### parse color input ----------------------------------------------------
-    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_RND
+    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
     TCLR=(${ROI_COLOR[${i}]}//:/ })
     if [[ ${TCLR[0],,} != "lut" ]]; then
       CLR_METHOD=${TCLR[0]}
@@ -1119,7 +1113,8 @@ if [[ -n ${ROI} ]]; then
             cyc | cycles) CLR_CYC=${TMP[1]} ;;
             dir | direction) CLR_DIR=${TMP[1]} ;;
             flr | floor) CLR_FLR=${TMP[1]} ;;
-            rnd | random) CLR_RND="true" ;;
+            rev | reverse) CLR_ORD="reverse" ;;
+            rnd | random) CLR_ORD="random" ;;
             *) echo "Unknown color specification" ;;
           esac
         done
@@ -1132,7 +1127,7 @@ if [[ -n ${ROI} ]]; then
       if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
       if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
       if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
-      if [[ -n ${CLR_RND} ]]; then clrfcn="${clrfcn} --order random"; fi
+      if [[ -n ${CLR_ORD} ]]; then clrfcn="${clrfcn} --order ${CLR_ORD}"; fi
       clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_FG_${i}.png"
       eval ${clrfcn}
     fi
