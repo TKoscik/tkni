@@ -220,14 +220,24 @@ if [[ "${METHOD,,}" == *"fsurf"* ]] \
     0 4 24 43 165 258 259 ${DIR_SCRATCH}/samseg/nonbrain.mgz
   mri_convert ${DIR_SCRATCH}/samseg/nonbrain.mgz ${DIR_SCRATCH}/samseg/nonbrain.nii.gz
   mri_convert ${DIR_SCRATCH}/samseg/seg.mgz ${DIR_SCRATCH}/samseg/brain.nii.gz
-  fslmaths ${DIR_SCRATCH}/samseg/nonbrain.nii.gz \
+  niimath ${DIR_SCRATCH}/samseg/nonbrain.nii.gz \
     -binv ${DIR_SCRATCH}/samseg/nonbrain.nii.gz
-  fslmaths ${DIR_SCRATCH}/samseg/brain.nii.gz \
+  niimath ${DIR_SCRATCH}/samseg/brain.nii.gz \
     -bin -mas ${DIR_SCRATCH}/samseg/nonbrain.nii.gz \
     ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+SAMSEG${SUFFIX}.nii.gz
   MASK_LS+=(${PREFIX}_mask-${LABEL}+SAMSEG${SUFFIX}.nii.gz)
 fi
 
+# SynthStrip -------------------------------------------------------------------
+if [[ "${METHOD,,}" == *"synth"* ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>Running Freesurfer's SynthStrip"; fi
+  mri_synthstrip -i ${IMAGE[0]} \
+    -m ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+SYNTH${SUFFIX}.nii.gz \
+    --no-csf
+  MASK_LS+=(${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+SYNTH${SUFFIX}.nii.gz)
+fi
+
+# apply spatial filter if specified --------------------------------------------
 if [[ "${SPATIAL_FILTER,,}" != "null" ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>>>>applying Spatial Filter ${SPATIAL_FILTER} ${FILTER_RADIUS}"; fi
   for (( i=0; i<${#MASK_LS[@]}; i++ )); do
@@ -250,23 +260,20 @@ if [[ ${#METHOD[@]} > 1 ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>Running making Venn-like overlap of masks"; fi
   maskVenn --mask-ls ${TLS} --label "brain+VENN${SUFFIX}" --prefix ${PREFIX} --dir-save ${DIR_SCRATCH}
   MASK_LS+=(${PREFIX}_mask-${LABEL}+VENN${SUFFIX}.nii.gz)
-
   ## make MAJORITY VOTE for brain mask
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>Running majority vote of masks"; fi
   ImageMath 3 ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+MALF${SUFFIX}.nii.gz MajorityVoting ${TLS//,/ }
   MASK_LS+=(${PREFIX}_mask-${LABEL}+MALF${SUFFIX}.nii.gz)
-
   ## make INTERSECTION mask
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>making intersection mask"; fi
   INTERSECT=$(ezMath -x "2^${#METHOD[@]}-1" -d 0)
-  fslmaths ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+VENN${SUFFIX}.nii.gz \
+  niimath ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+VENN${SUFFIX}.nii.gz \
     -thr ${INTERSECT} -uthr ${INTERSECT} -bin \
     ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+INTERSECT${SUFFIX}.nii.gz
   MASK_LS+=(${PREFIX}_mask-${LABEL}+INTERSECT${SUFFIX}.nii.gz)
-
   ## make UNION mask
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>making union mask"; fi
-  fslmaths ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+VENN${SUFFIX}.nii.gz \
+  niimath ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+VENN${SUFFIX}.nii.gz \
     -bin ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+UNION${SUFFIX}.nii.gz
   MASK_LS+=(${PREFIX}_mask-${LABEL}+UNION${SUFFIX}.nii.gz)
 fi
@@ -279,13 +286,15 @@ if [[ "${NO_PNG}" == "false" ]]; then
     png_fcn="make3Dpng --bg ${IMAGE[0]}"
     png_fcn=${png_fcn}' --bg-threshold "5,99"'
     png_fcn="${png_fcn} --fg ${DIR_SCRATCH}/${MASK_LS[${i}]}"
-    png_fcn=${png_fcn}' --fg-color "timbow:random"'
+    png_fcn="${png_fcn} --fg-mask ${DIR_SCRATCH}/${MASK_LS[${i}]}"
+    png_fcn=${png_fcn}' --fg-color "timbow:hue=#FF0000:sat=100;lum=35,85;rnd"'
     png_fcn=${png_fcn}' --fg-alpha 50'
     png_fcn=${png_fcn}' --fg-cbar "false"'
     png_fcn=${png_fcn}' --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z"'
     png_fcn="${png_fcn} --filename ${TNAME}"
     png_fcn="${png_fcn} --dir-save ${DIR_SCRATCH}"
     if [[ "${VERBOSE}" == "true" ]]; then echo ${png_fcn}; fi
+    echo ${DIR_SCRATCH}/${MASK_LS[${i}]}
     eval ${png_fcn}
   done
 fi

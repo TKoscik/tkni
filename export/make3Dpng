@@ -482,6 +482,11 @@ if [[ -n ${FG_MASK} ]]; then
     fi
     FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
   done
+else
+  for (( i=0; i<${FG_N}; i++ )); do
+    niimath ${FG[${i}]} -add 1 -bin ${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
+    FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
+  done
 fi
 
 if [[ -n ${ROI} ]]; then
