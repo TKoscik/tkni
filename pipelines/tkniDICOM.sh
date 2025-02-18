@@ -243,9 +243,6 @@ fi
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-#  reportDICOMConversion --pi ${PI} --project ${PROJECT} \
-#    --id ${IDPFX} --dir-id ${IDDIR} --input-dicom ${INPUT_DCM}
-
   mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
   RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
@@ -259,7 +256,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
   echo '```{r, out.width = "400px", fig.align="right"}' >> ${RMD}
-  echo 'knitr::include_graphics("/usr/local/tkni/TK_BRAINLab_logo.png")' >> ${RMD}
+  echo 'knitr::include_graphics("/usr/local/tkni/dev/TK_BRAINLab_logo.png")' >> ${RMD}
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
 
@@ -294,7 +291,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### Click to View ->' >> ${RMD}
   echo '#### File Tree' >> ${RMD}
   echo '```{bash}' >> ${RMD}
-#  echo 'tree -P "'${IDPFX}'*" -Rn --prune '${DIR_RAW} >> ${RMD}
   echo 'tree -P "*" -Rn --prune '${DIR_RAW} >> ${RMD}
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
@@ -328,7 +324,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   # Render RMD file as html ------------------------------------------------------
   Rscript -e "rmarkdown::render('${RMD}')"
-#  rm ${RMD}
   mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
   mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
 fi

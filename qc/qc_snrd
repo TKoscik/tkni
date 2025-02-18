@@ -1,0 +1,131 @@
+#!/bin/bash -e
+#===============================================================================
+# <<DESCRIPTION>>
+# Authors: <GIVENNAME> <FAMILYNAME>,
+# Date: <date of initial commit>
+# CHANGELOG: <description of major changes to functionality>
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long image:,mask:,fg:,dir-scratch:,\
+help,verbose,no-log -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+IMAGE=
+MASK=
+FG=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
+    --fg) FG="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo 'Dietrich Signal-to-Noise Ratio (SNRd)'
+  echo 'The ratio of signal to noise calculated within a masked region.'
+  echo 'Uses the air background as a reference.'
+  echo 'Will return -1 if the background has been masked out and is all zero'
+  echo '    Dietrich O, Raya JG, Reeder SB, Reiser MF, Schoenberg SO.'
+  echo '      Measurement of signal-to-noise ratios in MR images: influence of'
+  echo '      multichannel coils, parallel imaging, and reconstruction filters.'
+  echo '      J Magn Reson Imaging. 2007 Aug;26(2):375–85.'
+  echo '      Available from: http://dx.doi.org/10.1002/jmri.20969'
+  echo ''
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --image    <required>    NIfTI image to calculate stats for'
+  echo '  --mask                   binary mask indicating region of interest'
+  echo '                           default is to use the foreground mask as the'
+  echo '                           region of interest'
+  echo '  --fg       <required>    binary mask indicating the inverse of the'
+  echo '                           region to be used to calculate background'
+  echo '                           noise as a reference'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+mkdir -p ${DIR_SCRATCH}
+
+if [[ -z ${MASK} ]]; then
+  MASK=${DIR_SCRATCH}/MASK_FG.nii.gz
+  niimath ${FG} -bin ${MASK}
+else
+  MASK=${FG}
+fi
+
+BG=${DIR_SCRATCH}/MASK_BG.nii.gz
+niimath ${FG} -binv ${BG}
+
+FG_VALS=($(3dROIstats -mask ${MASK} ${IMAGE}))
+BG_VALS=($(3dROIstats -mask ${BG} -sigma ${IMAGE}))
+CONST=$(echo "scale=4; sqrt(2 / (4 - 3.14159))" | bc -l)
+
+if [[ "${BG_VALS[-1]}" == "0.000000" ]]; then
+  SNRD=-1
+else
+  SNRD=$(echo "scale=4; ${FG_VALS[-1]} / (${CONST} * ${BG_VALS[-1]})" | bc -l)
+fi
+echo ${SNRD}
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0

@@ -184,11 +184,11 @@ fi
 if [[ "${VERBOSE}" == "true" ]]; then
   echo "[TKNI: ${FCN_NAME}] setup BIDS information"
 fi
-DIR_PROJECT=$(getDir -i ${IMAGE})
-PID=$(getField -i ${IMAGE} -f sub)
-SID=$(getField -i ${IMAGE} -f ses)
-DIRPID=sub-${PID}
-if [ -n "${SID}" ]; then DIRPID=${DIRPID}/ses-${SID}; fi
+#DIR_PROJECT=$(getDir -i ${IMAGE})
+#PID=$(getField -i ${IMAGE} -f sub)
+#SID=$(getField -i ${IMAGE} -f ses)
+#DIRPID=sub-${PID}
+#if [ -n "${SID}" ]; then DIRPID=${DIRPID}/ses-${SID}; fi
 if [[ -z "${PREFIX}" ]]; then
   PREFIX=$(getBidsBase -s -i ${IMAGE})
   PREFIX=$(modField -i ${PREFIX} -a -f prep -v rescale)
@@ -215,25 +215,24 @@ IMGRS=${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz
 if [[ "${VERBOSE}" == "true" ]]; then
   echo "[TKNI: ${FCN_NAME}] set NANs to ${NAN}"
 fi
-fslmaths ${IMAGE} -nanm -mul ${NAN} ${DIR_SCRATCH}/mask-nan.nii.gz
-fslmaths ${IMAGE} -nan -add ${DIR_SCRATCH}/mask-nan.nii.gz ${IMGRS}
+niimath ${IMAGE} -nanm -mul ${NAN} ${DIR_SCRATCH}/mask-nan.nii.gz
+niimath ${IMAGE} -nan -add ${DIR_SCRATCH}/mask-nan.nii.gz ${IMGRS}
 
 # deal with negative values ----------------------------------------------------
 if [[ "${KEEP_NEG}" == "false" ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then
     echo "[TKNI: ${FCN_NAME}] removing NEGATIVE values"
   fi
-  fslmaths ${IMGRS} -thr 0 ${IMGRS}
+  niimath ${IMGRS} -thr 0 ${IMGRS}
 else
   if [[ "${VERBOSE}" == "true" ]]; then
     echo "[TKNI: ${FCN_NAME}] creating NEGATIVE value mask"
   fi
-  fslmaths ${IMGRS} -uthr 0 -abs -bin -mul -2 -add 1 ${DIR_SCRATCH}/mask-neg.nii.gz
-  
+  niimath ${IMGRS} -uthr 0 -abs -bin -mul -2 -add 1 ${DIR_SCRATCH}/mask-neg.nii.gz
   if [[ "${VERBOSE}" == "true" ]]; then
     echo "[TKNI: ${FCN_NAME}] using ABSOLUTE VALUE for processing"
   fi
-  fslmaths ${IMGRS} -abs -thr 0 ${IMGRS}
+  niimaths ${IMGRS} -abs -thr 0 ${IMGRS}
 fi
 
 # truncate intensities ---------------------------------------------------------
@@ -246,9 +245,9 @@ if [[ ${TRUNCATE,,} == "true" ]]; then
     if [[ "${VERBOSE}" == "true" ]]; then
       echo "[TKNI: ${FCN_NAME}] truncating by INTENSITY VALUE"
     fi
-    fslmaths ${IMGRS} -uthr ${LO} -bin -mul ${LO} ${DIR_SCRATCH}/lo.nii.gz
-    fslmaths ${IMGRS} -thr ${HI} -bin -mul ${HI} ${DIR_SCRATCH}/hi.nii.gz
-    fslmaths ${IMGRS} -thr ${LO} -uthr ${HI} \
+    niimath ${IMGRS} -uthr ${LO} -bin -mul ${LO} ${DIR_SCRATCH}/lo.nii.gz
+    niimath ${IMGRS} -thr ${HI} -bin -mul ${HI} ${DIR_SCRATCH}/hi.nii.gz
+    niimath ${IMGRS} -thr ${LO} -uthr ${HI} \
       -add ${DIR_SCRATCH}/lo.nii.gz -add ${DIR_SCRATCH}/hi.nii.gz ${IMGRS} 
   else
     if [[ "${VERBOSE}" == "true" ]]; then
@@ -278,7 +277,7 @@ if [[ "${ZERO_VALUE}" != "false" ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then
     echo "[TKNI: ${FCN_NAME}] setting ${ZERO_VALUE} to ZERO"
   fi
-  fslmaths ${IMGRS} -sub ${ZERO_VALUE} -thr 0 ${IMGRS}
+  niimath ${IMGRS} -sub ${ZERO_VALUE} -thr 0 ${IMGRS}
 fi
 
 # get denominator for value normalization --------------------------------------
@@ -299,14 +298,14 @@ fi
 if [[ "${VERBOSE}" == "true" ]]; then
   echo "[TKNI: ${FCN_NAME}] convert to FINAL RANGE and DATATYPE"
 fi
-fslmaths -dt float ${IMGRS} -div ${DENOM} -mul ${MAX} ${IMGRS} -odt ${DATATYPE}
+niimath -dt float ${IMGRS} -div ${DENOM} -mul ${MAX} ${IMGRS} -odt ${DATATYPE}
 
 # restore negatives if necessary -----------------------------------------------
 if [[ "${KEEP_NEG}" == "true" ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then
     echo "[TKNI: ${FCN_NAME}] restore NEGATIVE VALUES"
   fi
-  fslmaths ${IMGRS} -mul ${DIR_SCRATCH}/mask-neg.nii.gz \
+  niimath ${IMGRS} -mul ${DIR_SCRATCH}/mask-neg.nii.gz \
     ${IMGRS} -odt ${DATATYPE}
 fi
 

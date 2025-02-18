@@ -1,0 +1,150 @@
+#!/bin/bash -e
+#===============================================================================
+# <<DESCRIPTION>>
+# Authors: <GIVENNAME> <FAMILYNAME>,
+# Date: <date of initial commit>
+# CHANGELOG: <description of major changes to functionality>
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long image:,fg:,tissue:,label:,dir-scratch:,\
+help,verbose,no-log -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+IMAGE=
+FG=
+SEG=
+LABEL="2,4"
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --fg) FG="$2" ; shift 2 ;;
+    --tissue) SEG="$2" ; shift 2 ;;
+    --label) LABEL="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo 'Contrast to Noise Ratio (CNR):'
+  echo 'The CNR is an extension of the SNR calculation to evaluate how separated'
+  echo 'the tissue distributions of GM and WM are. Higher values indicate better'
+  echo 'quality.'
+  echo '    Magnotta VA, Friedman L, FIRST BIRN. Measurement of signal-to-noise'
+  echo '      and contrast-to-noise in the fBIRN multicenter imaging study.'
+  echo '      J Digit Imaging [Internet]. 2006 Jun;19(2):140–7.'
+  echo '      http://dx.doi.org/10.1007/s10278-006-0264-x'
+  echo ''
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --image    <required>    NIfTI image to calculate stats for'
+  echo '  --fg       <required>    Foreground mask, inverted to claculate signal'
+  echo '                           in non-tissue (air regions'
+  echo '  --tissue   <required>    GM/WM tissue segmentation, maybe a single'
+  echo '                           file (specify label values below), or'
+  echo '                           separate binary masks specified as a comma'
+  echo '                           separated list of filenames with GM first,'
+  echo '                           e.g., "GMMASK,WMMASK"'
+  echo '  --label                  required if giving multilabel segmentation'
+  echo '                           comma separatted list of values indicating'
+  echo '                           the label number for GM and WM,'
+  echo '                           default="2,4"'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# parse inputs -----------------------------------------------------------------
+SEG=(${SEG//,/ })
+LABEL=(${LABEL//,/ })
+
+# sort out segmentations into masks --------------------------------------------
+if [[ ${#SEG[@]} -eq 1 ]]; then
+  mkdir -p ${DIR_SCRATCH}
+  MASK_GM=${DIR_SCRATCH}/mask-gm.nii.gz
+  MASK_WM=${DIR_SCRATCH}/mask-wm.nii.gz
+  niimath ${SEG} -thr ${LABEL[0]} -uthr ${LABEL[0]} -bin ${MASK_GM}
+  niimath ${SEG} -thr ${LABEL[1]} -uthr ${LABEL[1]} -bin ${MASK_WM}
+else
+  MASK_GM=${TISSUE_SEG[0]}
+  MASK_WM=${TISSUE_SEG[1]}
+fi
+
+# Air mask ---------------------------------------------------------------------
+mkdir -p ${DIR_SCRATCH}
+niimath ${FG} -binv ${DIR_SCRATCH}/air.nii.gz
+
+# get MEAN and SD of intensity values for GM and WM ----------------------------
+GMVAL=($(3dROIstats -mask ${MASK_GM} -sigma ${IMAGE}))
+WMVAL=($(3dROIstats -mask ${MASK_WM} -sigma ${IMAGE}))
+AIRVAL=($(3dROIstats -mask ${DIR_SCRATCH}/air.nii.gz -sigma ${IMAGE}))
+
+# Calculate CJV ----------------------------------------------------------------
+NUMER=$(echo "scale=4; ${GMVAL[-2]} - ${WMVAL[-2]}" | bc -l)
+NUMER=${NUMER#-}
+
+DENOM=$(echo "scale=4; ${AIRVAL[-1]}^2 + ${GMVAL[-1]}^2  + ${WMVAL[-1]}^2" | bc -l)
+DENOM=$(echo "scale=4; sqrt(${DENOM})" | bc -l)
+
+CNR=$(echo "scale=4; ${NUMER}/${DENOM}" | bc -l)
+echo ${CNR}
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+
