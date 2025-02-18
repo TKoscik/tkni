@@ -131,7 +131,7 @@ tfext <- file_ext(nii.coef)
 if (tfext == "gz") {
   gunzip(filename=nii.coef, destname=sprintf("%s/coef.nii", dir.scratch), remove=F)
 } else {
-  file.copy(from = nii.coef, to = sprint("%s/coef.nii", dir.scratch))
+  file.copy(from = nii.coef, to = sprintf("%s/coef.nii", dir.scratch), overwrite=T)
 }
 nii.coef <- sprintf("%s/coef.nii", dir.scratch)
 
@@ -139,7 +139,7 @@ tfext <- file_ext(nii.test)
 if (tfext == "gz") {
   gunzip(filename=nii.test, destname=sprintf("%s/test.nii", dir.scratch), remove=F)
 } else {
-  file.copy(from = nii.test, to = sprint("%s/test.nii", dir.scratch))
+  file.copy(from = nii.test, to = sprintf("%s/test.nii", dir.scratch), overwrite=T)
 }
 nii.test <- sprintf("%s/test.nii", dir.scratch)
 
@@ -147,7 +147,7 @@ tfext <- file_ext(nii.pval)
 if (tfext == "gz") {
   gunzip(filename=nii.pval, destname=sprintf("%s/pval.nii", dir.scratch), remove=F)
 } else {
-  file.copy(from = nii.pval, to = sprint("%s/pval.nii", dir.scratch))
+  file.copy(from = nii.pval, to = sprintf("%s/pval.nii", dir.scratch), overwrite=T)
 }
 nii.pval <- sprintf("%s/pval.nii", dir.scratch)
 
@@ -156,10 +156,11 @@ if (!is.null(nii.mask)) {
   if (tfext == "gz") {
     gunzip(filename=nii.mask, destname=sprintf("%s/mask.nii", dir.scratch), remove=F)
   } else {
-    file.copy(from = nii.mask, to = sprint("%s/mask.nii", dir.scratch))
+    file.copy(from = nii.mask, to = sprintf("%s/mask.nii", dir.scratch), overwrite=T)
   }
   nii.mask<- sprintf("%s/mask.nii", dir.scratch)
 }
+
 # Load image dimensions and orientation ----------------------------------------
 img.dims <- info.nii(nii.coef, "dims")
 pixdim <- info.nii(nii.coef, "pixdim")
@@ -209,40 +210,46 @@ for (i in 1:2) {
     sig <- (pval < roi.thresh) * (coef < 0) * 1
   }
   clusters <- cluster.func(sig, img.dims, connectivity)
-  cluster.table <- as.data.frame(table(clusters))[-1, ]
-  cluster.table <- cluster.table[order(-cluster.table$Freq), ]
-  cluster.table <- cluster.table[which(cluster.table$Freq >= cluster.size), ]
-  cluster.table$peak.x <- cluster.table$peak.y <- cluster.table$peak.z <- as.numeric(NA)
-  cluster.table$peak.estimate <- cluster.table$peak.test <- cluster.table$peak.p <- as.numeric(NA)
-  for (i in 1:nrow(cluster.table)) {
-    idx <- which(clusters==cluster.table$clusters[i], arr.ind=T)
-    vals <- abs(test[idx])
-    pk.idx <- idx[which(vals==max(vals))[1], ]
-    cluster.table$peak.p[i] <- pval[pk.idx[1], pk.idx[2], pk.idx[3]]
-    cluster.table$peak.x[i] <- pk.idx[1]
-    cluster.table$peak.y[i] <- pk.idx[2]
-    cluster.table$peak.z[i] <- pk.idx[3]
-    cluster.table$peak.estimate[i] <- coef[pk.idx[1], pk.idx[2], pk.idx[3]]
-    cluster.table$peak.test[i] <- test[pk.idx[1], pk.idx[2], pk.idx[3]]
-  }
-  cluster.table <- cluster.table[which(cluster.table$peak.p < peak.thresh), ]
-  cluster.map <- array(0, dim=img.dims[1:3])
-  for (i in 1:nrow(cluster.table)) { cluster.map[which(clusters==cluster.table$clusters[i])] <- i }
-  if (save.clusters) {
-    fname <- sprintf("%s_cluster.nii", tpfx)
-    init.nii(new.nii=fname, dims=img.dims, pixdim=pixdim, orient=orient)
-    write.nii.volume(fname, 1, cluster.map)
-    gzip(fname)
-  }
-  if (save.mask) {
-    fname <- sprintf("%s_mask.nii", tpfx)
-    init.nii(new.nii=fname, dims=img.dims, pixdim=pixdim, orient=orient)
-    write.nii.volume(fname, 1, (cluster.map>0)*1)
-    gzip(fname)
-  }
-  if (save.table) {
-    fname <- sprintf("%s_cluster.csv", tpfx)
-    write.table(cluster.table, fname, sep=",", quote=F, row.names=F, col.names=T)
+  cluster.table <- as.data.frame(table(clusters))
+  if (nrow(cluster.table) > 1) {
+    cluster.table <- cluster.table[-1, ]
+    cluster.table <- cluster.table[order(-cluster.table$Freq), ]
+    cluster.table <- cluster.table[which(cluster.table$Freq >= cluster.size), ]
+    cluster.table$peak.x <- cluster.table$peak.y <- cluster.table$peak.z <- as.numeric(NA)
+    cluster.table$peak.estimate <- cluster.table$peak.test <- cluster.table$peak.p <- as.numeric(NA)
+    for (i in 1:nrow(cluster.table)) {
+      idx <- which(clusters==cluster.table$clusters[i], arr.ind=T)
+      vals <- abs(test[idx])
+      pk.idx <- idx[which(vals==max(vals))[1], ]
+      cluster.table$peak.p[i] <- pval[pk.idx[1], pk.idx[2], pk.idx[3]]
+      cluster.table$peak.x[i] <- pk.idx[1]
+      cluster.table$peak.y[i] <- pk.idx[2]
+      cluster.table$peak.z[i] <- pk.idx[3]
+      cluster.table$peak.estimate[i] <- coef[pk.idx[1], pk.idx[2], pk.idx[3]]
+      cluster.table$peak.test[i] <- test[pk.idx[1], pk.idx[2], pk.idx[3]]
+    } 
+    cluster.table <- cluster.table[which(cluster.table$peak.p < peak.thresh), ]
+    cluster.map <- array(0, dim=img.dims[1:3])
+    for (i in 1:nrow(cluster.table)) { cluster.map[which(clusters==cluster.table$clusters[i])] <- i }
+    if (save.clusters) {
+      fname <- sprintf("%s_cluster.nii", tpfx)
+      init.nii(new.nii=fname, dims=img.dims, pixdim=pixdim, orient=orient)
+      write.nii.volume(fname, 1, cluster.map)
+      gzip(fname, overwrite=TRUE)
+    }
+    if (save.mask) {
+      fname <- sprintf("%s_mask.nii", tpfx)
+      init.nii(new.nii=fname, dims=img.dims, pixdim=pixdim, orient=orient)
+      write.nii.volume(fname, 1, (cluster.map>0)*1)
+      gzip(fname,overwrite=TRUE)
+    }
+    if (save.table) {
+      fname <- sprintf("%s_cluster.csv", tpfx)
+      write.table(cluster.table, fname, sep=",", quote=F, row.names=F, col.names=T)
+    }
+  } else {
+    print(sprintf("NO CLUSTERS SURVIVE: effect-%s_dir-neg_p-%0.0g_peak-%0.0g_cl-%d",
+		  effect.name, roi.thresh, peak.thresh, cluster.size))
   }
 }
 
