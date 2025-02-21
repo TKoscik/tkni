@@ -14,8 +14,8 @@ M0.init <- 875
 DT <- NII_QALAS <- NII_MASK <- FNAME <- DIR.SAVE <- DIR.SCRATCH <- NULL
 
 # DEBUG
-NII_QALAS="/home/mrgo/Documents/scratch/qalas_test/sub-103_ses-20231107T1701_aid-4054_qalas.nii.gz"
-NII_MASK="/home/mrgo/Documents/scratch/qalas_test/mask.nii.gz"
+#NII_QALAS="/home/mrgo/Documents/scratch/qalas_test/sub-103_ses-20231107T1701_aid-4054_qalas.nii.gz"
+#NII_MASK="/home/mrgo/Documents/scratch/qalas_test/mask.nii.gz"
 
 for (i in seq(1,length(args))) {
   if (args[i] %in% c("tr", "TR", "repetition_time")) {
@@ -35,17 +35,31 @@ for (i in seq(1,length(args))) {
   } else if (args[i] %in% c("m0", "M0", "m0_init", "M0_INIT")) {
     M0.init <- as.numeric(args[i+1])
   } else if (args[i] %in% c("qalas", "QALAS", "nii_qalas")) {
-    NII_QALAS <- args[+1]
+    NII_QALAS <- args[i+1]
   } else if (args[i] %in% c("mask", "MASK", "nii_mask")) {
-    NII_MASK <- args[+1]
+    NII_MASK <- args[i+1]
   } else if (args[i] %in% c("prefix", "PREFIX", "filename", "FILENAME", "fname", "FNAME")) {
-    PREFIX <- args[+1]
+    PREFIX <- args[i+1]
   } else if (args[i] %in% c("save", "dir_save", "DIR_SAVE", "SAVE")) {
-    DIR.SAVE <- args[+1]
+    DIR.SAVE <- args[i+1]
   } else if (args[i] %in% c("scratch", "SCRATCH", "dir_scratch", "DIR_SCRATCH")) {
-    DIR.SCRATCH <- args[+1]
+    DIR.SCRATCH <- args[i+1]
   }
 }
+
+#print(TR)
+#print(FA)
+#print(TURBO)
+#print(ECHO_SPACING)
+#print(T2PREP)
+#print(DT)
+#print(T1.init)
+#print(M0.init)
+#print(NII_QALAS)
+#print(NII_MASK)
+#print(PREFIX)
+#print(DIR.SAVE)
+#print(DIR.SCRATCH)
 
 # set Timing variable to default -----------------------------------------------
 if (is.null(DT)) {
@@ -144,20 +158,19 @@ for (X in 1:nrow(idx)) {
   T1[X] <- OPT.OUT$par[1]
   T2[X] <- -(0.9)/(log(Mobs[1]/M1))
   PD[X] <- OPT.OUT$par[2]
-  print(X)
+#  print(X)
 }
-
 
 TT1 <- TT2 <- TPD <- read.nii.volume(NII_QALAS, 1)*0
 TT1[idx] <- T1
 TT2[idx] <- T2
 TPD[idx] <- PD
 # clip unrealistic values
-TT1[TT1>quantile(T1,0.95)] <- quantile(T1,0.95)
+#TT1[TT1>quantile(T1,0.95)] <- quantile(T1,0.95)
 TT1[TT1<0] <- 0
-TT2[TT2>quantile(T2,0.95)] <- quantile(T2,0.95)
+#TT2[TT2>quantile(T2,0.95)] <- quantile(T2,0.95)
 TT2[TT2<0] <- 0
-TPD[TPD>quantile(PD,0.95)] <- quantile(PD,0.95)
+#TPD[TPD>quantile(PD,0.95)] <- quantile(PD,0.95)
 TPD[TPD<0] <- 0
 
 FT1 <- sprintf("%s/%s_T1.nii", DIR.SAVE, FNAME)

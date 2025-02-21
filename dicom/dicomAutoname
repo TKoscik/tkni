@@ -202,16 +202,16 @@ for (( i=0; i<${N_NII}; i++ )); do
     echo "TFL"
     if [[ -z ${TFL_TYPE} ]] || [[ ${TFL_TYPE} == "famp" ]]; then
       TFL_TYPE="anat"
-    else      
-      TFL_TYPE="famp"
+    else
+      TFL_TYPE="sFlip"
+      FTMP=$(modField -i ${FTMP} -a -f acq -v ${TFL_TYPE})
     fi
-    FTMP=$(modField -i ${FTMP} -a -f acq -v ${TFL_TYPE})
   fi
   
   ### add direction to FUNC, fields, and dwi - - - - - - - - - - - - - - - - - -
-  if [[ "${MOD,,}" == "fieldmap" ]]\
-  || [[ "${MOD,,}" == "spinecho" ]]\
-  || [[ "${MOD,,}" == "bold" ]]\
+  if [[ "${MOD,,}" == "fieldmap" ]] \
+  || [[ "${MOD,,}" == "spinecho" ]] \
+  || [[ "${MOD,,}" == "bold" ]] \
   || [[ "${MOD,,}" == "dwi" ]]; then
     CHKDIR=$(getField -i ${FTMP} -f dir)
     if [[ -z ${CHKDIR} ]]; then
@@ -243,7 +243,7 @@ for (( i=0; i<${N_NII}; i++ )); do
   MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
   if [[ "${MOD}" == "bold" ]]; then
     PROC=$(getField -i ${F_AUTO[${i}]} -f proc)
-    if [[ "${PROC}" == "mean" ]]\
+    if [[ "${PROC}" == "mean" ]] \
     || [[ "${PROC}" == "z" ]]; then
       SNTMP=${SERIES_NUM[${i}]}
       SNTMP=${SNTMP:0:1}
