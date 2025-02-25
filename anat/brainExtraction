@@ -234,7 +234,7 @@ if [[ "${METHOD,,}" == *"synth"* ]]; then
   mri_synthstrip -i ${IMAGE[0]} \
     -m ${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+SYNTH${SUFFIX}.nii.gz \
     --no-csf
-  MASK_LS+=(${DIR_SCRATCH}/${PREFIX}_mask-${LABEL}+SYNTH${SUFFIX}.nii.gz)
+  MASK_LS+=(${PREFIX}_mask-${LABEL}+SYNTH${SUFFIX}.nii.gz)
 fi
 
 # apply spatial filter if specified --------------------------------------------
@@ -251,11 +251,10 @@ fi
 
 # do majority vote mask if multiple used ---------------------------------------
 METHOD=(${METHOD//,/ })
-if [[ ${#METHOD[@]} > 1 ]]; then
+if [[ ${#METHOD[@]} -gt 1 ]]; then
   for (( i=0; i<${#MASK_LS[@]}; i++ )); do
     TLS="${TLS},${DIR_SCRATCH}/${MASK_LS[${i}]}"
   done
-
   ## make VENN mask labelling overlapping regions in labels
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>Running making Venn-like overlap of masks"; fi
   maskVenn --mask-ls ${TLS} --label "brain+VENN${SUFFIX}" --prefix ${PREFIX} --dir-save ${DIR_SCRATCH}

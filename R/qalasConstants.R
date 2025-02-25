@@ -1,8 +1,9 @@
 args <- commandArgs(trailingOnly = TRUE)
 
-library(nifti.io, quietly=T)
-library(R.utils, quietly=T)
-library(tools, quietly=T)
+invisible(library(nifti.io, quietly=T))
+invisible(library(R.utils, quietly=T))
+invisible(library(tools, quietly=T))
+invisible(library(optimParallel, quietly=T))
 
 TR <- 4.5
 FA <- 4
@@ -12,6 +13,8 @@ T2PREP <- 0.9
 T1.init <- 1.3
 M0.init <- 875
 DT <- NII_QALAS <- NII_MASK <- FNAME <- DIR.SAVE <- DIR.SCRATCH <- NULL
+METHOD <- "Nelder-Mead"
+NUM.CORES <- 8
 
 # DEBUG
 #NII_QALAS="/home/mrgo/Documents/scratch/qalas_test/sub-103_ses-20231107T1701_aid-4054_qalas.nii.gz"
@@ -34,6 +37,10 @@ for (i in seq(1,length(args))) {
     T1.init <- as.numeric(args[i+1])
   } else if (args[i] %in% c("m0", "M0", "m0_init", "M0_INIT")) {
     M0.init <- as.numeric(args[i+1])
+  } else if (args[i] %in% c("method", "optimizer")) {
+    METHOD <- args[i+1]
+  } else if (args[i] %in% c("cores", "parallel", "num_cores")) {
+    NUM.CORES <- args[i+1]
   } else if (args[i] %in% c("qalas", "QALAS", "nii_qalas")) {
     NII_QALAS <- args[i+1]
   } else if (args[i] %in% c("mask", "MASK", "nii_mask")) {
@@ -154,13 +161,14 @@ OPT.INIT <- c(T1.init, M0.init)
 T1 <- T2 <- PD <- as.numeric(nrow(idx))
 for (X in 1:nrow(idx)) {
   Mobs <- c(Q1[X], Q2[X], Q3[X], Q4[X], Q5[X])
-  OPT.OUT <- optim(OPT.INIT, optQALAS)
+  OPT.OUT <- optim(OPT.INIT, optQALAS, method=METHOD)
   T1[X] <- OPT.OUT$par[1]
   T2[X] <- -(0.9)/(log(Mobs[1]/M1))
   PD[X] <- OPT.OUT$par[2]
 #  print(X)
 }
 
+# output results ----------------------------------------------------------------
 TT1 <- TT2 <- TPD <- read.nii.volume(NII_QALAS, 1)*0
 TT1[idx] <- T1
 TT2[idx] <- T2
@@ -173,8 +181,8 @@ TT2[TT2<0] <- 0
 #TPD[TPD>quantile(PD,0.95)] <- quantile(PD,0.95)
 TPD[TPD<0] <- 0
 
-FT1 <- sprintf("%s/%s_T1.nii", DIR.SAVE, FNAME)
-FT2 <- sprintf("%s/%s_T2.nii", DIR.SAVE, FNAME)
+FT1 <- sprintf("%s/%s_T1map.nii", DIR.SAVE, FNAME)
+FT2 <- sprintf("%s/%s_T2map.nii", DIR.SAVE, FNAME)
 FPD <- sprintf("%s/%s_PDunscaled.nii", DIR.SAVE, FNAME)
 init.nii(FT1, dims=img.dims, pixdim=pixdim, orient=orient, datatype=64)
 init.nii(FT2, dims=img.dims, pixdim=pixdim, orient=orient, datatype=64)
@@ -182,6 +190,9 @@ init.nii(FPD, dims=img.dims, pixdim=pixdim, orient=orient, datatype=64)
 write.nii.volume(FT1, 1, TT1)
 write.nii.voxel(FT2, 1, TT2)
 write.nii.voxel(FPD, 1, TPD)
+
+## remove scratch directory
+fs::dir_delete(DIR.SCRATCH)
 
 ### for future try parallelizing
 # OPT.FCN <- function(X, ...) {

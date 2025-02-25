@@ -455,9 +455,11 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '  - Brain Masks  ' >> ${RMD}
   echo '  - Rigid Alignment Transform  ' >> ${RMD}
   echo '9. Generate PNGs, QC Metrics, and HTML Report  ' >> ${RMD}
+  echo '' >> ${RMD}
 
   echo '#### Procedure' >> ${RMD}
   echo 'The base anatomical image, '${BASE_MOD}' was processed using a robust, standaradized protocol that utilizes multiple neuroimaging software packages including AFNI [1,2], Advanced Normalization Tools (ANTs) [3,4], FreeSurfer [5], and FSL [6] (note that FSL is not used in commercial applications due to license encumberance). In addition, we utilize a variety of helper-functions, wrappers, pipelines and workflows available in our TKNI package [7]. First, images are conformed to standard RPI orientation. Second, images are denoised using a non-local, spatially adaptive procedure [8] implemented in ANTs. Third, we generate a binary foreground mask using an automated clipping procedure based on image intensity implemented in AFNI (3dAutomask). This foreground mask asists in constraining the region for subsequent steps to a reasonable representation of the individuals head and provides an initial focal region for subsequent alignment. Fourth, MRI images often contain low frequency intensity nonuniformity, or bias. We use the N4 algorithm [9] implemented in ANTs which essentially fits low frequency intensity variations with a B--spline model, which can then be subtracted from the image. Fifth, typically neuroimages are aligned to an arbitrary line connecting the anterior and posterior commissures, ACPC alignment. Identification of these landmarks may require manual intervention and neuroanatomical expertise. Instead of ACPC alignment, we leverage modern advancements in image registration and perform a rigid body alignment to a common space template using ANTs. This has the advantage of eliminating manual intervention and rigid transformations do not distort native brain shape or size. For cases where rigid alignment fail, while rare, manual ACPC alignment is substituted. Six, some of the preceding steps include interpolation of the image data and may be rescaled by the software packages. To eliminate this as a factor all images are rescaled such that values range from 0 to 10000 and are stored as signed 16-bit integers. Seven, segmentation of brain from non-brain tissue is critical for neuro-analysis. Unfortunately, all brain segmentation tools fail under certain circumstances and cases. Fortunately, different brain segmentation tools tend to fail in distinct ways. Hence, we leverage these distinct errors in brain segmentation using a joint label fusion technique [10] in order to cancel out non-shared errors across brain segmentation tools [1,3,11,12]. (Note: We are currently evaluating emerging machine learning methods that may supplant this method). Next, we use custom softwar to generate PNG images to represent our results using itk-SNAP c3d [13] and ImageMagick [14]. Lastly, we calculate image quality metrics based on MRIQC but implemented independently using neuroimaging software tools and niimath [15] for voxelwise operations.' >> ${RMD}
+  echo '' >> ${RMD}
 
   echo '#### Citations' >> ${RMD}
   echo '[1] Cox RW. AFNI: software for analysis and visualization of functional magnetic resonance neuroimages. Comput Biomed Res. 1996;29: 162–173. Available: https://www.ncbi.nlm.nih.gov/pubmed/8812068  ' >> ${RMD}
@@ -475,22 +477,34 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '[13] Yushkevich PA, Piven J, Hazlett HC, Smith RG, Ho S, Gee JC, et al. User-guided 3D active contour segmentation of anatomical structures: significantly improved efficiency and reliability. Neuroimage. 2006;31: 1116–1128. doi:10.1016/j.neuroimage.2006.01.015  ' >> ${RMD}
   echo '[14] Mastering digital image alchemy. In: ImageMagick [Internet]. [cited 14 Feb 2025]. Available: https://imagemagick.org  ' >> ${RMD}
   echo '[15] Rorden C, Webster M, Drake C, Jenkinson M, Clayden JD, Li N, et al. Niimath and fslmaths: Replication as a method to enhance popular neuroimaging tools. Apert Neuro. 2024;4. doi:10.52294/001c.94384  ' >> ${RMD}
+  echo '' >> ${RMD}
 
-  echo '#### Cleaned' >> ${RMD}
+  echo '### Cleaned' >> ${RMD}
   TNII=${DIR_ANAT}/native/${IDPFX}_${BASE_MOD}.nii.gz
   TPNG=${DIR_ANAT}/native/${IDPFX}_${BASE_MOD}.png
   if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
   echo '!['${TNII}']('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
-  echo '#### Raw' >> ${RMD}
+  echo '### Raw' >> ${RMD}
   BNAME=$(basename ${IMG_RAW})
   FNAME=${IMG_RAW//\.nii\.gz}
   if [[ ! -f "${FNAME}.png" ]]; then make3Dpng --bg ${IMG_RAW}; fi
   echo '!['${BNAME}']('${FNAME}'.png)' >> ${RMD}
   echo '' >> ${RMD}
 
-  echo '#### QC Statistics' >> ${RMD}
+  echo '### Check Brain Extraction Quality' >> ${RMD}
+  MASKPREF=("MALF" "SYNTH" "ANTs" "SAMSEG" "AFNI" "FSL")
+  for (( i=0; i<${#MASKPREF[@]}; i++ )); do
+    FCHK=${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+${MASKPREF[${i}]}.nii.gz
+    if [[ -f "${FCHK}" ]]; then break; fi
+  done
+  TNII=${IDPFX}_mask-brain+${MASKPREF[${i}]}.nii.gz
+  TPNG=${DIR_PREP}/${IDPFX}_mask-brain+${MASKPREF[${i}]}.png
+  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+  echo '' >> ${RMD}
+
+  echo '### QC Statistics' >> ${RMD}
   echo '|Image|EFC|FBER|SNR (frame)|SNR (FG)|SNR (brain)|SNR Dietrich|' >> ${RMD}
   echo '|:----|----:|----:|----:|----:|----:|----:|' >> ${RMD}
   echo "|RAW|${EFC_RAW}|${FBER_RAW}|${SNR_RAW_FR}|${SNR_RAW_FG}|${SNR_RAW_BR}|${SNRD_RAW}|" >> ${RMD}
@@ -499,9 +513,9 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '|Image|ROI|Mean|SD|Median|MAD|Skew|Kurtosis|Q-5%|Q-95%|' >> ${RMD}
   echo '|:----|----:|----:|----:|----:|----:|----:|----:|----:|' >> ${RMD}
   echo "|RAW|FG|${D_RAW_FG[0]}|${D_RAW_FG[1]}|${D_RAW_FG[2]}|${D_RAW_FG[3]}|${D_RAW_FG[4]}|${D_RAW_FG[5]}|${D_RAW_FG[6]}|${D_RAW_FG[7]}|" >> ${RMD}
-  echo "|RAW|Brain|${D_RAW_BR[0]}|${D_RAW_BR[1]}|${D_RAW_BR[2]}|${D_RAW_BR[3]}|${D_RAW_BR[4]}|${D_RAW_BR[5]]}|${D_RAW_BR[6]}|${D_RAW_BR[7]}|" >> ${RMD}
+  echo "|RAW|Brain|${D_RAW_BR[0]}|${D_RAW_BR[1]}|${D_RAW_BR[2]}|${D_RAW_BR[3]}|${D_RAW_BR[4]}|${D_RAW_BR[5]}|${D_RAW_BR[6]}|${D_RAW_BR[7]}|" >> ${RMD}
   echo "|CLEAN|FG|${D_NTV_FG[0]}|${D_NTV_FG[1]}|${D_NTV_FG[2]}|${D_NTV_FG[3]}|${D_NTV_FG[4]}|${D_NTV_FG[5]}|${D_NTV_FG[6]}|${D_NTV_FG[7]}|" >> ${RMD}
-  echo "|CLEAN|Brain|${D_NTV_BR[0]}|${D_NTV_BR[1]}|${D_NTV_BR[2]}|${D_NTV_BR[3]}|${D_NTV_BR[4]}|${D_NTV_BR[5]]}|${D_NTV_BR[6]}|${D_NTV_BR[7]}|" >> ${RMD}
+  echo "|CLEAN|Brain|${D_NTV_BR[0]}|${D_NTV_BR[1]}|${D_NTV_BR[2]}|${D_NTV_BR[3]}|${D_NTV_BR[4]}|${D_NTV_BR[5]}|${D_NTV_BR[6]}|${D_NTV_BR[7]}|" >> ${RMD}
    echo '' >> ${RMD}
 
   echo '#### QC Descriptions and Citations {.tabset}' >> ${RMD}
@@ -510,32 +524,36 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo 'Effective Focus Criterion  ' >> ${RMD}
   echo 'The EFC uses the Shannon entropy of voxel intensities as an indication of ghosting and blurring induced by head motion. Lower values are better. The original equation is normalized by the maximum entropy, so that the EFC can be compared across images with different dimensions.  ' >> ${RMD}
   echo -e '\tAtkinson, et al. 1997. http://dx.doi.org/10.1109/42.650886  ' >> ${RMD}
+  echo '' >> ${RMD}
 
   echo '##### FBER' >> ${RMD}
   echo 'Foreground / Background Energy Ratio (FBER):  ' >> ${RMD}
   echo 'The mean energy of image values within the head relative to outside the head. Higher values are better, and an FBER=-1.0 indicates that there is no signal outside the head mask (e.g., a skull-stripped dataset).  ' >> ${RMD}
   echo -e '\tShehzad Z. 2015. http://dx.doi.org/10.3389/conf.fnins.2015.91.00047  ' >> ${RMD}
+  echo '' >> ${RMD}
 
   echo '##### SNR' >> ${RMD}
   echo 'Signal-to-Noise Ratio:  ' >> ${RMD}
   echo 'The ratio of signal to noise calculated within a masked region.  ' >> ${RMD}
+  echo '' >> ${RMD}
 
-  echo '#### SNR Dietrich' >> ${RMD}
+  echo '##### SNR Dietrich' >> ${RMD}
   echo 'Dietrich Signal-to-Noise Ratio:  ' >> ${RMD}
   echo 'The ratio of signal to noise calculated within a masked region. Uses the air background as a reference. Will return -1 if the background has been masked out and is all zero' >> ${RMD}
   echo -e '\tDietrich, et al. 2007. http://dx.doi.org/10.1002/jmri.20969' >> ${RMD}
+  echo '' >> ${RMD}
 
-  echo '#### Additional Cleaned Slice Images {.tabset}' >> ${RMD}
-  echo '##### Click to View -->' >> ${RMD}
+  echo '### Additional Cleaned Slice Images {.tabset}' >> ${RMD}
+  echo '#### Click to View -->' >> ${RMD}
   TNII=${DIR_ANAT}/native/${IDPFX}_${BASE_MOD}.nii.gz
   if [[ -f "${DIR_ANAT}/native/${IDPFX}_slice-axial_${BASE_MOD}.png" ]]; then
-    echo '##### Axial' >> ${RMD}
+    echo '#### Axial' >> ${RMD}
     TPNG=${DIR_ANAT}/native/${IDPFX}_slice-axial_${BASE_MOD}.png
     echo '!['${TNII}']('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
   fi
   if [[ -f "${DIR_ANAT}/native/${IDPFX}_slice-coronal_${BASE_MOD}.png" ]]; then
-    echo '##### Coronal' >> ${RMD}
+    echo '#### Coronal' >> ${RMD}
     TPNG=${DIR_ANAT}/native/${IDPFX}_slice-coronal_${BASE_MOD}.png
     echo '!['${TNII}']('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
@@ -546,17 +564,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '!['${TNII}']('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
   fi
-
-  echo '### Check Brain Extraction Quality' >> ${RMD}
-  MASKPREF=("MALF" "SYNTH" "ANTs" "SAMSEG" "AFNI" "FSL")
-  for (( i=0; i<${#MASKPREF[@]}; i++ )); do
-    FCHK=${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+${MASKPREF[${i}]}.nii.gz
-    if [[ -f "${FCHK}" ]]; then break; fi
-  done
-  TNII=${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+${MASKPREF[${i}]}.nii.gz
-  TPNG=${DIR_PREP}/${IDPFX}_mask-brain+${MASKPREF[${i}]}.png
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
 
   echo '### Processing Steps {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
