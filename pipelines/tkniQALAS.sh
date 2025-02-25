@@ -59,7 +59,7 @@ OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,qalas:,b1:,native:,brain:,csf:,\
 opt-tr:,opt-fa:,opt-turbo:,opt-echo-spacing:,opt-t2prep:,opt-t1init:,opt-m0init:,\
 b1k:,\
-no-norm,atlas:atlas-xfm:,\
+no-denoise,no-norm,atlas:atlas-xfm:,\
 dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -94,6 +94,7 @@ NATIVE=
 BRAIN=
 CSF=
 
+NO_DENOISE="false"
 NO_NORM="false"
 ATLAS="/usr/local/tkni/atlas/adult/HCPYAX/HCPYAX_700um_T1w.nii.gz"
 ATLAS_XFM=
@@ -300,7 +301,7 @@ if [[ -n ${CSF} ]]; then
   fi
 fi
 
-if [[ ${NO_NORM} == "false" ]]; fi
+if [[ ${NO_NORM} == "false" ]]; then
   if [[ ! -f ${ATLAS} ]]; then
     echo "ERROR [${PIPE}:${FLOW}] ATLAS reference image not found"
     exit 4
@@ -792,11 +793,13 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '![Raw QALAS]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
-  echo '#### Denoising' >> ${RMD}
-  echo '![Denoised QALAS]('${DIR_SCRATCH}/${IDPFX}_prep-denoise_qalas.png')' >> ${RMD}
-  echo '' >> ${RMD}
-  echo '![Noise]('${DIR_SCRATCH}/${IDPFX}_prep-noise_qalas.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  if [[ ${NO_DENOISE} == "false" ]]; then
+    echo '#### Denoising' >> ${RMD}
+    echo '![Denoised QALAS]('${DIR_SCRATCH}/${IDPFX}_prep-denoise_qalas.png')' >> ${RMD}
+    echo '' >> ${RMD}
+    echo '![Noise]('${DIR_SCRATCH}/${IDPFX}_prep-noise_qalas.png')' >> ${RMD}
+    echo '' >> ${RMD}
+  fi
 
   echo '#### FG Mask' >> ${RMD}
   TPNG=${DIR_SAVE}/anat/mask/${FLOW}/${IDPFX}_mask-fg+${FLOW}.png
