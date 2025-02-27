@@ -407,7 +407,7 @@ if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> QC Metrics"; fi
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_PIPE}/qc/${PIPE}${FLOW}
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
   RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}

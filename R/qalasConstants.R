@@ -13,8 +13,9 @@ T2PREP <- 0.9
 T1.init <- 1.3
 M0.init <- 875
 DT <- NII_QALAS <- NII_MASK <- FNAME <- DIR.SAVE <- DIR.SCRATCH <- NULL
-METHOD <- "Nelder-Mead"
+METHOD <- "L-BFGS-B"
 NUM.CORES <- 8
+VERBOSE <- FALSE
 
 # DEBUG
 #NII_QALAS="/home/mrgo/Documents/scratch/qalas_test/sub-103_ses-20231107T1701_aid-4054_qalas.nii.gz"
@@ -142,30 +143,36 @@ optQALAS <- function(INPUT, ...) {
   M0 <- INPUT[2]
   M0star <- M0 * (1-exp(-TR/T1)) / (1 - cos(FA) * exp(-TR/T1))
   T1star <- T1 * (1-exp(-TR/T1)) / (1 - cos(FA) * exp(-TR/T1))
-  M6pred <- predictMz(M0, T1, DT[6])
-  M7pred <- changeMz(M0star, T1star, M6pred, DT[7])
-  M8pred <- changeMz(M0, T1, M7pred, DT[8])
-  M9pred <- changeMz(M0star, T1star, M8pred, DT[9])
-  M10pred <- changeMz(M0, T1, M9pred, DT[10])
-  M11pred <- changeMz(M0star, T1star, M10pred, DT[11])
-  M12pred <- changeMz(M0, T1, M11pred, DT[12])
-  M13pred <- changeMz(M0star, T1star, M12pred, DT[13])
-  M1 <<- changeMz(M0, T1, M13pred, sum(DT[1], DT[14]))
-  MZpred <- c(M6pred, M8pred, M10pred, M12pred)
-  sum((Mobs[2:5] - MZpred)^2)
+  M6 <- predictMz(M0, T1, DT[6])
+  M7 <- changeMz(M0star, T1star, M6, DT[7])
+  M8 <- changeMz(M0, T1, M7, DT[8])
+  M9 <- changeMz(M0star, T1star, M8, DT[9])
+  M10 <- changeMz(M0, T1, M9, DT[10])
+  M11 <- changeMz(M0star, T1star, M10, DT[11])
+  M12 <- changeMz(M0, T1, M11, DT[12])
+  M13 <- changeMz(M0star, T1star, M12, DT[13])
+  M1 <<- changeMz(M0, T1, M13, sum(DT[1], DT[14]))
+  MZ <- c(M6, M8, M10, M12)
+  T2e <- -(T2PREP)/(log(Mobs[1]/M1))
+  penalty <- 1
+  if (T1 <= T2e) { penalty <- 10}
+  if (T2e <= 0) { penalty <- 10}
+  sum(((Mobs[2:length(Mobs)] - MZ)^2)*penalty)
 }
 
 # loop over voxels -------------------------------------------------------------
 OPT.INIT <- c(T1.init, M0.init)
-
 T1 <- T2 <- PD <- as.numeric(nrow(idx))
 for (X in 1:nrow(idx)) {
   Mobs <- c(Q1[X], Q2[X], Q3[X], Q4[X], Q5[X])
-  OPT.OUT <- optim(OPT.INIT, optQALAS, method=METHOD)
+  T1[X] <- T2[X] <- PD[X] <- 0
+  OPT.OUT <- optim(OPT.INIT, optQALAS, method=METHOD, lower=c(0.001,0.001), upper=c(10,max(Mobs)*2))
   T1[X] <- OPT.OUT$par[1]
-  T2[X] <- -(0.9)/(log(Mobs[1]/M1))
+  T2[X] <- -(T2PREP)/(log(Mobs[1]/M1))
   PD[X] <- OPT.OUT$par[2]
-#  print(X)
+  if (VERBOSE) {
+    print(sprintf("%0.2f -- T1=%0.4g; T2=%0.4g; PD=%0.4g", X/nrow(idx), T1[X], T2[X], PD[X]))
+  }
 }
 
 # output results ----------------------------------------------------------------
@@ -173,12 +180,9 @@ TT1 <- TT2 <- TPD <- read.nii.volume(NII_QALAS, 1)*0
 TT1[idx] <- T1
 TT2[idx] <- T2
 TPD[idx] <- PD
-# clip unrealistic values
-#TT1[TT1>quantile(T1,0.95)] <- quantile(T1,0.95)
+## clamp negative values to 0
 TT1[TT1<0] <- 0
-#TT2[TT2>quantile(T2,0.95)] <- quantile(T2,0.95)
 TT2[TT2<0] <- 0
-#TPD[TPD>quantile(PD,0.95)] <- quantile(PD,0.95)
 TPD[TPD<0] <- 0
 
 FT1 <- sprintf("%s/%s_T1map.nii", DIR.SAVE, FNAME)
@@ -191,16 +195,6 @@ write.nii.volume(FT1, 1, TT1)
 write.nii.voxel(FT2, 1, TT2)
 write.nii.voxel(FPD, 1, TPD)
 
-## remove scratch directory
+# remove scratch directory
 fs::dir_delete(DIR.SCRATCH)
 
-### for future try parallelizing
-# OPT.FCN <- function(X, ...) {
-#   coords <- c(idx[X, ], Inf)
-#   Mobs <- c(Q1[idx[X]], Q2[idx[X]], Q3[idx[X]], Q4[idx[X]], Q5[idx[X]])
-#   OPT.OUT <- optim(INPUT, OPT.FCN)
-#   of <- data.frame(T1 = OPT.OUT$par[1], T2 = -(0.9)/(log(Mobs[1]/M1)))
-#   table.to.nii(in.table = of, coords=coords[1:3], save.dir=dir.save,
-#                do.log=TRUE, model.string=FORM[i],
-#                img.dims=img.dims, pixdim=pixdim, orient=orient)
-# }

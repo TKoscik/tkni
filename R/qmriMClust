@@ -1,0 +1,40 @@
+args <- commandArgs(trailingOnly = TRUE)
+
+invisible(library(nifti.io, quietly=T))
+invisible(library(R.utils, quietly=T))
+invisible(library(tools, quietly=T))
+
+NCL <- 3
+
+for (i in seq(1,length(args))) {
+  if (args[i] %in% c("t1", "T1", "longitudinal_relaxation_time", "longitudinal")) {
+    NII_T1 <- args[i+1]
+  } else if (args[i] %in% c("t2", "T2", "transverse_relaxation_time", "transverse")) {
+    NII_T2 <- args[i+1]
+  } else if (args[i] %in% c("pd", "PD", "proton_density")) {
+    NII_PD <- args[i+1]
+  } else if (args[i] %in% c("mask", "MASK", "nii_mask")) {
+    NII_MASK <- args[i+1]
+  } else if (args[i] %in% c("n", "g", "cluster", "mixture_components", "components")) {
+    NCL <- as.numeric(args[i+1])
+  } else if (args[i] %in% c("prefix", "PREFIX", "filename", "FILENAME", "fname", "FNAME")) {
+    PREFIX <- args[i+1]
+  } else if (args[i] %in% c("save", "dir_save", "DIR_SAVE", "SAVE")) {
+    DIR.SAVE <- args[i+1]
+  } else if (args[i] %in% c("scratch", "SCRATCH", "dir_scratch", "DIR_SCRATCH")) {
+    DIR.SCRATCH <- args[i+1]
+  }
+}
+
+# create scratch folder --------------------------------------------------------
+if (is.null(DIR.SCRATCH)) {
+  DIR.SCRATCH <- sprintf("~/Documents/scratch/qmriMClust_tmp_%s", format(Sys.time(), "%Y%m%dT%H%M%S"))
+}
+dir.create(DIR.SCRATCH, showWarnings=F, recursive=T)
+
+# set output defaults ----------------------------------------------------------
+if (is.null(DIR.SAVE)) { DIR.SAVE <- dirname(NII_QALAS) }
+if (is.null(FNAME)) {
+  FNAME <- basename(NII_QALAS)
+  FNAME <- file_path_sans_ext(FNAME, compression=T)
+}

@@ -58,7 +58,7 @@ trap egress EXIT
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,qalas:,b1:,native:,brain:,csf:,\
 opt-tr:,opt-fa:,opt-turbo:,opt-echo-spacing:,opt-t2prep:,opt-t1init:,opt-m0init:,\
-b1k:,\
+no-b1:,b1k:,do-n4:,\
 no-denoise,no-norm,atlas:atlas-xfm:,\
 dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
@@ -75,6 +75,8 @@ DIR_PROJECT=
 IDPFX=
 IDDIR=
 
+NO_B1="false"
+DO_N4="false"
 B1=
 B1K=10
 
@@ -109,6 +111,7 @@ HELP=false
 VERBOSE=false
 NO_PNG=false
 NO_RMD=false
+KEEP_CLEANED=true
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
@@ -140,6 +143,8 @@ while true; do
     --brain) BRAIN="$2" ; shift 2 ;;
     --csf) CSF="$2" ; shift 2 ;;
     --no-denoise) NO_DENOISE="true" ; shift ;;
+    --no-b1) NO_B1="true" ; shift ;;
+    --do-n4) DO_N4="true" ; shift ;;
     --no-norm) NO_NORM="true" ; shift ;;
     --atlas) ATLAS="$2" ; shift 2 ;;
     --atlas-xfm) ATLAS_XFM="$2" ; shift 2 ;;
@@ -265,6 +270,8 @@ DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}
 DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
 mkdir -p ${DIR_SCRATCH}
 
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Directories Setup"; fi
+
 # parse inputs -----------------------------------------------------------------
 if [[ -z ${QALAS} ]]; then
   QALAS=${DIR_RAW}/anat/${IDPFX}_qalas.nii.gz
@@ -273,13 +280,16 @@ if [[ ! -f ${QALAS} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] QALAS not found"
   exit 1
 fi
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Processing QALAS: ${QALAS}"; fi
 
-if [[ -z ${B1} ]]; then
-  B1=${DIR_RAW}/fmap/${IDPFX}_acq-sFlip_TB1TFL.nii.gz
-fi
-if [[ ! -f ${B1} ]]; then
-  echo "WARNING [${PIPE}:${FLOW}] B1 not found, will use N4 method for bias estimation"
-  B1="N4"
+if [[ ${NO_B1,,} == "false" ]]; then
+  if [[ -z ${B1} ]]; then
+    B1=${DIR_RAW}/fmap/${IDPFX}_acq-sFlip_TB1TFL.nii.gz
+  fi
+  if [[ ! -f ${B1} ]]; then
+    echo "WARNING [${PIPE}:${FLOW}] B1 not found"
+  fi
+  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Using B1: ${B1}"; fi
 fi
 
 if [[ -z ${NATIVE} ]]; then
@@ -328,121 +338,136 @@ fi
 QALAS_RAW=${DIR_SCRATCH}/$(modField -i $(basename ${QALAS}) -a -f prep -v raw)
 cp ${QALAS} ${QALAS_RAW}
 NVOL=$(niiInfo -i ${QALAS_RAW} -f volumes)
-QPROC=${QALAS_RAW}
+TR=$(niiInfo -i ${QALAS_RAW} -f tr)
+unset QPROC
 
+# Split QALAS into volumes -----------------------------------------------------
+for (( i=0; i<${NVOL}; i++ )); do
+  QPROC+=(${DIR_SCRATCH}/q${i}_raw.nii.gz)
+  3dcalc -a ${QALAS_RAW}[${i}] -expr 'a' -prefix ${QPROC[${i}]}
+  if [[ ${NO_PNG} == "false" ]]; then
+    make3Dpng --bg ${QPROC[${i}]} --bg-threshold "2.5,97.5"
+  fi
+done
 if [[ ${NO_PNG} == "false" ]]; then
-  montage_fcn="montage"
-  for (( j=1; j<=${NVOL}; j++ )); do
-    make3Dpng --bg ${QALAS_RAW} --bg-vol ${j} --bg-threshold "2.5,97.5" --filename t${j}
-    montage_fcn="${montage_fcn} ${DIR_SCRATCH}/t${j}.png"
-  done
-  montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
-  montage_fcn=${montage_fcn}' -background "#FFFFFF"'
-  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/${IDPFX}_prep-raw_qalas.png"
-  eval ${montage_fcn}
-  rm ${DIR_SCRATCH}/t*.png
+  montage ${DIR_SCRATCH}/q*_raw.png \
+    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+    ${DIR_SCRATCH}/${IDPFX}_prep-raw_qalas.png
+  rm ${DIR_SCRATCH}/q*_raw.png
 fi
 
 # Denoise Image ----------------------------------------------------------------
-## *** MAYBE MOVE TO AFTER QUANTIFICATION OF T1 T2 and PD
 if [[ ${NO_DENOISE} == "false" ]]; then
-  DENOISE=$(modField -i ${QALAS_RAW} -m -f prep -v denoise)
-  NOISE=$(modField -i ${QALAS_RAW} -m -f prep -v noise)
-  DenoiseImage -d 4 -n Rician -i ${QALAS_RAW} -o [${DENOISE},${NOISE}]
+  for (( i=0; i<${NVOL}; i++ )); do
+    DenoiseImage -d 3 -n Rician -i ${QPROC[${i}]} \
+      -o [${DIR_SCRATCH}/q${i}_denoise.nii.gz,${DIR_SCRATCH}/q${i}_noise.nii.gz]
+    ## Correct output spacing that gets messed up by ANTs
+    antsApplyTransforms -d 3 -n Linear \
+      -i ${DIR_SCRATCH}/q${i}_denoise.nii.gz \
+      -o ${DIR_SCRATCH}/q${i}_denoise.nii.gz \
+      -r ${QPROC[${i}]}
+    antsApplyTransforms -d 3 -n Linear \
+      -i ${DIR_SCRATCH}/q${i}_noise.nii.gz \
+      -o ${DIR_SCRATCH}/q${i}_noise.nii.gz \
+      -r ${QPROC[${i}]}
+    if [[ ${NO_PNG} == "false" ]]; then
+      make3Dpng --bg ${DIR_SCRATCH}/q${i}_denoise.nii.gz --bg-threshold "2.5,97.5"
+      make3Dpng --bg ${DIR_SCRATCH}/q${i}_noise.nii.gz --bg-color "virid-esque"
+    fi
+    QPROC[${i}]="${DIR_SCRATCH}/q${i}_denoise.nii.gz"
+  done
   if [[ ${NO_PNG} == "false" ]]; then
-    montage_fcn="montage"
-    for (( j=1; j<=${NVOL}; j++ )); do
-      make3Dpng --bg ${DENOISE} --bg-vol ${j} --bg-threshold "2.5,97.5" --filename t${j}
-      montage_fcn="${montage_fcn} ${DIR_SCRATCH}/t${j}.png"
-    done
-    montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
-    montage_fcn=${montage_fcn}' -background "#FFFFFF"'
-    montage_fcn="${montage_fcn} ${DIR_SCRATCH}/${IDPFX}_prep-denoise_qalas.png"
-    eval ${montage_fcn}
-    rm ${DIR_SCRATCH}/t*.png
-
-    montage_fcn="montage"
-    for (( j=1; j<=${NVOL}; j++ )); do
-      make3Dpng --bg ${NOISE} --bg-vol ${j} --bg-color "virid-esque" --filename t${j}
-      montage_fcn="${montage_fcn} ${DIR_SCRATCH}/t${j}.png"
-    done
-    montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
-    montage_fcn=${montage_fcn}' -background "#FFFFFF"'
-    montage_fcn="${montage_fcn} ${DIR_SCRATCH}/${IDPFX}_prep-noise_qalas.png"
-    eval ${montage_fcn}
-    rm ${DIR_SCRATCH}/t*.png
+    montage ${DIR_SCRATCH}/q*_denoise.png \
+      -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+      ${DIR_SCRATCH}/${IDPFX}_prep-denoise_qalas.png
+    rm ${DIR_SCRATCH}/q*_denoise.png
+    montage ${DIR_SCRATCH}/q*_noise.png \
+      -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+      ${DIR_SCRATCH}/${IDPFX}_prep-noise_qalas.png
+    rm ${DIR_SCRATCH}/q*_noise.png
   fi
-  QPROC=${DENOISE}
 fi
 
 # generate FG mask -------------------------------------------------------------
 FG=${DIR_SCRATCH}/${IDPFX}_mask-fg+${FLOW}.nii.gz
-3dAutomask -prefix ${FG} -clfrac 0.5 -q -dilate 3 -erode 3 ${QPROC}
+for (( i=0; i<${NVOL}; i++ )); do
+  3dAutomask -prefix ${DIR_SCRATCH}/fg${i}.nii.gz -clfrac 0.5 -q ${QPROC[${i}]}
+done
+ImageMath 3 ${FG} MajorityVoting ${DIR_SCRATCH}/fg*.nii.gz
+rm ${DIR_SCRATCH}/fg*.nii.gz
 if [[ ${NO_PNG} == "false" ]]; then
-  make3Dpng --bg ${QPROC} --bg-threshold "2.5,97.5" \
-    --fg ${FG} --fg-mask ${FG} --fg-alpha 50 \
-    --fg-color "timbow:hue=#FF0000:sat=100;lum=35,85;rnd" \
-    --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
+  make3Dpng --bg ${QPROC[0]} --bg-threshold "2.5,97.5" \
+    --fg ${FG} --fg-mask ${FG} --fg-alpha 50 --fg-cbar "false" \
+    --fg-color "timbow:hue=#FF0000:sat=100:lum=65,65:cyc=1/6" \
+    --layout "9:x;9:x;9:x;9:x;9:x" \
     --filename ${IDPFX}_mask-fg+${FLOW}
 fi
 
-# Process B1 map ---------------------------------------------------------------
+# Debias Image ---------------------------------------------------------------
 ## If not provided, use N4 method.
 ## If provided, apply smoothing kernel, then scale image by B1 map
-DEBIAS=$(modField -i ${QALAS_RAW} -m -f prep -v debias)
-BIAS=$(modField -i ${QALAS_RAW} -m -f prep -v bias)
-if [[ -z ${B1} ]]; then
-  N4BiasFieldCorrection -d 4 -x ${FG} -i ${QPROC} -o [${DEBIAS},${BIAS}]
-else
+if [[ -n ${B1} ]]; then NO_B1="false"; fi
+if [[ ${NO_B1,,} == "false" ]]; then
+  BIAS=${DIR_SCRATCH}/${IDPFX}_prep-biasB1_qalas.nii.gz
   antsApplyTransforms -d 3 -n Linear -i ${B1} -o ${BIAS} -t identity -r ${FG}
   niimath ${BIAS} -s ${B1K} ${BIAS}
   for (( i=0; i<${NVOL}; i++ )); do
-    3dcalc -a ${QPROC}[${i}] -expr a -prefix ${DIR_SCRATCH}/qvol${i}.nii.gz
-    OV=($(3dROIstats -mask ${FG} -sigma ${DIR_SCRATCH}/qvol${i}.nii.gz))
-    niimath ${DIR_SCRATCH}/qvol${i}.nii.gz -div ${BIAS} ${DIR_SCRATCH}/qvol${i}.nii.gz
-    NV=($(3dROIstats -mask ${FG} -sigma ${DIR_SCRATCH}/qvol${i}.nii.gz))
-    niimath ${DIR_SCRATCH}/qvol${i}.nii.gz \
-      -sub ${NV[-2]} -div ${NV[-1]} \
-      -mul ${OV[-1]} -add ${OV[-2]} \
-      -thr 0 \
-      ${DIR_SCRATCH}/qvol${i}.nii.gz
+    OV=($(3dROIstats -mask ${FG} -sigma ${QPROC[${i}]}))
+    niimath ${QPROC[${i}]} -div ${BIAS} ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz
+    NV=($(3dROIstats -mask ${FG} -sigma ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz))
+    niimath ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz \
+      -sub ${NV[-2]} -div ${NV[-1]} -mul ${OV[-1]} -add ${OV[-2]} -thr 0 \
+      ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz
+    if [[ ${NO_PNG} == "false" ]]; then
+      make3Dpng --bg ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz --bg-threshold "2.5,97.5"
+    fi
+    QPROC[${i}]="${DIR_SCRATCH}/q${i}_debiasB1.nii.gz"
   done
-  TTR=($(niiInfo -i ${QPROC} -f "TR"))
-  ImageMath 4 ${DEBIAS} TimeSeriesAssemble ${TTR} 0 ${DIR_SCRATCH}/qvol*.nii.gz
-  rm ${DIR_SCRATCH}/qvol*
+  if [[ ${NO_PNG} == "false" ]]; then
+    make3Dpng --bg ${BIAS} --bg-color "plasma"
+    montage ${DIR_SCRATCH}/q*_debiasB1.png \
+      -tile 1x -geometry +0+0 -gravity center -background "#000000" \
+      ${DIR_SCRATCH}/${IDPFX}_prep-debiasB1_qalas.png
+    rm ${DIR_SCRATCH}/q*_debiasB1.png
+  fi
 fi
-if [[ ${NO_PNG} == "false" ]]; then
-  make3Dpng --bg ${BIAS} --bg-color "plasma"
-  montage_fcn="montage"
-  for (( j=1; j<=${NVOL}; j++ )); do
-    make3Dpng --bg ${DEBIAS} --bg-vol ${j} --bg-threshold "2.5,97.5" --filename t${j}
-    montage_fcn="${montage_fcn} ${DIR_SCRATCH}/t${j}.png"
+
+if [[ ${DO_N4,,} == "true" ]]; then
+  for (( i=0; i<${NVOL}; i++ )); do
+    N4BiasFieldCorrection -d 3 -x ${FG} -i ${QPROC[${i}]} \
+      -o [${DIR_SCRATCH}/q${i}_debiasN4.nii.gz,${DIR_SCRATCH}/q${i}_biasN4.nii.gz]
+    if [[ ${NO_PNG} == "false" ]]; then
+      make3Dpng --bg ${DIR_SCRATCH}/q${i}_biasN4.nii.gz --bg-color "plasma"
+      make3Dpng --bg ${DIR_SCRATCH}/q${i}_debiasN4.nii.gz --bg-threshold "2.5,97.5"
+    fi
+    QPROC[${i}]="${DIR_SCRATCH}/q${i}_debiasN4.nii.gz"
   done
-  montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
-  montage_fcn=${montage_fcn}' -background "#FFFFFF"'
-  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/${IDPFX}_prep-debias_qalas.png"
-  eval ${montage_fcn}
-  rm ${DIR_SCRATCH}/t*.png
+  if [[ ${NO_PNG} == "false" ]]; then
+    montage ${DIR_SCRATCH}/q*_debiasN4.png \
+      -tile 1x -geometry +0+0 -gravity center -background "#000000" \
+      ${DIR_SCRATCH}/${IDPFX}_prep-debiasN4_qalas.png
+    montage ${DIR_SCRATCH}/q*_biasN4.png \
+      -tile 1x -geometry +0+0 -gravity center -background "#000000" \
+      ${DIR_SCRATCH}/${IDPFX}_prep-biasN4_qalas.png
+    rm ${DIR_SCRATCH}/q*_debiasN4.png
+    rm ${DIR_SCRATCH}/q*_biasN4.png
+  fi
 fi
-QPROC=${DEBIAS}
 
 # Get brain masks --------------------------------------------------------------
 for (( i=0; i<${NVOL}; i++ )); do
-  3dcalc -a ${QPROC}[${i}] -expr a -prefix ${DIR_SCRATCH}/qvol${i}.nii.gz
-  mri_synthstrip -i ${DIR_SCRATCH}/qvol${i}.nii.gz \
-    -m ${DIR_SCRATCH}/mask-brain${i}.nii.gz
+  mri_synthstrip -i ${QPROC[${i}]} -m ${DIR_SCRATCH}/mask-brain${i}.nii.gz
 done
 ImageMath 3 ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
   MajorityVoting ${DIR_SCRATCH}/mask-brain*.nii.gz
-rm ${DIR_SCRATCH}/qvol*
 rm ${DIR_SCRATCH}/mask-brain*
 if [[ ${NO_PNG} == "false" ]]; then
   make3Dpng --bg ${QPROC} --bg-threshold "2.5,97.5" \
     --fg ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
     --fg-mask ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
     --fg-alpha 50 \
-    --fg-color "timbow:hue=#FF0000:sat=100;lum=35,85;rnd" \
-    --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
+    --fg-color "timbow:hue=#FF0000:sat=100;lum=65,65" \
+    --layout "9:x;9:x;9:x;9:x;9:x" \
     --filename ${IDPFX}_mask-brain+${FLOW}
 fi
 
@@ -452,10 +477,10 @@ niimath ${DIR_SCRATCH}/mask-brain+NATIVE+nocsf.nii.gz \
   -binv -mas ${DIR_SCRATCH}/mask-brain+NATIVE.nii.gz \
   ${DIR_SCRATCH}/mask-csf+NATIVE.nii.gz
 
+# Recombine volumes into time-series -------------------------------------------
+ImageMath 4 ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz TimeSeriesAssemble ${TR} 0 ${QPROC[@]}
+
 # Calculate constants: T1, T2, PDunscaled --------------------------------------
-## *** ADD CODE TO COMBINE INTO 4D FILE
-cp ${QPROC} ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz
-QPROC=${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz
 Rscript ${TKNIPATH}/R/qalasConstants.R \
   "tr" ${OPT_TR} \
   "fa" ${OPT_FA} \
@@ -465,15 +490,16 @@ Rscript ${TKNIPATH}/R/qalasConstants.R \
   "t1_init" ${OPT_T1INIT} \
   "m0_init" ${OPT_M0INIT} \
   "optimizer" ${OPT_METHOD} \
-  "qalas" ${QPROC} \
-  "mask" ${FG} \
+  "qalas" ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz \
+  "mask" ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
   "prefix" ${IDPFX} \
   "dir_save" ${DIR_SCRATCH} \
   "dir_scratch" ${DIR_SCRATCH}/qalasConstants_tmp
 gzip ${DIR_SCRATCH}/*.nii
 
 # Coregister and Push to Native Space -----------------------------------------
-3dcalc -a ${QPROC}[2] -expr 'a' -prefix ${DIR_SCRATCH}/MOVING_QALAS.nii.gz
+MIDVOL=$(printf %.0f $(echo "(${NVOL} / 2)" | bc -l))
+cp ${QPROC[${MIDVOL}]} ${DIR_SCRATCH}/MOVING_QALAS.nii.gz
 coregistrationChef --recipe-name "intermodalSyn" \
   --fixed ${NATIVE} --fixed-mask ${DIR_SCRATCH}/mask-brain+NATIVE.nii.gz \
   --moving ${DIR_SCRATCH}/MOVING_QALAS.nii.gz \
@@ -517,32 +543,6 @@ if [[ "${CLAMP_T2}" != "false" ]]; then
   niimath ${IMG_T2} -thr 0 -uthr ${CLAMP_T2} -add ${DIR_SCRATCH}/tclamp.nii.gz ${IMG_T2}
 fi
 
-# Scale PD map so ventricular CSF is 100% --------------------------------------
-TMASK=${DIR_SCRATCH}/mask-brain+NATIVE+nocsf.nii.gz
-T2HI=($(3dBrickStat -mask ${TMASK} -perclist 1 97.5 ${IMG_T2}))
-niimath ${IMG_T2} -thr ${T2HI[-1]} -bin -mas ${TMASK} -kernel boxv 1 -ero \
-  ${DIR_SCRATCH}/${IDPFX}_mask-csf+${FLOW}.nii.gz
-PD975=($(3dBrickStat -mask ${DIR_SCRATCH}/${IDPFX}_mask-csf+${FLOW}.nii.gz \
-  -perclist 1 97.5 \
-  ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz))
-if [[ ${NO_PNG} == "false" ]]; then
-  make3Dpng --bg ${QPROC} --bg-threshold "2.5,97.5" \
-    --fg ${DIR_SCRATCH}/${IDPFX}_mask-csf+${FLOW}.nii.gz \
-    --fg-mask ${DIR_SCRATCH}/${IDPFX}_mask-csf+${FLOW}.nii.gz \
-    --fg-alpha 50 \
-    --fg-color "timbow:hue=#FF0000:sat=100;lum=35,85;rnd" \
-    --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
-    --filename ${IDPFX}_mask-csf+${FLOW}
-fi
-
-niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
-  -thr ${PD975[-1]} -bin -mul ${PD975[-1]} \
-  ${DIR_SCRATCH}/tclamp.nii.gz
-niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
-  -thr 0 -uthr ${PD975[-1]} -add ${DIR_SCRATCH}/tclamp.nii.gz \
-  -div ${PD975[-1]} \
-  ${IMG_PD}
-
 if [[ ${NO_PNG} == "false" ]]; then
   make3Dpng --bg ${NATIVE} --bg-thresh "2.5,97.5" \
     --bg-color "timbow:hue=#00FF00:lum=0,100:cyc=1/6" \
@@ -553,10 +553,57 @@ if [[ ${NO_PNG} == "false" ]]; then
     --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
     --filename ${IDPFX}_coregistration \
     --dir-save ${DIR_SCRATCH}/xfm
+fi
 
-  make3Dpng --bg ${IMG_T1} --bg-thresh "2.5,97.5"
-  make3Dpng --bg ${IMG_T2} --bg-thresh "2.5,97.5"
-  make3Dpng --bg ${IMG_PD} --bg-thresh "2.5,97.5"
+## Tissue segmentation  (and improved rescaling PD to actual CSF) --------------
+#Rscript ${TKNIPATH}/R/qmriMClust.R \
+#  "n" 3 \
+#  "t1" ${IMG_T1} \
+#  "t2" ${IMG_T2} \
+#  "pd" ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
+#  "mask" ${DIR_SCRATCH}/mask-brain+NATIVE+nocsf.nii.gz \
+#  "prefix" ${IDPFX} \
+#  "dir_save" ${DIR_SCRATCH} \
+#  "dir_scratch" ${DIR_SCRATCH}/qmriMClust_tmp
+#gzip ${DIR_SCRATCH}/*.nii
+
+# Scale PD map so ventricular CSF is 100% --------------------------------------
+#TMASK=${DIR_SCRATCH}/${IDPFX}_mask-CSF+QMRI.nii.gz
+#niimath ${DIR_SCRATCH}/${IDPFX}_label-tissue+QMRI.nii.gz -thr 3 -uthr 3 -bin ${TMASK}
+#PD975=($(3dBrickStat -mask ${TMASK} -perclist 1 97.5 ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz))
+#niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
+#  -thr ${PD975[-1]} -bin -mul ${PD975[-1]} \
+#  ${DIR_SCRATCH}/tclamp.nii.gz
+#niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
+#  -thr 0 -uthr ${PD975[-1]} -add ${DIR_SCRATCH}/tclamp.nii.gz \
+#  -div ${PD975[-1]} -mul 1000 \
+#  ${IMG_PD}
+
+## clamp PD values to 99% of in brain values then rescale so this is 1000 -----
+PD99=($(3dBrickStat -mask ${DIR_SCRATCH}/mask-brain+NATIVE.nii.gz \
+  -perclist 1 99 ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz))
+niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
+  -thr ${PD99[-1]} -bin -mul ${PD99[-1]} ${DIR_SCRATCH}/tclamp.nii.gz
+niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
+  -thr 0 -uthr ${PD99[-1]} -add ${DIR_SCRATCH}/tclamp.nii.gz \
+  -div ${PD99[-1]} -mul 1000 \
+  ${IMG_PD}
+
+if [[ ${NO_PNG} == "false" ]]; then
+  make3Dpng --bg ${IMG_T1}
+  make3Dpng --bg ${IMG_T1} --layout "9:x;9:x;9:x;9:x;9:x" --filename ${IDPFX}_plane-sagittal_T1map
+  make3Dpng --bg ${IMG_T1} --layout "9:y;9:y;9:y;9:y;9:y" --filename ${IDPFX}_plane-coronal_T1map
+  make3Dpng --bg ${IMG_T1} --layout "9:z;9:z;9:z;9:z;9:z" --filename ${IDPFX}_plane-axial_T1map
+
+  make3Dpng --bg ${IMG_T2}
+  make3Dpng --bg ${IMG_T2} --layout "9:x;9:x;9:x;9:x;9:x" --filename ${IDPFX}_plane-sagittal_T2map
+  make3Dpng --bg ${IMG_T2} --layout "9:y;9:y;9:y;9:y;9:y" --filename ${IDPFX}_plane-coronal_T2map
+  make3Dpng --bg ${IMG_T2} --layout "9:z;9:z;9:z;9:z;9:z" --filename ${IDPFX}_plane-axial_T2map
+
+  make3Dpng --bg ${IMG_PD}
+  make3Dpng --bg ${IMG_PD} --layout "9:x;9:x;9:x;9:x;9:x" --filename ${IDPFX}_plane-sagittal_PD
+  make3Dpng --bg ${IMG_PD} --layout "9:y;9:y;9:y;9:y;9:y" --filename ${IDPFX}_plane-coronal_PD
+  make3Dpng --bg ${IMG_PD} --layout "9:z;9:z;9:z;9:z;9:z" --filename ${IDPFX}_plane-axial_PD
 fi
 
 # Synthesize desired MRI sequences ---------------------------------------------
@@ -621,7 +668,7 @@ for (( i=0; i<${#SYNTH[@]}; i++ )) do
     for (( j=1; j<${#PARAMS[@]}; j++ )); do
       if [[ ${PARAMS[${j}]^^} == *"TE"* ]]; then TE=${PARAMS[$((${j}+1))]}; fi
       if [[ ${PARAMS[${j}]^^} == *"TI"* ]]; then TI=${PARAMS[$((${j}+1))]}; fi
-      if [[ ${PARAMS[${j}]^^} == *"TSAT"* ]]; then TSAT=${PARAMS[$((${j}+1))]} fi
+      if [[ ${PARAMS[${j}]^^} == *"TSAT"* ]]; then TSAT=${PARAMS[$((${j}+1))]}; fi
     done
     if [[ ${VERBOSE} == "true" ]]; then
       echo "MSG [${PIPE}:${FLOW}] SYNTHESIZING: ${PARAMS[0]}"
@@ -694,18 +741,19 @@ fi
 
 if [[ ${KEEP_CLEANED} == "true" ]]; then
   mkdir -p ${DIR_SAVE}/anat/cleaned
-  mv ${QPROC} ${DIR_SAVE}/anat/cleaned/
+  mv ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz ${DIR_SAVE}/anat/cleaned/
 fi
 
-mkdir -p ${DIR_SAVE}/anat/native
-mv ${DIR_SCRATCH}/${IDPFX}_T1map.nii.gz ${DIR_SAVE}/anat/native/
-mv ${DIR_SCRATCH}/${IDPFX}_T1map.png ${DIR_SAVE}/anat/native/
-mv ${DIR_SCRATCH}/${IDPFX}_T2map.nii.gz ${DIR_SAVE}/anat/native/
-mv ${DIR_SCRATCH}/${IDPFX}_T2map.png ${DIR_SAVE}/anat/native/
-mv ${DIR_SCRATCH}/${IDPFX}_PD.nii.gz ${DIR_SAVE}/anat/native/
-mv ${DIR_SCRATCH}/${IDPFX}_PD.png ${DIR_SAVE}/anat/native/
+mkdir -p ${DIR_SAVE}/anat/native_qmri
+mv ${DIR_SCRATCH}/${IDPFX}_T1map.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_T1map.png ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_T2map.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_T2map.png ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_PD.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_PD.png ${DIR_SAVE}/anat/native_qmri/
 
-mv ${DIR_SCRATCH}/${IDPFX}*synth* ${DIR_SAVE}/anat/native/
+mkdir -p ${DIR_SAVE}/anat/native_synth
+mv ${DIR_SCRATCH}/${IDPFX}*synth* ${DIR_SAVE}/anat/native_synth/
 
 mkdir -p ${DIR_SAVE}/anat/mask/${FLOW}
 mv ${DIR_SCRATCH}/${IDPFX}_mask* ${DIR_SAVE}/anat/mask/${FLOW}
@@ -713,9 +761,19 @@ mv ${DIR_SCRATCH}/${IDPFX}_mask* ${DIR_SAVE}/anat/mask/${FLOW}
 mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
 mv ${DIR_SCRATCH}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
 
+DIR_PREP="${DIR_SAVE}/prep/${IDDIR}/${PIPE}${FLOW}"
+mkdir -p ${DIR_PREP}
+mv ${DIR_SCRATCH}/*.png ${DIR_PREP}/
+
+#mkdir -p ${DIR_SAVE}/anat/posterior/${FLOW}
+#mv ${DIR_SCRATCH}/*posterior* ${DIR_SAVE}/anat/posterior/${FLOW}/
+
+#mkdir -p ${DIR_SAVE}/label/${FLOW}
+#mv ${DIR_SCRATCH}/*label-tissue.nii.gz ${DIR_SAVE}/label/${FLOW}/
+
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_PIPE}/qc/${PIPE}${FLOW}
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
   RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
@@ -737,7 +795,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '## QALAS Processing' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
 
-  # output Project related information -------------------------------------------
+  # output Project related information -----------------------------------------
   echo 'PI: **'${PI}'**\' >> ${RMD}
   echo 'PROJECT: **'${PROJECT}'**\' >> ${RMD}
   echo 'IDENTIFIER: **'${IDPFX}'**\' >> ${RMD}
@@ -746,38 +804,74 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   echo '### QALAS Processing Results' >> ${RMD}
 
-  ## T1 ---------------------------------------------------------------------------
+  ## T1 ------------------------------------------------------------------------
   echo '### T1 map' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native/${IDPFX}_T1map.nii.gz
-  TPNG=${DIR_ANAT}/native/${IDPFX}_T1map.png
+  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T1map.nii.gz
+  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T1map.png
   if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
   echo '!['${TNII}']('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
-  ## T2 ---------------------------------------------------------------------------
+  echo '#### T1map Slice Mosaics {.tabset}' >> ${RMD}
+  echo '##### Click to View -->' >> ${RMD}
+  echo '##### Axial' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T1map.png')' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '##### Coronal' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_T1map.png')' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '##### Sagittal' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_T1map.png')' >> ${RMD}
+  echo '' >> ${RMD}
+
+  ## T2 ------------------------------------------------------------------------
   echo '### T2 map' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native/${IDPFX}_T2map.nii.gz
-  TPNG=${DIR_ANAT}/native/${IDPFX}_T2map.png
+  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T2map.nii.gz
+  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T2map.png
   if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
   echo '!['${TNII}']('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
-  ## PD ---------------------------------------------------------------------------
+  echo '#### T2map Slice Mosaics {.tabset}' >> ${RMD}
+  echo '##### Click to View -->' >> ${RMD}
+  echo '##### Axial' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T2map.png')' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '##### Coronal' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_T2map.png')' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '##### Sagittal' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_T2map.png')' >> ${RMD}
+  echo '' >> ${RMD}
+
+  ## PD ------------------------------------------------------------------------
   echo '### Proton Density (PD)' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native/${IDPFX}_PD.nii.gz
-  TPNG=${DIR_ANAT}/native/${IDPFX}_PD.png
+  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PD.nii.gz
+  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PD.png
   if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
   echo '!['${TNII}']('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
-  ## Synthesized Images
+  echo '#### PD Slice Mosaics {.tabset}' >> ${RMD}
+  echo '##### Click to View -->' >> ${RMD}
+  echo '##### Axial' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PDmap.png')' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '##### Coronal' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_PDmap.png')' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '##### Sagittal' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_PDmap.png')' >> ${RMD}
+  echo '' >> ${RMD}
+
+  ## Synthesized Images --------------------------------------------------------
   echo '### Synthesized Images {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
-  NIILS=($(ls ${DIR_SAVE}/anat/${IDPFX}*synth*.nii.gz))
+  NIILS=($(ls ${DIR_SAVE}/anat/native_synth/${IDPFX}*synth*.nii.gz))
   for (( i=0; i<${#NIILS[@]}; i++ )); do
     TNII=$(basename ${NIILS[${i}]})
-    FNAME=${BNAME//\.nii\.gz}
-    TPNG=${DIR_SAVE}/anat/${FNAME}.png
+    FNAME=${TNII//\.nii\.gz}
+    TPNG=${DIR_SAVE}/anat/native_synth/${FNAME}.png
     SFX=${FNAME//${IDPFX}_}
     echo "#### ${SFX}" >> ${RMD}
     if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
@@ -789,15 +883,15 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '### Processing Steps {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
   echo '#### Raw QALAS' >> ${RMD}
-  TPNG=${DIR_SCRATCH}/${IDPFX}_prep-raw_qalas.png
+  TPNG=${DIR_PREP}/${IDPFX}_prep-raw_qalas.png
   echo '![Raw QALAS]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
   if [[ ${NO_DENOISE} == "false" ]]; then
     echo '#### Denoising' >> ${RMD}
-    echo '![Denoised QALAS]('${DIR_SCRATCH}/${IDPFX}_prep-denoise_qalas.png')' >> ${RMD}
+    echo '![Denoised QALAS]('${DIR_PREP}/${IDPFX}_prep-denoise_qalas.png')' >> ${RMD}
     echo '' >> ${RMD}
-    echo '![Noise]('${DIR_SCRATCH}/${IDPFX}_prep-noise_qalas.png')' >> ${RMD}
+    echo '![Noise]('${DIR_PREP}/${IDPFX}_prep-noise_qalas.png')' >> ${RMD}
     echo '' >> ${RMD}
   fi
 
@@ -806,20 +900,25 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '![FG Mask]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
-  echo '#### Debias' >> ${RMD}
-  echo '![Debiased QALAS]('${DIR_SCRATCH}/${IDPFX}_prep-debias_qalas.png')' >> ${RMD}
-  echo '' >> ${RMD}
-  echo '![Bias Field]('${DIR_SCRATCH}/${IDPFX}_prep-bias_qalas.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  if [[ ${NO_B1,,} == "false" ]]; then
+    echo '#### Debias' >> ${RMD}
+    echo '![Debiased QALAS]('${DIR_PREP}/${IDPFX}_prep-debiasB1_qalas.png')' >> ${RMD}
+    echo '' >> ${RMD}
+    echo '![Bias Field]('${DIR_PREP}/${IDPFX}_prep-biasB1_qalas.png')' >> ${RMD}
+    echo '' >> ${RMD}
+  fi
+
+  if [[ ${DO_N4,,} == "true" ]]; then
+    echo '#### Debias' >> ${RMD}
+    echo '![Debiased QALAS]('${DIR_PREP}/${IDPFX}_prep-debiasN4_qalas.png')' >> ${RMD}
+    echo '' >> ${RMD}
+    echo '![Bias Field]('${DIR_PREP}/${IDPFX}_prep-biasN4_qalas.png')' >> ${RMD}
+    echo '' >> ${RMD}
+  fi
 
   echo '#### Brain Mask' >> ${RMD}
   TPNG=${DIR_SAVE}/anat/mask/${FLOW}/${IDPFX}_mask-brain+${FLOW}.png
   echo '![Brain Mask]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
-
-  echo '#### CSF Mask' >> ${RMD}
-  TPNG=${DIR_SAVE}/anat/mask/${FLOW}/${IDPFX}_mask-csf+${FLOW}.png
-  echo '![CSF Mask]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
   echo '#### Coregistration' >> ${RMD}
@@ -843,3 +942,8 @@ touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
