@@ -855,13 +855,13 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### PD Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PDmap.png')' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PD.png')' >> ${RMD}
   echo '' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_PDmap.png')' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_PD.png')' >> ${RMD}
   echo '' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_PDmap.png')' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_PD.png')' >> ${RMD}
   echo '' >> ${RMD}
 
   ## Synthesized Images --------------------------------------------------------
