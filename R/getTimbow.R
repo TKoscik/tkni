@@ -24,5 +24,5 @@ palette <- timbow(n.colors=n.colors,
                   colorfulness = saturation,
                   luminosity.limits = c(luminosity.lo, luminosity.hi),
                   hue.direction = direction,
-                  n.cycles = cycles)
+                  n.cycles = cycles, show.plot=FALSE)
 cat(palette)

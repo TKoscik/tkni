@@ -75,10 +75,10 @@ myelin[myelin > quantile(myelin, 0.98)] <- quantile(myelin, 0.98) # winsorize up
 myelin <- sqrt(myelin) # claculate myelin
 
 # gather nifti parameters and save output --------------------------------------
-img.dims <- nii.dims(nii.t1)
-pixdim <- unlist(nii.hdr(nii.t1, "pixdim"))
-orient <- nii.orient(nii.t1)
+img.dims <- info.nii(nii.t1, "dims")
+pixdim <- info.nii(nii.t1, "pixdim")
+orient <- info.nii(nii.t1, "orient")
 save.dir <- dirname(nii.t1)
-init.nii(paste0(save.dir, "/myelin.nii"), img.dims, pixdim, orient)
+init.nii(paste0(save.dir, "/myelin.nii"), dims=img.dims, pixdim=pixdim, orient=orient)
 write.nii.volume(paste0(save.dir, "/myelin.nii"), 1, myelin)
 

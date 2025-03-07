@@ -9,6 +9,7 @@ PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
 FCN_NAME=($(basename "$0"))
 DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
 OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
 KERNEL="$(uname -s)"
 HARDWARE="$(uname -m)"
 NO_LOG=false
@@ -89,34 +90,9 @@ fi
 #===============================================================================
 # Start of Function
 #===============================================================================
-# Set up BIDs compliant variables and workspace --------------------------------
-DIR_PROJECT=$(getDir -i ${INPUT})
-PID=$(getField -i ${INPUT} -f sub)
-SID=$(getField -i ${INPUT} -f ses)
-PIDSTR=sub-${PID}
-if [[ -n ${SID} ]]; then PIDSTR="${PIDSTR}_ses-${SID}"; fi
-DIRPID=sub-${PID}
-if [[ -n ${SID} ]]; then DIRPID="${DIRPID}/ses-${SID}"; fi
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${T1}); fi
+if [[ -z ${PREFIX} ]]; then PREFIX=$(getBidsBase -i ${T1} -s); fi
 
-if [[ -z ${PREFIX} ]]; then
-  PREFIX=$(getBidsBase -i ${TS})
-  PREP=$(getField -i ${PREFIX} -f prep)
-  if [[ -n ${PREP} ]]; then
-    PREFIX=$(modField -i ${PREFIX} -m -f prep -v "${PREP}+pad${PAD}")
-  else
-    PREFIX=$(modField -i ${PREFIX} -a -f prep -v "pad${PAD}")
-  fi
-fi
-
-## not sure if this works and will not always be applicable ----
-### may be easier to hard code the anat/func/dwi folders
-FCN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-FCN_TYPE=(${FCN_DIR//\// })
-## ----
-
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/inc/${FCN_TYPE[-1]}/prep/${DIRPID}
-fi
 mkdir -p ${DIR_SAVE}
 mkdir -p ${DIR_SCRATCH}
 

@@ -444,21 +444,21 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '3. Generate Foreground Mask  ' >> ${RMD}
   echo '4. Non-Uniformity Correction  ' >> ${RMD}
   echo '5. Rigid Alignment, Base Image to Template  ' >> ${RMD}
-  echo '  - Apply to Foreground Mask  ' >> ${RMD}
-  echo '  - Alternatively Use Manual Rigid/Affine Transformation  ' >> ${RMD}
+  echo '    - Apply to Foreground Mask  ' >> ${RMD}
+  echo '    - Alternatively Use Manual Rigid/Affine Transformation  ' >> ${RMD}
   echo '6. Rescale Intensity  ' >> ${RMD}
   echo '7. Multi-Approach Brain Extraction  ' >> ${RMD}
-  echo '  - AFNI skullstrip, ANTs Brain Extraction, FSL BET, SAMSEG  ' >> ${RMD}
+  echo '    - AFNI skullstrip, ANTs Brain Extraction, FSL BET, SAMSEG  ' >> ${RMD}
   echo '8. Save Results  ' >> ${RMD}
-  echo '  - Native Space, Clean, Base Image  ' >> ${RMD}
-  echo '  - Foreground Mask  ' >> ${RMD}
-  echo '  - Brain Masks  ' >> ${RMD}
-  echo '  - Rigid Alignment Transform  ' >> ${RMD}
+  echo '    - Native Space, Clean, Base Image  ' >> ${RMD}
+  echo '    - Foreground Mask  ' >> ${RMD}
+  echo '    - Brain Masks  ' >> ${RMD}
+  echo '    - Rigid Alignment Transform  ' >> ${RMD}
   echo '9. Generate PNGs, QC Metrics, and HTML Report  ' >> ${RMD}
   echo '' >> ${RMD}
 
   echo '#### Procedure' >> ${RMD}
-  echo 'The base anatomical image, '${BASE_MOD}' was processed using a robust, standaradized protocol that utilizes multiple neuroimaging software packages including AFNI [1,2], Advanced Normalization Tools (ANTs) [3,4], FreeSurfer [5], and FSL [6] (note that FSL is not used in commercial applications due to license encumberance). In addition, we utilize a variety of helper-functions, wrappers, pipelines and workflows available in our TKNI package [7]. First, images are conformed to standard RPI orientation. Second, images are denoised using a non-local, spatially adaptive procedure [8] implemented in ANTs. Third, we generate a binary foreground mask using an automated clipping procedure based on image intensity implemented in AFNI (3dAutomask). This foreground mask asists in constraining the region for subsequent steps to a reasonable representation of the individuals head and provides an initial focal region for subsequent alignment. Fourth, MRI images often contain low frequency intensity nonuniformity, or bias. We use the N4 algorithm [9] implemented in ANTs which essentially fits low frequency intensity variations with a B--spline model, which can then be subtracted from the image. Fifth, typically neuroimages are aligned to an arbitrary line connecting the anterior and posterior commissures, ACPC alignment. Identification of these landmarks may require manual intervention and neuroanatomical expertise. Instead of ACPC alignment, we leverage modern advancements in image registration and perform a rigid body alignment to a common space template using ANTs. This has the advantage of eliminating manual intervention and rigid transformations do not distort native brain shape or size. For cases where rigid alignment fail, while rare, manual ACPC alignment is substituted. Six, some of the preceding steps include interpolation of the image data and may be rescaled by the software packages. To eliminate this as a factor all images are rescaled such that values range from 0 to 10000 and are stored as signed 16-bit integers. Seven, segmentation of brain from non-brain tissue is critical for neuro-analysis. Unfortunately, all brain segmentation tools fail under certain circumstances and cases. Fortunately, different brain segmentation tools tend to fail in distinct ways. Hence, we leverage these distinct errors in brain segmentation using a joint label fusion technique [10] in order to cancel out non-shared errors across brain segmentation tools [1,3,11,12]. (Note: We are currently evaluating emerging machine learning methods that may supplant this method). Next, we use custom softwar to generate PNG images to represent our results using itk-SNAP c3d [13] and ImageMagick [14]. Lastly, we calculate image quality metrics based on MRIQC but implemented independently using neuroimaging software tools and niimath [15] for voxelwise operations.' >> ${RMD}
+  echo 'The base anatomical image, '${BASE_MOD}', was processed using a robust, standaradized protocol that utilizes multiple neuroimaging software packages including AFNI [1,2], Advanced Normalization Tools (ANTs) [3,4], FreeSurfer [5], and FSL [6] (note that FSL is not used in commercial applications due to license encumberance). In addition, we utilize a variety of helper-functions, wrappers, pipelines and workflows available in our TKNI package [7]. First, images are conformed to standard RPI orientation. Second, images are denoised using a non-local, spatially adaptive procedure [8] implemented in ANTs. Third, we generate a binary foreground mask using an automated clipping procedure based on image intensity implemented in AFNI (3dAutomask). This foreground mask asists in constraining the region for subsequent steps to a reasonable representation of the individuals head and provides an initial focal region for subsequent alignment. Fourth, MRI images often contain low frequency intensity nonuniformity, or bias. We use the N4 algorithm [9] implemented in ANTs which essentially fits low frequency intensity variations with a B--spline model, which can then be subtracted from the image. Fifth, typically neuroimages are aligned to an arbitrary line connecting the anterior and posterior commissures, ACPC alignment. Identification of these landmarks may require manual intervention and neuroanatomical expertise. Instead of ACPC alignment, we leverage modern advancements in image registration and perform a rigid body alignment to a common space template using ANTs. This has the advantage of eliminating manual intervention and rigid transformations do not distort native brain shape or size. For cases where rigid alignment fail, while rare, manual ACPC alignment is substituted. Six, some of the preceding steps include interpolation of the image data and may be rescaled by the software packages. To eliminate this as a factor all images are rescaled such that values range from 0 to 10000 and are stored as signed 16-bit integers. Seven, segmentation of brain from non-brain tissue is critical for neuro-analysis. Unfortunately, all brain segmentation tools fail under certain circumstances and cases. Fortunately, different brain segmentation tools tend to fail in distinct ways. Hence, we leverage these distinct errors in brain segmentation using a joint label fusion technique [10] in order to cancel out non-shared errors across brain segmentation tools [1,3,11,12]. (Note: We are currently evaluating emerging machine learning methods that may supplant this method). Next, we use custom softwar to generate PNG images to represent our results using itk-SNAP c3d [13] and ImageMagick [14]. Lastly, we calculate image quality metrics based on MRIQC but implemented independently using neuroimaging software tools and niimath [15] for voxelwise operations.  ' >> ${RMD}
   echo '' >> ${RMD}
 
   echo '#### Citations' >> ${RMD}
@@ -539,8 +539,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   echo '##### SNR Dietrich' >> ${RMD}
   echo 'Dietrich Signal-to-Noise Ratio:  ' >> ${RMD}
-  echo 'The ratio of signal to noise calculated within a masked region. Uses the air background as a reference. Will return -1 if the background has been masked out and is all zero' >> ${RMD}
-  echo -e '\tDietrich, et al. 2007. http://dx.doi.org/10.1002/jmri.20969' >> ${RMD}
+  echo 'The ratio of signal to noise calculated within a masked region. Uses the air background as a reference. Will return -1 if the background has been masked out and is all zero  ' >> ${RMD}
+  echo -e '\tDietrich, et al. 2007. http://dx.doi.org/10.1002/jmri.20969  ' >> ${RMD}
   echo '' >> ${RMD}
 
   echo '### Additional Cleaned Slice Images {.tabset}' >> ${RMD}

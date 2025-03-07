@@ -941,7 +941,7 @@ if [[ -n ${FG} ]]; then
     ## COLORIZE and RESIZE foreground slices ---------------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize FG ${i} slices"; fi
     ### parse color input -----------------------------------------------------------
-    unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
+    unset CLR_METHOD CLR_HUE CLR_N CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
     TCLR=(${FG_COLOR[${i}]//:/ })
     CLR_METHOD=${TCLR[0]}
     if [[ ${#TCLR[@]} -gt 1 ]]; then
@@ -949,6 +949,7 @@ if [[ -n ${FG} ]]; then
        TMP=(${TCLR[${j}]//=/ })
         case ${TMP[0]} in
           hue | color) CLR_HUE=${TMP[1]} ;;
+          n | number) CLR_N=${TMP[1]} ;;
           sat | saturation) CLR_SAT=${TMP[1]} ;;
           lum | luminosity) CLR_LUM=${TMP[1]} ;;
           cyc | cycles) CLR_CYC=${TMP[1]} ;;
@@ -962,6 +963,7 @@ if [[ -n ${FG} ]]; then
     fi
     clrfcn="makeColorBar --method ${CLR_METHOD}"
     if [[ -n ${CLR_HUE} ]]; then clrfcn="${clrfcn} --hue \"${CLR_HUE}\""; fi
+    if [[ -n ${CLR_N} ]]; then clrfcn="${clrfcn} --n \"${CLR_N}\""; echo "NUM CLORS SET"; fi
     if [[ -n ${CLR_SAT} ]]; then clrfcn="${clrfcn} --saturation ${CLR_SAT}"; fi
     if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
     if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi

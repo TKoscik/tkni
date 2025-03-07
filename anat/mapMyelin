@@ -41,7 +41,7 @@ trap egress EXIT
 OPTS=$(getopt -o hl --long prefix:,\
 t1:,t2:,label:,label-vals:,norm-t1:,norm-t2:,\
 dir-save:,dir-scratch:,\
-help,no-log -n 'parse-options' -- "$@")
+help,no-log,no-png -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -59,11 +59,14 @@ NORM_T2="0.1x1.95x3.1x4.5x6.738198"
 DIR_SAVE=
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
+NO_LOG="false"
+NO_PNG="false"
 
 while true; do
   case "$1" in
     -h | --help) HELP=true ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
     --prefix) PREFIX="$2" ; shift 2 ;;
     --t1) T1="$2" ; shift 2 ;;
     --t2) T2="$2" ; shift 2 ;;
@@ -126,14 +129,12 @@ fi
 #==============================================================================
 # Start of function
 #==============================================================================
-if [[ -z "${PREFIX}" ]]; then PREFIX=$(getBidsBase ${T1}); fi
-
-SPACE_LAB=$(getSpace -i ${T1})
-if [[ -z ${SPACE_LAB} ]]; then SPACE_LAB="map"; fi
+if [[ -z "${PREFIX}" ]]; then PREFIX=$(getBidsBase -i ${T2} -s); fi
 
 # create save directory
-if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=$(dirname ${T1}); fi
-DIR_SAVE="${DIR_SAVE}/myelin_${SPACE_LAB}"
+if [[ -z "${DIR_SAVE}" ]]; then
+  DIR_SAVE="$(dirname ${T1})/outcomes/myelin"
+fi
 mkdir -p ${DIR_SAVE}
 
 # Copy images to scratch, for manipulation
@@ -144,7 +145,7 @@ cp ${LABEL} ${DIR_SCRATCH}/label.nii.gz
 gunzip ${DIR_SCRATCH}/*.gz
 
 # calculate myelin map
-Rscript ${INC_R}/mapMyelin.R \
+Rscript ${TKNIPATH}/R/mapMyelin.R \
   "t1" ${DIR_SCRATCH}/t1.nii "t2" ${DIR_SCRATCH}/t2.nii \
   "label" ${DIR_SCRATCH}/label.nii "label-values" ${LABEL_VALS} \
   "t1.norms" ${NORM_T1} "t2.norms" ${NORM_T2}
@@ -156,6 +157,11 @@ CopyImageHeaderInformation ${T1} \
   ${DIR_SCRATCH}/${PREFIX}_myelin.nii.gz \
   1 1 1
 mv ${DIR_SCRATCH}/${PREFIX}_myelin.nii.gz ${DIR_SAVE}
+
+if [[ "${NO_PNG}" == "false" ]]; then
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_myelin.nii.gz \
+    --bg-color "timbow" --bg-cbar "true"
+fi
 
 #==============================================================================
 # End of function

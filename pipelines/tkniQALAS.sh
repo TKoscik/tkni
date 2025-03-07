@@ -515,7 +515,7 @@ TXFM1=${DIR_SCRATCH}/xfm/${IDPFX}_from-QALAS_to-native_xfm-affine.mat
 TXFM2=${DIR_SCRATCH}/xfm/${IDPFX}_from-QALAS_to-native_xfm-syn.nii.gz
 IMG_T1=${DIR_SCRATCH}/${IDPFX}_T1map.nii.gz
 IMG_T2=${DIR_SCRATCH}/${IDPFX}_T2map.nii.gz
-IMG_PD=${DIR_SCRATCH}/${IDPFX}_PD.nii.gz
+IMG_PD=${DIR_SCRATCH}/${IDPFX}_PDmap.nii.gz
 antsApplyTransforms -d 3 -n Linear \
   -i ${DIR_SCRATCH}/${IDPFX}_qalas_T1map.nii.gz \
   -o ${IMG_T1} \
@@ -749,8 +749,8 @@ mv ${DIR_SCRATCH}/${IDPFX}_T1map.nii.gz ${DIR_SAVE}/anat/native_qmri/
 mv ${DIR_SCRATCH}/${IDPFX}_T1map.png ${DIR_SAVE}/anat/native_qmri/
 mv ${DIR_SCRATCH}/${IDPFX}_T2map.nii.gz ${DIR_SAVE}/anat/native_qmri/
 mv ${DIR_SCRATCH}/${IDPFX}_T2map.png ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_PD.nii.gz ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_PD.png ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_PDmap.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_PDmap.png ${DIR_SAVE}/anat/native_qmri/
 
 mkdir -p ${DIR_SAVE}/anat/native_synth
 mv ${DIR_SCRATCH}/${IDPFX}*synth* ${DIR_SAVE}/anat/native_synth/
@@ -846,8 +846,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   ## PD ------------------------------------------------------------------------
   echo '### Proton Density (PD)' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PD.nii.gz
-  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PD.png
+  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PDmap.nii.gz
+  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PDmap.png
   if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
   echo '!['${TNII}']('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
@@ -855,13 +855,13 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### PD Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PD.png')' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PDmap.png')' >> ${RMD}
   echo '' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_PD.png')' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_PDmap.png')' >> ${RMD}
   echo '' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_PD.png')' >> ${RMD}
+  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_PDmap.png')' >> ${RMD}
   echo '' >> ${RMD}
 
   ## Synthesized Images --------------------------------------------------------

@@ -286,7 +286,7 @@ if [[ "${NO_PNG}" == "false" ]]; then
     png_fcn=${png_fcn}' --bg-threshold "5,99"'
     png_fcn="${png_fcn} --fg ${DIR_SCRATCH}/${MASK_LS[${i}]}"
     png_fcn="${png_fcn} --fg-mask ${DIR_SCRATCH}/${MASK_LS[${i}]}"
-    png_fcn=${png_fcn}' --fg-color "timbow:hue=#FF0000:sat=100;lum=35,85;rnd"'
+    png_fcn=${png_fcn}' --fg-color "timbow:hue=#FF0000:sat=100:lum=65,65;rnd"'
     png_fcn=${png_fcn}' --fg-alpha 50'
     png_fcn=${png_fcn}' --fg-cbar "false"'
     png_fcn=${png_fcn}' --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z"'

@@ -1,0 +1,306 @@
+#!/bin/bash -e
+#===============================================================================
+# Synthesize MRI images from Quantitative Maps
+# Authors: Timothy Koscik, PhD
+# Date: 2025-03-07
+# CHANGELOG: <description of major changes to functionality>
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvkl --long prefix:,\
+mod:,t1:,t2:,pd:,preset:,formula:,params:,\
+dir-save:,dir-scratch:,\
+help,verbose,keep,no-log -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+PREFIX=
+MOD=
+
+T1=
+T2=
+PD=
+
+PRESET=
+FORMULA=
+PARAMS=
+
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${OPERATOR}_${FCN_NAME}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG="false"
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -p | --no-png) NO_PNG=true ; shift ;;
+    --prefix) PREFIX="$2" ; shift 2 ;;
+    --mod) MOD="$2" ; shift 2 ;;
+    --t1) T1="$2" ; shift 2 ;;
+    --t2) T2="$2" ; shift 2 ;;
+    --pd) PD="$2" ; shift 2 ;;
+    --preset) PRESET="$2" ; shift 2 ;;
+    --formula) FORMULA="$2" ; shift 2 ;;
+    --params) PARAMS="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix  <optional>     filename, without extension to use for file'
+  echo '  --mod                    modality to add to filename after prefix,'
+  echo '                           it is good practice to add synth or some'
+  echo '                           other means to differentiate it from acquired'
+  echo '                           images. e.g., "synthT1w"'
+  echo '  --t1                     filepath for T1map'
+  echo '  --t2                     filepath for T2map'
+  echo '  --pd                     filepath for PDmap'
+  echo '  --preset                 specify a preset image contrast to generate.'
+  echo '  --params                 a semicolon separated list of parameters'
+  echo '                           needed to calculate the synthetic image. Each'
+  echo '                           parameter should appear as a case sensitive,'
+  echo '                           uniquely replaceable value in the formula,'
+  echo '                           and should be specified in seconds if time,'
+  echo '                           e.g., TR=4;TE=0.05'
+  echo '  --formula                a formula for 3dcalc to calculate the image'
+  echo '                           given the desired parameters.'
+  echo '                           T1map, T2map, and PDmap values must be'
+  echo '                           specified as "T1", "T2", and "PD",'
+  echo '                           e.g., "PD*((1-exp(-TR/T1))*exp(TE/T2))"'
+  echo '  --dir-save               location to save output'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  echo 'Additional Information -------------------------------------------------'
+  echo 'Presets can be used with custom parameters; if unspecified the defaults'
+  echo '  below are used.'
+  echo 'Available presets include:'
+  echo '  "t2w-fse"  | "fast-spin echo"'
+  echo '     FORMULA="PD*((1-exp(-TR/T1))*exp(TE/T2))"'
+  echo '         MOD="acq-FSE_synthT2w"'
+  echo '      PARAMS="TR=8;TE=0.08"'
+  echo ''
+  echo '  "t1w-gre" | "t1w" | "gradient echo"'
+  echo '     FORMULA="PD*((1-exp(-TR/T1))*exp(TE/T2))"'
+  echo '         MOD="acq-GRE_synthT1w"'
+  echo '      PARAMS="TR=0.113;TE=0"'
+  echo ''
+  echo '  "t1w-mp2rage" | "mp2rage"'
+  echo '      FORMULA="1-2*exp(-TI/T1)"'
+  echo '          MOD="acq-MP2RAGE_synthT1w"'
+  echo '      PARAMS="TI=1.816"'
+  echo ''
+  echo '  "t2w-flair" | "flair"'
+  echo '      FORMULA="abs(TE)*exp(-TSAT/T1)*exp(-TE/T2)*(1-2*exp(-TI/T1))"'
+  echo '          MOD="synthFLAIR"'
+  echo '      PARAMS="TI=2.075;TE=0.08;TSAT=1.405"'
+  echo ''
+  echo '  "dir" | "double inversion recovery" | "double inversion"'
+  echo '      FORMULA="abs((PD)*(1-2*exp(-TI2/T1)+2*exp(-(TI1+TI2)/T1)-exp(-TR/T2)))*(exp(-TE/T2))"'
+  echo '          MOD="synthDIR"'
+  echo '      PARAMS="TI1=2.208;TI2=0.545;TE=0.08;TR=6.67"'
+  echo ''
+  echo '  "tbe" | "tissue boundary" | "tissue boundary enhancement"'
+  echo '      FORMULA="abs(PD*(1-2*exp(-TI/T1))*(1-exp(-TR/T1))*exp(-TE/T2))"'
+  echo '          MOD="synthTBE"'
+  echo '       PARAMS="TI=0.795;TE=0.001;TR=5.02"'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${T1}); fi
+if [[ -z ${PREFIX} ]]; then PREFIX=$(getBidsBase -i ${T1} -s); fi
+
+mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SCRATCH}
+
+# Set formula if PRESET is specified -------------------------------------------
+if [[ -n ${PRESET} ]]; then
+  case "${PRESET,,}" in
+    "t2w-fse" | "fast-spin echo")
+      FORMULA="PD*((1-exp(-TR/T1))*exp(TE/T2))"
+      MOD="acq-FSE_synthT2w"
+      ;;
+    "t1w-gre" | "t1w" | "gradient echo")
+      FORMULA="PD*((1-exp(-TR/T1))*exp(TE/T2))"
+      MOD="acq-GRE_synthT1w"
+      ;;
+    "t1w-mp2rage" | "mp2rage")
+      FORMULA="1-2*exp(-TI/T1)"
+      MOD="acq-MP2RAGE_synthT1w"
+      ;;
+    "t2w-flair" | "flair")
+      FORMULA="abs(TE)*exp(-TSAT/T1)*exp(-TE/T2)*(1-2*exp(-TI/T1))"
+      MOD="synthFLAIR"
+      ;;
+    "dir" | "double inversion recovery" | "double inversion")
+      FORMULA="abs((PD)*(1-2*exp(-TI2/T1)+2*exp(-(TI1+TI2)/T1)-exp(-TR/T2)))*(exp(-TE/T2))"
+      MOD="synthDIR"
+      ;;
+    "tbe" | "tissue boundary" | "tissue boundary enhancement")
+      FORMULA="abs(PD*(1-2*exp(-TI/T1))*(1-exp(-TR/T1))*exp(-TE/T2))"
+      MOD="synthTBE"
+      ;;
+    *)
+      echo "ERROR [tkni:${FCN_NAME}] PRESET (${PRESET}) not defined, aborting"
+      exit 1
+      ;;
+  esac
+  if [[ -z ${PARAMS} ]]; then
+    case "${PRESET,,}" in
+      "t2w-fse" | "fast-spin echo")
+        PARAMS="TR=8;TE=0.08"
+        ;;
+      "t1w-gre" | "t1w" | "gradient echo")
+        PARAMS="TR=0.113;TE=0"
+        ;;
+      "t1w-mp2rage" | "mp2rage")
+        PARAMS="TI=1.816"
+        ;;
+      "t2w-flair" | "flair")
+        PARAMS="TI=2.075;TE=0.08;TSAT=1.405"
+        ;;
+      "dir" | "double inversion recovery" | "double inversion")
+        PARAMS="TI1=2.208;TI2=0.545;TE=0.08;TR=6.67"
+        ;;
+      "tbe" | "tissue boundary" | "tissue boundary enhancement")
+        PARAMS="TI=0.795;TE=0.001;TR=5.02"
+        ;;
+      *)
+        echo "ERROR [tkni:${FCN_NAME}] PARAMS (for ${PRESET}) not defined, aborting"
+        exit 1
+        ;;
+    esac
+  fi
+fi
+
+
+# check NII inputs -------------------------------------------------------------
+DO_T1="false"
+DO_T2="false"
+DO_PD="false"
+if [[ ${FORMULA} = *"T1"* ]]; then
+  DO_T1="true"
+  if [[ -z ${T1} ]]; then
+    echo "ERROR [tkni:${FCN_NAME}] T1map required but not specified"
+    exit 2
+  fi
+  if [[ ! -f ${T1} ]]; then
+    echo "ERROR [tkni:${FCN_NAME}] T1map file not found"
+    exit 3
+  fi
+fi
+
+if [[ ${FORMULA} = *"T2"* ]]; then
+  DO_T2="true"
+  if [[ -z ${T2} ]]; then
+    echo "ERROR [tkni:${FCN_NAME}] T2map required but not specified"
+    exit 2
+  fi
+  if [[ ! -f ${T2} ]]; then
+    echo "ERROR [tkni:${FCN_NAME}] T2map file not found"
+    exit 3
+  fi
+fi
+
+if [[ ${FORMULA} = *"PD"* ]]; then
+  DO_PD="true"
+  if [[ -z ${PD} ]]; then
+    echo "ERROR [tkni:${FCN_NAME}] PDmap required but not specified"
+    exit 2
+  fi
+  if [[ ! -f ${PD} ]]; then
+    echo "ERROR [tkni:${FCN_NAME}] PDmap file not found"
+    exit 3
+  fi
+fi
+
+# parse parameters -------------------------------------------------------------
+PARAMS=(${PARAMS//;/ })
+for (( i=0; i<${#PARAMS[@]}; i++ )); do
+  TP=(${PARAMS[${i}]//=/ })
+  FORMULA=${FORMULA//${TP[0]}/${TP[1]}}
+done
+
+# substitute T1, T2, PD for variables for 3dcalc -------------------------------
+if [[ ${DO_T1} == "true" ]]; then FORMULA=(${FORMULA//T1/a}); fi
+if [[ ${DO_T2} == "true" ]]; then FORMULA=(${FORMULA//T2/b}); fi
+if [[ ${DO_PD} == "true" ]]; then FORMULA=(${FORMULA//PD/c}); fi
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>FORMULA: ${FORMULA}"; fi
+
+# synthesize image -------------------------------------------------------------
+SYFCN="3dcalc"
+if [[ ${DO_T1} == "true" ]]; then SYFCN="${SYFCN} -a ${T1}"; fi
+if [[ ${DO_T2} == "true" ]]; then SYFCN="${SYFCN} -b ${T2}"; fi
+if [[ ${DO_PD} == "true" ]]; then SYFCN="${SYFCN} -c ${PD}"; fi
+SYFCN="${SYFCN} -expr '${FORMULA}'"
+SYFCN="${SYFCN} -prefix ${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz"
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>FUNCTION: ${SYFCN}"; fi
+
+eval ${SYFCN}
+
+# generate png of output -------------------------------------------------------
+if [[ ${NO_PNG} == "false" ]]; then
+  make3Dpng --bg ${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz --bg-thresh "2.5,97.5"
+fi
+
+# save output ------------------------------------------------------------------
+mv ${DIR_SCRATCH}/* ${DIR_SAVE}/
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+
+
