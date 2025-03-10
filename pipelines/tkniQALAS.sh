@@ -601,9 +601,9 @@ if [[ ${NO_PNG} == "false" ]]; then
   make3Dpng --bg ${IMG_T2} --layout "9:z;9:z;9:z;9:z;9:z" --filename ${IDPFX}_plane-axial_T2map
 
   make3Dpng --bg ${IMG_PD}
-  make3Dpng --bg ${IMG_PD} --layout "9:x;9:x;9:x;9:x;9:x" --filename ${IDPFX}_plane-sagittal_PD
-  make3Dpng --bg ${IMG_PD} --layout "9:y;9:y;9:y;9:y;9:y" --filename ${IDPFX}_plane-coronal_PD
-  make3Dpng --bg ${IMG_PD} --layout "9:z;9:z;9:z;9:z;9:z" --filename ${IDPFX}_plane-axial_PD
+  make3Dpng --bg ${IMG_PD} --layout "9:x;9:x;9:x;9:x;9:x" --filename ${IDPFX}_plane-sagittal_PDmap
+  make3Dpng --bg ${IMG_PD} --layout "9:y;9:y;9:y;9:y;9:y" --filename ${IDPFX}_plane-coronal_PDmap
+  make3Dpng --bg ${IMG_PD} --layout "9:z;9:z;9:z;9:z;9:z" --filename ${IDPFX}_plane-axial_PDmap
 fi
 
 # Synthesize desired MRI sequences ---------------------------------------------

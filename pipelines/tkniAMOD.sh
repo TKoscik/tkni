@@ -87,7 +87,7 @@ AMOD="T2w,FLAIR,SWI"
 #AMOD="T2w,FLAIR,PDT2,PDw,T2starw,SWI,Chimap,M0map,MTRmap,MTVmap,MTsat,MWFmap,PDmap,R1map,R2map,R2starmap,RB1map,S0map,T1map,T1rho,T2map,T2starmap,TB1map")
 ADIR=
 
-COREG_RECIPE="affine"
+COREG_RECIPE="intermodalSyn"
 DIR_XFM=
 NORM_REF=
 NORM_XFM_MAT=
@@ -164,7 +164,6 @@ while true; do
     * ) break ;;
   esac
 done
-
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
