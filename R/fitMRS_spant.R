@@ -2,11 +2,13 @@ args <- commandArgs(trailingOnly = TRUE)
 
 library(spant, quietly=T)
 library(nifti.io, quietly=T)
+source("/usr/local/tkni/dev/R/spant_fit_svs.R")
 
 HSVD=30
 EDDY=TRUE
 DFP=TRUE
 CSF <- GM <- WM <- NULL
+dir.scratch <- sprintf("/scratch/tkni_fitMRS_spant_%s", format(Sys.time(), "%Y%m%dT%H%M%S"))
 
 for (i in seq(1,length(args))) {
   if (args[i] %in% c("mrs", "mrs.data")) {
@@ -25,6 +27,8 @@ for (i in seq(1,length(args))) {
     WM <- as.numeric(args[i+1])
   } else if (args[i] %in% c("dir.save", "save.dir", "save")) {
     dir.save <- args[i+1]
+  } else if (args[i] %in% c("dir.scratch", "scratch.dir", "scratch")) {
+    dir.save <- args[i+1]
   }
 }
 
@@ -37,10 +41,18 @@ if (no.hsvd == "true") {
 if (no.eddy == "true") { EDDY=FALSE }
 if (no.dfp == "true") { DFP=FALSE }
 
-p_vols=c(wm=0, gm=100, csf=0)
-if (!is.null(WM)) { p_vols[1] <- WM}
-if (!is.null(GM)) { p_vols[2] <- GM}
-if (!is.null(CSF)) { p_vols[3] <- CSF}
+p.vols=c(wm=0, gm=100, csf=0)
+if (!is.null(WM)) { p.vols[1] <- WM}
+if (!is.null(GM)) { p.vols[2] <- GM}
+if (!is.null(CSF)) { p.vols[3] <- CSF}
 
-fit_svs(input = mrs.data, output_dir = dir.save, pvols=p_vols, ecc=EDDY, hsvd_width=HSVD, dfp_corr=DFP)
+#dir.create(dir.scratch, showWarnings = F, recursive = F)
+#file.copy(from=mrs.data, to=sprintf("%s/mrs.dat", dir.scratch), overwrite=T)
+#setwd(dir.scratch)
+#mrs <- read_mrs(sprintf("%s/mrs.dat", dir.scratch))
+#print(mrs.data)
+#print(dir.save)
+#print(p.vols)
+spant_fit_svs(input=mrs.data, output_dir=dir.save,
+        p_vols=p.vols, ecc=EDDY, hsvd_width=HSVD, dfp_corr=DFP, use_basis_cache="never")
 

@@ -489,14 +489,16 @@ for (( i=0; i<${NTS}; i++ )); do
   TS_MASK=${DIR_SCRATCH}/tmp/ts_mask-brain.nii.gz
   # TS_MASK_DIL=${DIR_SCRATCH}/tmp/ts_mask-brain+MD.nii.gz
   TS_ROI=${DIR_SCRATCH}/tmp/ts_proc-mean_roi-brain_bold.nii.gz
-  if [[ ${BEX_MODE,,} == "auto" ]]; then
+  if [[ ${BEX_MODE,,} == "synth" ]]; then
+    mri_synthstrip -i ${TS_MEAN} -m ${TS_MASK}
+  elif [[ ${BEX_MODE,,} == "auto" ]]; then
     3dAutomask -prefix ${TS_MASK} -q -clfrac ${BEX_CLFRAC} ${TS_MEAN}
   elif [[ ${BEX_MODE,,} == "bet" ]]; then
     ## or use BET if you want to and it works better for some reason
     bet ${TS_MEAN} ${TS_MASK} -m -v
     niimath ${TS_MASK} -bin ${TS_MASK} -odt char
   else
-    echo "ERROR [TKNI:${FCN_NAME}] Method of BOLD brain extraction must be specified, auto or bet"
+    echo "ERROR [TKNI:${FCN_NAME}] Method of BOLD brain extraction must be specified, synth, auto, or bet"
     exit 2
   fi
   niimath ${TS_MEAN} -mas ${TS_MASK} ${TS_ROI}
@@ -696,6 +698,8 @@ for (( i=0; i<${NTS}; i++ )); do
       fcn_str="${fcn_str} -t ${NORM_XFM[${j}]}"
     done
     eval ${fcn_str}
+    niimath ${DIR_SCRATCH}/tmp/${TFX}_norm_mask-brain.nii.gz \
+      ${DIR_SCRATCH}/tmp/${TFX}_norm_mask-brain.nii.gz -odt char
 
     make3Dpng --bg ${DIR_SCRATCH}/xfm/norm_ref.nii.gz --bg-threshold "2.5,97.5" \
       --fg ${DIR_SCRATCH}/tmp/${TFX}_norm_proc-mean_bold.nii.gz \

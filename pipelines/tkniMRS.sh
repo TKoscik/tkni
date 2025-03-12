@@ -58,10 +58,11 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,\
-mrs:,mrs-loc:,mrs-mask:,native:,native-mask:,tissue:,tissue-val:,\
+mrs:,mrs-loc:,mrs-mask:,mrs-unsupressed:,\
+native:,native-mask:,tissue:,tissue-val:,\
 no-hsvd,no-eddy,no-dfp,\
 dir-save:,dir-scratch:,requires:,\
-help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
+help,verbose,force,no-png,no-rmd,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -78,15 +79,18 @@ IDDIR=
 MRS=
 MRS_LOC=
 MRS_MASK=
+MRS_UNSUPRESS="false"
 NATIVE=
 NATIVE_MASK=
 TISSUE=
 TISSUE_VAL="1;2,3;4"
 
+#MOL="2hg,a_glc,ace,ala,asc,asp,tp_31p,b_glc,bhb,cho,cho_rt,cit,cr_ch2_rt,cr_ch3_rt,cr,gaba_jn,gaba,gaba_rt,glc,gln,glu,glu_rt,gly,glyc,gpc_31p,gpc,gpe_31p,gsh,h2o,ins,ins_rt,lac,lac_rt,lip09,lip13a,lip13b,lip20,m_cr_ch2,mm_3t,mm09,mm12,mm14,mm17,mm20,msm,naa,naa_rt,naa2,naag_ch3,naag,nadh_31p,nadp_31p,pch_31p,pch,pcr_31p,pcr,pe_31p,peth,pi_31p,pyr,ser,sins,suc,tau,thr,val"
+
 COREG_RECIPE="intermodalSyn"
-NO_HSVD=
-NO_EDDY=
-NO_DFP=
+NO_HSVD=false
+NO_EDDY=false
+NO_DFP=false
 
 DIR_SAVE=
 DIR_SCRATCH=
@@ -117,6 +121,8 @@ while true; do
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --mrs) MRS="$2" ; shift 2 ;;
     --mrs-loc) MRS_LOC="$2" ; shift 2 ;;
+    --mrs-mask) MRS_MASK="$2" ; shift 2 ;;
+    --mrs-unsuppressed) MRS_UNSUPRESS="true" ; shift ;;
     --native) NATIVE="$2" ; shift 2 ;;
     --native-mask) NATIVE_MASK="$2" ; shift 2 ;;
     --tissue) TISSUE="$2" ; shift 2 ;;
@@ -188,12 +194,6 @@ if [[ -z ${IDPFX} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] ID Prefix must be provided"
   exit 1
 fi
-if [[ -z ${BDIR} ]]; then BDIR=${DIR_PROJECT}/derivatives/${PIPE}/anat/native; fi
-if [[ -z ${BIMG} ]]; then BIMG=${BDIR}/${IDPFX}_${BMOD}.nii.gz; fi
-if [[ ! -f ${BIMG} ]]; then
-  echo -e "\tERROR [${PIPE}:${FLOW}] Base image not found."
-  exit 1
-fi
 if [[ -z ${IDDIR} ]]; then
   TSUB=$(getField -i ${IDPFX} -f sub)
   TSES=$(getField -i ${IDPFX} -f ses)
@@ -244,8 +244,17 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Identify Inputs --------------------------------------------------------------
+echo ">>>>> ${MRS}"
 if [[ -z ${MRS} ]]; then
-  MRS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35.dat))
+  if [[ ${MRS_UNSUPRESS} == "false" ]]; then
+    if ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35.dat 1> /dev/null 2>&1; then
+      MRS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35.dat))
+    fi
+  else
+    if ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35_unsuppressed.dat 1> /dev/null 2>&1; then
+      MRS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35_unsuppressed.dat))
+    fi
+  fi
 fi
 if [[ ! -f ${MRS} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] MRS data not found."
@@ -268,7 +277,7 @@ if [[ -n ${MRS_MASK} ]]; then
 fi
 
 if [[ -z ${NATIVE} ]]; then
-  NATIVE=${DIR_PROJECT}/derivatives/${PIPE}/${FLOW}/native/${IDPFX}_T1w.nii.gz
+  NATIVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/native/${IDPFX}_T1w.nii.gz
 fi
 if [[ ! -f ${NATIVE} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] NATIVE image not found."
@@ -276,7 +285,7 @@ if [[ ! -f ${NATIVE} ]]; then
 fi
 
 if [[ -z ${NATIVE_MASK} ]]; then
-  NATIVE_MASK=${DIR_PROJECT}/derivatives/${PIPE}/${FLOW}/mask/${IDPFX}_mask-brain.nii.gz
+  NATIVE_MASK=${DIR_PROJECT}/derivatives/${PIPE}/anat/mask/${IDPFX}_mask-brain.nii.gz
 fi
 if [[ ! -f ${NATIVE_MASK} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] NATIVE_MASK image not found."
@@ -284,7 +293,7 @@ if [[ ! -f ${NATIVE_MASK} ]]; then
 fi
 
 if [[ -z ${TISSUE} ]]; then
-  TISSUE=${DIR_PROJECT}/derivatives/${PIPE}/${FLOW}/label/${IDPFX}_label-tissue.nii.gz
+  TISSUE=${DIR_PROJECT}/derivatives/${PIPE}/anat/label/${IDPFX}_label-tissue.nii.gz
 fi
 if [[ ! -f ${TISSUE} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] TISSUE segmentation not found."
@@ -296,16 +305,19 @@ if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}; fi
 mkdir -p ${DIR_SCRATCH}
 
 # Copy data to scratch and gunzip as needed ------------------------------------
-
+#cp ${MRS} ${DIR_SCRATCH}/
+#MRS=($(ls ${DIR_SCRATCH}/*PRESS35.dat))
 
 # Coregister anatomical localizer to NATIVE ------------------------------------
 ## get brain mask for localizer to focus registration, if not provided
 if [[ -z ${MRS_MASK} ]]; then
+  if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>generating brain mask for localizer"; fi
   MRS_MASK=${DIR_SCRATCH}/mrs-localizer_mask-brain.nii.gz
   mri_synthstrip -i ${MRS_LOC} -m ${MRS_MASK}
 fi
 
 ## run coregistation
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>coregistering localizer to native anatomical"; fi
 TMOD=($(getField -i ${MRS_LOC} -f modality))
 coregistrationChef --recipe-name ${COREG_RECIPE} \
   --fixed ${NATIVE} --fixed-mask ${NATIVE_MASK} \
@@ -327,7 +339,12 @@ fi
 if [[ -f ${XFM_INV} ]]; then XFM_REV_STR="${XFM_REV_STR} -t ${XFM_INV}"; fi
 
 # get MRS VOI in native space --------------------------------------------------
-Rscript "getMRSvoi" "nii" ${MRS_LOC} "mrs" ${MRS} \
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>pushing VOI to native space"; fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo Rscript ${TKNIPATH}/R/getMRSvoi.R "nii" ${MRS_LOC} "mrs" ${MRS} \
+  "file" ${IDPFX}_mask-mrsVOI "dir.save" ${DIR_SCRATCH}
+fi
+Rscript ${TKNIPATH}/R/getMRSvoi.R "nii" ${MRS_LOC} "mrs" ${MRS} \
   "file" ${IDPFX}_mask-mrsVOI "dir.save" ${DIR_SCRATCH}
 gzip ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii
 antsApplyTransforms -d 3 -n GenericLabel \
@@ -337,11 +354,13 @@ antsApplyTransforms -d 3 -n GenericLabel \
 make3Dpng --bg ${NATIVE} --bg-thresh "2.5,97.5" \
   --fg ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii.gz \
   --fg-mask ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii.gz \
-  --fg-color "timbow:hue=#00FF00:lum=65,65:cyc=1/6" --fg-cbar "false" \
+  --fg-color "timbow:hue=#00FF00:lum=65,65:cyc=1/6" \
+  --fg-alpha 50 --fg-cbar "false" \
   --filename ${IDPFX}_mask-mrsVOI --dir-save ${DIR_SCRATCH}
 
 # Calculate partial volumes from tissue segmentation within VOI ----------------
 ## split tisse segmentation into CSF, GM, and WM components
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>calculating partial volumes"; fi
 TVALS=(${TISSUE_VAL//;/ })
 CSF=(${TVALS[0]//,/ })
 TCSF=${DIR_SCRATCH}/mask-csf.nii.gz
@@ -349,7 +368,8 @@ niimath ${TISSUE} -mul 0 ${TCSF}
 for (( i=0; i<${#CSF[@]}; i++ )); do
   niimath ${TISSUE} -thr ${CSF[${i}]} -uthr ${CSF[${i}]} -bin -add ${TCSF} ${TCSF} -odt char
 done
-COUNT_CSF=$(3DBrickStat -sum ${TCSF})
+COUNT_CSF=$(3dBrickStat -mask ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii.gz -sum ${TCSF})
+echo -e ">>>>>CSF Count\t${COUNT_CSF}"
 
 GM=(${TVALS[1]//,/ })
 TGM=${DIR_SCRATCH}/mask-gm.nii.gz
@@ -357,7 +377,8 @@ niimath ${TISSUE} -mul 0 ${TGM}
 for (( i=0; i<${#GM[@]}; i++ )); do
   niimath ${TISSUE} -thr ${GM[${i}]} -uthr ${GM[${i}]} -bin -add ${TGM} ${TGM} -odt char
 done
-COUNT_GM=$(3DBrickStat -sum ${TGM})
+COUNT_GM=$(3dBrickStat -mask ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii.gz -sum ${TGM})
+echo -e ">>>>>GM Count\t${COUNT_GM}"
 
 WM=(${TVALS[2]//,/ })
 TWM=${DIR_SCRATCH}/mask-wm.nii.gz
@@ -365,12 +386,20 @@ niimath ${TISSUE} -mul 0 ${TWM}
 for (( i=0; i<${#WM[@]}; i++ )); do
   niimath ${TISSUE} -thr ${WM[${i}]} -uthr ${WM[${i}]} -bin -add ${TWM} ${TWM} -odt char
 done
-COUNT_WM=$(3DBrickStat -sum ${TWM})
+COUNT_WM=$(3dBrickStat -mask ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii.gz -sum ${TWM})
+echo -e ">>>>>WM Count\t${COUNT_WM}"
 
 TOTAL_V=$(echo "scale=0; ${COUNT_CSF} + ${COUNT_GM} + ${COUNT_WM}" | bc -l)
-CSF_PCT=$(echo "scale=4; ${COUNT_CSF} / ${TOTAL_V} * 100" | bc -l)
-GM_PCT=$(echo "scale=4; ${COUNT_GM} / ${TOTAL_V} * 100" | bc -l)
-WM_PCT=$(echo "scale=4; ${COUNT_WM} / ${TOTAL_V} * 100" | bc -l)
+CSF_PCT=$(echo "scale=4; (${COUNT_CSF} / ${TOTAL_V}) * 100" | bc -l)
+GM_PCT=$(echo "scale=4; (${COUNT_GM} / ${TOTAL_V}) * 100" | bc -l)
+WM_PCT=$(echo "scale=4; (${COUNT_WM} / ${TOTAL_V}) * 100" | bc -l)
+
+if [[ ${VERBOSE} == "true" ]]; then
+  echo ">>>>> VOI Partial Volumes"
+  echo -e "\tCSF:\t${CSF_PCT}%"
+  echo -e "\tGM:\t${GM_PCT}%"
+  echo -e "\tWM:\t${WM_PCT}%"
+fi
 
 #  Use SPANT to fit MRS spectrum -----------------------------------------------
 #  (a) load MRS data from Siemens TWIX/dat file
@@ -381,16 +410,405 @@ WM_PCT=$(echo "scale=4; ${COUNT_WM} / ${TOTAL_V} * 100" | bc -l)
 #      - use HSVD water removal, eddy correction, and dynamic
 #        frequency and phase correction.
 
-Rscript fitMRS_spant.R "mrs" ${MRS} \
+if [[ ${VERBOSE} == "true" ]]; then
+  echo ">>>>> running spant for MRS fitting"
+  echo Rscript ${TKNIPATH}/R/fitMRS_spant.R "mrs" ${MRS} \
+    "no-hsvd" ${NO_HSVD} "no-eddy" ${NO_EDDY} "no-dfp" ${NO_DFP} \
+    "csf" ${CSF_PCT} "gm" ${GM_PCT} "wm" ${WM_PCT} \
+    "dir.save" ${DIR_SCRATCH}
+fi
+
+Rscript ${TKNIPATH}/R/fitMRS_spant.R "mrs" ${MRS} \
   "no-hsvd" ${NO_HSVD} "no-eddy" ${NO_EDDY} "no-dfp" ${NO_DFP} \
   "csf" ${CSF_PCT} "gm" ${GM_PCT} "wm" ${WM_PCT} \
-  "dir.save" ${DIR_SCRATCH}
+  "dir.save" ${DIR_SCRATCH}/spant
+
+# generate HTML QC report ------------------------------------------------------
+if [[ "${NO_RMD}" == "false" ]]; then
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
+  RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
+
+  echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
+  echo '```{r setup, include=FALSE}' >> ${RMD}
+  echo 'knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, comment=NA)' >> ${RMD}
+  echo -e '```\n' >> ${RMD}
+  echo '```{r, out.width = "400px", fig.align="right"}' >> ${RMD}
+  echo 'knitr::include_graphics("'${TKNIPATH}'/TK_BRAINLab_logo.png")' >> ${RMD}
+  echo -e '```\n' >> ${RMD}
+  echo '```{r, echo=FALSE}' >> ${RMD}
+  echo 'library(spant)' >> ${RMD}
+  echo 'library(DT)' >> ${RMD}
+  echo 'library(downloadthis)' >> ${RMD}
+  echo "create_dt <- function(x){" >> ${RMD}
+  echo "  DT::datatable(x, extensions='Buttons'," >> ${RMD}
+  echo "    options=list(dom='Blfrtip'," >> ${RMD}
+  echo "    buttons=c('copy', 'csv', 'excel', 'pdf', 'print')," >> ${RMD}
+  echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
+  echo -e '```\n' >> ${RMD}
+
+  echo '## Magnetic Resonance Spectroscopy Processing' >> ${RMD}
+  echo -e '\n---\n' >> ${RMD}
+
+  # output Project related information -----------------------------------------
+  echo 'PI: **'${PI}'**\' >> ${RMD}
+  echo 'PROJECT: **'${PROJECT}'**\' >> ${RMD}
+  echo 'IDENTIFIER: **'${IDPFX}'**\' >> ${RMD}
+  echo 'DATE: **`r Sys.time()`**\' >> ${RMD}
+  echo '' >> ${RMD}
+
+  ## VOI -----------------------------------------------------------------------
+  echo '### MRS Volume' >> ${RMD}
+  TNII="${IDPFX}_mask-mrsVOI.nii.gz"
+  TPNG="${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.png"
+  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+  echo '' >> ${RMD}
+
+  # add data download buttons --------------------------------------------------
+  TCSV="${DIR_SCRATCH}/spant/fit_res_tCr_ratio.csv"
+  FNAME="${IDPFX}_ratio-tCr_MRSfit"
+  echo '```{r}' >> ${RMD}
+  echo 'data <- read.csv("'${TCSV}'")' >> ${RMD}
+  echo 'download_this(.data=data,' >> ${RMD}
+  echo '  output_name = "'${FNAME}'",' >> ${RMD}
+  echo '  output_extension = ".csv",' >> ${RMD}
+  echo '  button_label = "Download '${FNAME}' CSV",' >> ${RMD}
+  echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  TCSV="${DIR_SCRATCH}/spant/fit_res_unscaled.csv"
+  FNAME="${IDPFX}_MRSfit"
+  echo '```{r}' >> ${RMD}
+  echo 'data <- read.csv("'${TCSV}'")' >> ${RMD}
+  echo 'download_this(.data=data,' >> ${RMD}
+  echo '  output_name = "'${FNAME}'",' >> ${RMD}
+  echo '  output_extension = ".csv",' >> ${RMD}
+  echo '  button_label = "Download '${FNAME}' CSV",' >> ${RMD}
+  echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  TCSV="${DIR_SCRATCH}/spant/svs_results.rds"
+  FNAME="${IDPFX}_MRSfit"
+  echo '```{r}' >> ${RMD}
+  echo 'data <- readRDS("'${TCSV}'")' >> ${RMD}
+  echo 'download_this(.data=data,' >> ${RMD}
+  echo '  output_name = "'${FNAME}'",' >> ${RMD}
+  echo '  output_extension = ".rds",' >> ${RMD}
+  echo '  button_label = "Download '${FNAME}' RDS",' >> ${RMD}
+  echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo -e '\n---\n' >> ${RMD}
+
+  # load spant results ---------------------------------------------------------
+  echo '### SPANT SVS Analysis Results' >> ${RMD}
+
+  echo '```{r}' >> ${RMD}
+  echo 'params <- readRDS("'${DIR_SCRATCH}/spant/svs_results.rds'")' >> ${RMD}
+  echo 'argg <- readRDS("'${DIR_SCRATCH}/spant/svs_argg.rds'")' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+
+  echo '# {.tabset}' >> ${RMD}
+  echo '## Fit plots {.tabset}' >> ${RMD}
+  echo '### Standard' >> ${RMD}
+  echo '```{r fitplot, fig.width=7, fig.height=6}' >> ${RMD}
+  echo 'plot(params$fit_res, xlim = params$plot_ppm_xlim)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '### Stackplot' >> ${RMD}
+  echo '```{r stackplot, fig.width=7, fig.height=8}' >> ${RMD}
+  echo 'stackplot(params$fit_res, y_offset = 3, combine_lipmm = TRUE, labels = TRUE,' >> ${RMD}
+  echo '          xlim = params$plot_ppm_xlim)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '```{r basisplot, results = "asis", fig.width=7, fig.height=6}' >> ${RMD}
+  echo '# basis_names <- params$fit_res$basis$names' >> ${RMD}
+  echo 'basis_names <- colnames(params$fit_res$fits[[1]][-1:-4])' >> ${RMD}
+  echo 'for (n in 1:length(basis_names)) {' >> ${RMD}
+  echo '  cat("\n### ", basis_names[n], "\n", sep = "")' >> ${RMD}
+  echo '  plot(params$fit_res, plot_sigs = basis_names[n], main = basis_names[n],' >> ${RMD}
+  echo '       xlim = params$plot_ppm_xlim)' >> ${RMD}
+  echo '  cat("\n")' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '```{r, results = "asis"}' >> ${RMD}
+  echo 'if (!is.null(params$summary_tab)) {' >> ${RMD}
+  echo '  cat("## Summary table\n")' >> ${RMD}
+  echo '  col.names <- c("Name", "Value")' >> ${RMD}
+  echo '  kable_table <- kableExtra::kbl(params$summary_tab, col.names = col.names,' >> ${RMD}
+  echo '                                 align = c("l", "r"))' >> ${RMD}
+  echo '  boot_opts <- c("striped", "hover", "condensed")' >> ${RMD}
+  echo '  kableExtra::kable_styling(kable_table, full_width = FALSE, position = "left",' >> ${RMD}
+  echo '                            bootstrap_options = boot_opts)' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '## Results table' >> ${RMD}
+  echo '```{r}' >> ${RMD}
+  echo 'ratio_str   <- params$output_ratio[1]' >> ${RMD}
+  echo 'if (params$w_ref_available) {' >> ${RMD}
+  echo '  col_names <- c("amps", "CI95")' >> ${RMD}
+  echo '  res_tab   <- sv_res_table(params$res_tab_molal, format_out = TRUE)' >> ${RMD}
+  echo '  out_tab   <- res_tab[col_names]' >> ${RMD}
+  echo '  col.names <- c("Name", "Amp. (mmol/kg)", "95% CI (mmol/kg)")' >> ${RMD}
+  echo '  ' >> ${RMD}
+  echo '  if (!is.null(params$res_tab_legacy)) {' >> ${RMD}
+  echo '    res_tab   <- sv_res_table(params$res_tab_legacy, format_out = TRUE)' >> ${RMD}
+  echo '    out_tab   <- cbind(out_tab, res_tab[col_names])' >> ${RMD}
+  echo '    col.names <- c(col.names, "Amp. (mmol/kg)", "95% CI (mmol/kg)")' >> ${RMD}
+  echo '  }' >> ${RMD}
+  echo '  ' >> ${RMD}
+  echo '  if (!is.null(ratio_str)) {' >> ${RMD}
+  echo '    res_tab   <- sv_res_table(params$res_tab_ratio, format_out = TRUE)' >> ${RMD}
+  echo '    out_tab   <- cbind(out_tab, res_tab[col_names])' >> ${RMD}
+  echo '    col.names <- c(col.names, paste0("Amp. (/", ratio_str, ")"),' >> ${RMD}
+  echo '                              paste0("95% CI (/", ratio_str, ")"))' >> ${RMD}
+  echo '  }' >> ${RMD}
+  echo '  out_tab   <- cbind(out_tab, res_tab["sds_perc"])' >> ${RMD}
+  echo '  col.names <- c(col.names, "SD %")' >> ${RMD}
+  echo '} else {' >> ${RMD}
+  echo '  col_names <- c("amps", "CI95", "sds_perc")' >> ${RMD}
+  echo '  if (is.null(ratio_str)) {' >> ${RMD}
+  echo '    res_tab   <- sv_res_table(params$res_tab_unscaled, format_out = TRUE)' >> ${RMD}
+  echo '    out_tab   <- res_tab[col_names]' >> ${RMD}
+  echo '    col.names <- c("Name", "Amp. (a.u.)", "95% CI (a.u.)", "SD %")' >> ${RMD}
+  echo '  } else {' >> ${RMD}
+  echo '    res_tab   <- sv_res_table(params$res_tab_ratio, format_out = TRUE)' >> ${RMD}
+  echo '    out_tab   <- res_tab[col_names]' >> ${RMD}
+  echo '    col.names <- c("Name", paste0("Amp. (/", ratio_str, ")"),' >> ${RMD}
+  echo '                   paste0("95% CI (/", ratio_str, ")"), "SD %")' >> ${RMD}
+  echo '  }' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'boot_opts <- c("striped", "hover", "condensed")' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'kable_table <- kableExtra::kbl(out_tab, col.names = col.names,' >> ${RMD}
+  echo '                               align = rep("r", 10))' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (params$w_ref_available & !is.null(params$res_tab_legacy)) {' >> ${RMD}
+  echo '  extra_cols  <- ifelse(is.null(ratio_str), 1, 3)' >> ${RMD}
+  echo '  header_str  <- c(" " = 1, "standard concentration scaling" = 2,' >> ${RMD}
+  echo '                   "legacy concentration scaling" = 2, " " = extra_cols)' >> ${RMD}
+  echo '  ' >> ${RMD}
+  echo '  kable_table <- kableExtra::add_header_above(kable_table, header_str)' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'kableExtra::kable_styling(kable_table, full_width = FALSE, position = "left",' >> ${RMD}
+  echo '                          bootstrap_options = boot_opts)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '```{r, results = "'asis'"}' >> ${RMD}
+  echo 'if (params$w_ref_available) {' >> ${RMD}
+  echo 'cat("See the [spant User Guide](https://spantdoc.wilsonlab.co.uk/water_scaling) for details on water scaling.\n")' >> ${RMD}
+  echo '#  cat("^1^ Concentrations listed in molal units: moles of solute / mass of solvent. See the following papers for details :\n\nGasparovic C, Chen H, Mullins PG. Errors in 1H-MRS estimates of brain metabolite concentrations caused by failing to take into account tissue-specific signal relaxation. NMR Biomed. 2018 Jun;31(6):e3914. https://doi.org/10.1002/nbm.3914\n\nGasparovic C, Song T, Devier D, Bockholt HJ, Caprihan A, Mullins PG, Posse S, Jung RE, Morrison LA. Use of tissue water as a concentration reference for proton spectroscopic imaging. Magn Reson Med. 2006 Jun;55(6):1219-26. https://doi.org/10.1002/mrm.20901\n\n")  ' >> ${RMD}
+  echo '#  cat("^2^ Concentrations listed in pseduo-molar units: moles of solute / (mass of solvent + mass of tissue). These values are included for legacy puposes, for example to directly compare results from the default scaling method used by LCModel and TARQUIN. See sections 1.3 and 10.2 of the [LCModel manual](http://s-provencher.com/pub/LCModel/manual/manual.pdf) for details.")' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '```{r, results = "asis", fig.width=7, fig.height=7}' >> ${RMD}
+  echo 'if (!is.null(params$dyn_data_uncorr)) {' >> ${RMD}
+  echo '  cat("## Dynamic plots {.tabset}\n")' >> ${RMD}
+  echo '  if (!is.null(params$dyn_data_corr)) {' >> ${RMD}
+  echo '    cat("### Spectrogram with dynamic correction\n")' >> ${RMD}
+  echo '    if (is.null(params$plot_ppm_xlim)) {' >> ${RMD}
+  echo '      image(params$dyn_data_corr, xlim = c(4, 0.5))' >> ${RMD}
+  echo '    } else {' >> ${RMD}
+  echo '      image(params$dyn_data_corr, xlim = params$plot_ppm_xlim)' >> ${RMD}
+  echo '    }' >> ${RMD}
+  echo '  }' >> ${RMD}
+  echo '  cat("\n\n### Spectrogram without dynamic correction\n")' >> ${RMD}
+  echo '  if (is.null(params$plot_ppm_xlim)) {' >> ${RMD}
+  echo '    image(params$dyn_data_uncorr, xlim = c(4, 0.5))' >> ${RMD}
+  echo '  } else {' >> ${RMD}
+  echo '    image(params$dyn_data_uncorr, xlim = params$plot_ppm_xlim)' >> ${RMD}
+  echo '  }' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '## Spectral plots {.tabset}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '### Processed cropped' >> ${RMD}
+  echo '```{r, fig.width=7, fig.height=6}' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$phase)) {' >> ${RMD}
+  echo '  phase_offset <- params$fit_res$res_tab$phase' >> ${RMD}
+  echo '} else {' >> ${RMD}
+  echo '  phase_offset <- 0' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$phi1)) {' >> ${RMD}
+  echo '  phi1_offset <- params$fit_res$res_tab$phi1' >> ${RMD}
+  echo '} else {' >> ${RMD}
+  echo '  phi1_offset <- 0' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$shift)) {' >> ${RMD}
+  echo '  shift_offset <- params$fit_res$res_tab$shift' >> ${RMD}
+  echo '} else {' >> ${RMD}
+  echo '  shift_offset <- 0' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'proc_spec <- params$fit_res$data' >> ${RMD}
+  echo 'proc_spec <- phase(proc_spec, phase_offset, phi1_offset)' >> ${RMD}
+  echo 'proc_spec <- shift(proc_spec, shift_offset, units = "ppm")' >> ${RMD}
+  echo 'proc_spec <- zf(proc_spec)' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (is.null(params$plot_ppm_xlim)) {' >> ${RMD}
+  echo '  plot(proc_spec, xlim = c(4, 0.2))' >> ${RMD}
+  echo '} else {' >> ${RMD}
+  echo '  plot(proc_spec, xlim = params$plot_ppm_xlim)' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '### Processed full' >> ${RMD}
+  echo '```{r, fig.width=7, fig.height=6}' >> ${RMD}
+  echo 'plot(proc_spec)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '```{r, results = "asis", fig.width=7, fig.height=6}' >> ${RMD}
+  echo 'if (params$w_ref_available) {' >> ${RMD}
+  echo '  cat("### Water reference resonance\n")' >> ${RMD}
+  echo '  # w_ref_proc <- shift(w_ref, shift_offset, units = "ppm")' >> ${RMD}
+  echo '  w_ref_proc <- auto_phase(w_ref, xlim = c(5.3, 4))' >> ${RMD}
+  echo '  w_ref_proc <- zf(w_ref_proc)' >> ${RMD}
+  echo '  plot(w_ref_proc, xlim = c(5.3, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '## Diagnostics table' >> ${RMD}
+  echo '```{r}' >> ${RMD}
+  echo 'name  <- NULL' >> ${RMD}
+  echo 'value <- NULL' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$SNR)) {' >> ${RMD}
+  echo '  name  <- c(name, "Spectral signal to noise ratio")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$SNR, 2))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$SRR)) {' >> ${RMD}
+  echo '  name  <- c(name, "Spectral signal to residual ratio")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$SRR, 2))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$FWHM)) {' >> ${RMD}
+  echo '  name  <- c(name, "Spectral linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$FWHM, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$tNAA_lw)) {' >> ${RMD}
+  echo '  name  <- c(name, "tNAA linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$tNAA_lw, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$NAA_lw)) {' >> ${RMD}
+  echo '  name  <- c(name, "NAA linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$NAA_lw, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$tCho_lw)) {' >> ${RMD}
+  echo '  name  <- c(name, "tCho linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$tCho_lw, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$Cho_lw)) {' >> ${RMD}
+  echo '  name  <- c(name, "Cho linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$Cho_lw, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$tCr_lw)) {' >> ${RMD}
+  echo '  name  <- c(name, "tCr linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$tCr_lw, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$Cr_lw)) {' >> ${RMD}
+  echo '  name  <- c(name, "Cr linewidth (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$Cr_lw, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$phase)) {' >> ${RMD}
+  echo '  name  <- c(name, "Zero-order phase (degrees)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$phase, 1))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$phi1)) {' >> ${RMD}
+  echo '  name  <- c(name, "First-order phase (ms)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$phi1, 3))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (!is.null(params$fit_res$res_tab$shift)) {' >> ${RMD}
+  echo '  name  <- c(name, "Frequency offset (ppm)")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$shift, 4))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (params$w_ref_available) {' >> ${RMD}
+  echo '  name  <- c(name,  "Water amplitude", "Water suppression efficiency (%)")' >> ${RMD}
+  echo '  value <- c(value, format(params$res_tab_molal$w_amp),' >> ${RMD}
+  echo '             spant:::round_dp(params$res_tab_molal$ws_eff, 3))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'if (params$fit_res$method == "ABFIT") {' >> ${RMD}
+  echo '  name  <- c(name, "Fit quality number (FQN)",' >> ${RMD}
+  echo '             "Baseline effective d.f. per ppm",' >> ${RMD}
+  echo '             "Lineshape asymmetry")' >> ${RMD}
+  echo '  value <- c(value, spant:::round_dp(params$fit_res$res_tab$FQN, 2),' >> ${RMD}
+  echo '             spant:::round_dp(params$fit_res$res_tab$bl_ed_pppm, 2),' >> ${RMD}
+  echo '             spant:::round_dp(params$fit_res$res_tab$asym, 2))' >> ${RMD}
+  echo '}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'diag_tab <- data.frame(name, value)' >> ${RMD}
+  echo 'kableExtra::kable_styling(kableExtra::kbl(diag_tab, align = c("l", "r"),' >> ${RMD}
+  echo '                                          col.names = c("Name", "Value")),' >> ${RMD}
+  echo '                          full_width = FALSE, position = "left",' >> ${RMD}
+  echo '                          bootstrap_options = boot_opts)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '## Provenance' >> ${RMD}
+  echo '```{r, echo = TRUE}' >> ${RMD}
+  echo 'packageVersion("spant")' >> ${RMD}
+  echo 'Sys.time()' >> ${RMD}
+  echo 'print(params$fit_res$data, full = TRUE)' >> ${RMD}
+  echo 'print(params$w_ref, full = TRUE)' >> ${RMD}
+  echo 'print(argg)' >> ${RMD}
+  echo '```' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '# {-}' >> ${RMD}
+  echo '' >> ${RMD}
+  echo '**Please cite the following if you found ABfit and spant useful in your research:**' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'Wilson M. Adaptive baseline fitting for 1H MR spectroscopy analysis. Magn Reson Med. 2021 Jan;85(1):13-29. https://doi.org/10.1002/mrm.28385  ' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'Wilson, M. spant: An R package for magnetic resonance spectroscopy analysis. Journal of Open Source Software. 2021 6(67), 3646. https://doi.org/10.21105/joss.03646  ' >> ${RMD}
+  echo '' >> ${RMD}
+  echo 'Wilson M. Robust retrospective frequency and phase correction for single-voxel MR spectroscopy. Magn Reson Med. 2019 May;81(5):2878-2886. https://doi.org/10.1002/mrm.27605' >> ${RMD}
+
+  ## knit RMD
+  Rscript -e "Sys.setenv(RSTUDIO_PANDOC=\"/usr/bin/pandoc\"); rmarkdown::render('${RMD}')"
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
+  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
+    echo -e "\t${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
+  fi
+fi
 
 #  Save results ----------------------------------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>saving fit"; fi
 mkdir -p ${DIR_SAVE}/mrs
-cp ${DIR_SCRATCH}/fit_res_tCr_ratio.csv ${DIR_SAVE}/mrs/${IDPFX}_ratio-tCr_MRSfit.csv
-cp ${DIR_SCRATCH}/fit_res_unscaled.csv ${DIR_SAVE}/mrs/${IDPFX}_MRSfit.csv
-cp ${DIR_SCRATCH}/report.html ${DIR_SAVE}/mrs/${IDPFX}_MRSfit.html
+cp ${DIR_SCRATCH}/spant/fit_res_tCr_ratio.csv ${DIR_SAVE}/mrs/${IDPFX}_ratio-tCr_MRSfit.csv
+cp ${DIR_SCRATCH}/spant/fit_res_unscaled.csv ${DIR_SAVE}/mrs/${IDPFX}_MRSfit.csv
+cp ${DIR_SCRATCH}/spant/svs_results.rds ${DIR_SAVE}/mrs/${IDPFX}_MRSfit.rds
 
-mkdir -p ${DIR_SAVE}/anat/mask
-cp ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.nii.gz ${DIR_SAVE}/anat/mask/
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>saving VOI"; fi
+mkdir -p ${DIR_SAVE}/mrs/mask
+cp ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.* ${DIR_SAVE}/mrs/mask/
+
+# set status file --------------------------------------------------------------
+mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
+touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> QC check file status set"
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0

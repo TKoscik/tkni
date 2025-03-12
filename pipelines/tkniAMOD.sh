@@ -226,12 +226,6 @@ if [[ -z ${IDPFX} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] ID Prefix must be provided"
   exit 1
 fi
-if [[ -z ${BDIR} ]]; then BDIR=${DIR_PROJECT}/derivatives/${PIPE}/anat/native; fi
-if [[ -z ${BIMG} ]]; then BIMG=${BDIR}/${IDPFX}_${BMOD}.nii.gz; fi
-if [[ ! -f ${BIMG} ]]; then
-  echo -e "\tERROR [${PIPE}:${FLOW}] Base image not found."
-  exit 1
-fi
 if [[ -z ${IDDIR} ]]; then
   TSUB=$(getField -i ${IDPFX} -f sub)
   TSES=$(getField -i ${IDPFX} -f ses)
