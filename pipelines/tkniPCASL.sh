@@ -380,7 +380,7 @@ if [[ ${NO_NORM,,} == "false" ]]; then
   fi
 fi
 
-#***** gather missing OPTS from JSON -------------------------------------------
+# gather missing OPTS from JSON -------------------------------------------
 if [[ -z ${OPT_DURATION} ]]; then
   TR=($(jq ".RepetitionTime" < ${ASL_JSON} | tr -d '[],\n'))
   TD=($(jq ".PostLabelDelay" < ${ASL_JSON} | tr -d '[],\n'))
@@ -735,6 +735,9 @@ if [[ ${NO_PWI} == "false" ]]; then
   mv ${DIR_SCRATCH}/${IDPFX}_${PWI_LABEL}.* ${DIR_SAVE}/
 fi
 
+mkdir -p ${DIR_SAVE}/moco/${IDDIR}
+mv ${DIR_SCRATCH}/*.1D ${DIR_SAVE}/moco/${IDDIR}/
+
 #save normalized output
 if [[ ${NO_NORM,,} == "false" ]]; then
   for (( j=0; j<${#NORM_REF[@]}; j++ )); do
@@ -821,73 +824,50 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo -e '![Reorient]('${DIR_SCRATCH}'/'${IDPFX}'_prep-reorient_asl.png)\n' >> ${RMD}
   fi
 
+  echo '#### Motion Correction'
+  echo -e '![MOCO]('${DIR_SCRATCH}'/'${IDPFX}'_prep-moco_asl.png)\n' >> ${RMD}
+  echo -e '![Regressors]('${DIR_SCRATCH}'/'${IDPFX}'_regressors.png)\n' >> ${RMD}
+
+  if [[ ${NO_DENOISE} == "false" ]]; then
+    echo '#### Denoise {.tabset}' >> ${RMD}
+    echo '##### Control' >> ${RMD}
+    echo -e '![Denoise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+denoise_asl.png)\n' >> ${RMD}
+    echo -e '![Noise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+noise_asl.png)\n' >> ${RMD}
+    echo '##### Labeled' >> ${RMD}
+    echo -e '![Denoise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+denoise_asl.png)\n' >> ${RMD}
+    echo -e '![Noise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+noise_asl.png)\n' >> ${RMD}
+  fi
+
+  if [[ ${NO_Debias} == "false" ]]; then
+    echo '#### Debias {.tabset}' >> ${RMD}
+    echo '##### Control' >> ${RMD}
+    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+debias_asl.png)\n' >> ${RMD}
+    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+biasField_asl.png)\n' >> ${RMD}
+    echo '##### Labeled' >> ${RMD}
+    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+debias_asl.png)\n' >> ${RMD}
+    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+biasField_asl.png)\n' >> ${RMD}
+  fi
+
+  echo '#### Coregistration' >> ${RMD}
+    echo -e '![Coregistration]('${DIR_SCRATCH}'/'${IDPFX}'_reg-${COREG_RECIPE}+native.png)\n' >> ${RMD}
+    echo -e '![Control]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+coreg_asl.png)\n' >> ${RMD}
+    echo -e '![Labeled]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+coreg_asl.png)\n' >> ${RMD}
+  fi
+
+  ## knit RMD
+  Rscript -e "rmarkdown::render('${RMD}')"
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
+  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+  mv ${DIR_SCRATCH}/*.html ${DIR_PROJECT}/qc/${PIPE}${FLOW}/
 fi
 
-├── C1_biasField.nii.gz
-├── C1.nii.gz
-├── C1_noise.nii.gz
-├── C2_biasField.nii.gz
-├── C2.nii.gz
-├── C2_noise.nii.gz
-├── C3_biasField.nii.gz
-├── C3.nii.gz
-├── C3_noise.nii.gz
-├── C4_biasField.nii.gz
-├── C4.nii.gz
-├── C4_noise.nii.gz
-├── CBF1.nii.gz
-├── CBF2.nii.gz
-├── CBF3.nii.gz
-├── CBF4.nii.gz
-├── L1_biasField.nii.gz
-├── L1.nii.gz
-├── L1_noise.nii.gz
-├── L2_biasField.nii.gz
-├── L2.nii.gz
-├── L2_noise.nii.gz
-├── L3_biasField.nii.gz
-├── L3.nii.gz
-├── L3_noise.nii.gz
-├── L4_biasField.nii.gz
-├── L4.nii.gz
-├── L4_noise.nii.gz
-├── M0.nii.gz
-├── M1.nii.gz
-├── M2.nii.gz
-├── M3.nii.gz
-├── M4.nii.gz
-├── mask-brain.nii.gz
-├── moco
-├── Rplot001.png
-├── sub-878_ses-20241022T1649_asl.nii.gz
-├── sub-878_ses-20241022T1649_CBF.nii.gz
-├── sub-878_ses-20241022T1649_CBF.png
-├── sub-878_ses-20241022T1649_CBF.tsv
-├── sub-878_ses-20241022T1649_displacement+absolute+mm.1D
-├── sub-878_ses-20241022T1649_displacement+framewise.1D
-├── sub-878_ses-20241022T1649_displacement+relative+mm.1D
-├── sub-878_ses-20241022T1649_displacement+RMS.1D
-├── sub-878_ses-20241022T1649_moco+6.1D
-├── sub-878_ses-20241022T1649_prep-control+biasField_asl.png
-├── sub-878_ses-20241022T1649_prep-control+coreg_asl.png
-├── sub-878_ses-20241022T1649_prep-control+debias_asl.png
-├── sub-878_ses-20241022T1649_prep-control+denoise_asl.png
-├── sub-878_ses-20241022T1649_prep-control+noise_asl.png
-├── sub-878_ses-20241022T1649_prep-label+biasField_asl.png
-├── sub-878_ses-20241022T1649_prep-label+coreg_asl.png
-├── sub-878_ses-20241022T1649_prep-label+debias_asl.png
-├── sub-878_ses-20241022T1649_prep-label+denoise_asl.png
-├── sub-878_ses-20241022T1649_prep-label+noise_asl.png
-├── sub-878_ses-20241022T1649_prep-moco_asl.png
-├── sub-878_ses-20241022T1649_prep-raw_asl.png
-├── sub-878_ses-20241022T1649_prep-reorient_asl.png
-├── sub-878_ses-20241022T1649_proc-mean_asl.nii.gz
-├── sub-878_ses-20241022T1649_proc-scanner_relCBF.nii.gz
-├── sub-878_ses-20241022T1649_proc-scanner_relCBF.png
-├── sub-878_ses-20241022T1649_proc-scanner_relCBF.tsv
-├── sub-878_ses-20241022T1649_reg-intermodalAffine+native.png
-├── sub-878_ses-20241022T1649_regressors.png
-├── sub-878_ses-20241022T1649_relCBF.tsv
-├── sub-878_ses-20241022T1649_spike.1D
-└── xfm
-    └── sub-878_ses-20241022T1649_mod-M0_from-asl_to-native_xfm-affine.mat
+# set status file --------------------------------------------------------------
+mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
+touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
+
+
