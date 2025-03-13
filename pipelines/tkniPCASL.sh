@@ -387,7 +387,7 @@ if [[ -z ${OPT_DURATION} ]]; then
   OPT_DURATION=$(echo "scale=4; ${TR} - ${TD}" | bc -l)
 fi
 
-if [[ -s ${OPT_DELAY} ]]; then
+if [[ -z ${OPT_DELAY} ]]; then
   OPT_DELAY=($(jq ".PostLabelDelay" < ${ASL_JSON} | tr -d '[],\n'))
 fi
 
@@ -469,7 +469,7 @@ regressorPlot --regressor ${PLOTLS}
 
 # Split 4D file into 3D, organize into pairs -----------------------------------
 for (( i=0; i<${NVOL}; i++ )); do
-  3dcalc -a ${ASL_TMP}[${i}] -expr 'a' -prefix vol${i}.nii.gz
+  3dcalc -a ${ASL_TMP}[${i}] -expr 'a' -prefix ${DIR_SCRATCH}/vol${i}.nii.gz
 done
 
 if [[ ${ASL_M0} != "false" ]]; then
@@ -753,8 +753,8 @@ mv ${DIR_SCRATCH}/xfm/* ${DIR_XFM}/
 
 # initialize RMD output --------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  #mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
-  RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
+  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
+  RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
   echo '```{r setup, include=FALSE}' >> ${RMD}
@@ -784,24 +784,10 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # show outcome
   echo '### Cerebral Blood Flow (ml/100g/min)' >> ${RMD}
   echo -e '!['${IDPFX}_CBF.nii.gz']('${DIR_SAVE}/${IDPFX}_CBF.png')\n' >> ${RMD}
-  TCSV="${DIR_SAVE}/${IDPFX}_CBF.tsv"
-  FNAME="${IDPFX}_CBF"
-  echo '```{r}' >> ${RMD}
-  echo 'data <- read.csv("'${TCSV}'", sep="\t")' >> ${RMD}
-  echo 'download_this(.data=data,' >> ${RMD}
-  echo '  output_name = "'${FNAME}'",' >> ${RMD}
-  echo '  output_extension = ".csv",' >> ${RMD}
-  echo '  button_label = "Download '${FNAME}' CSV",' >> ${RMD}
-  echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
-  echo '```' >> ${RMD}
-  echo '' >> ${RMD}
-
-  # show PWI
-  if [[ ${NO_PWI} == "false" ]]; then
-    echo '### Relative Cerebral Blood Flow (processed on scanner)' >> ${RMD}
-    echo -e '!['${IDPFX}_${PWI_LABEL}.nii.gz']('${DIR_SAVE}/${IDPFX}_${PWI_LABEL}.png')\n' >> ${RMD}
-    TCSV="${DIR_SAVE}/${IDPFX}_${PWI_LABEL}.tsv"
-    FNAME="${IDPFX}_${PWI_LABEL}"
+  for (( i=0; i<${#LABEL[@]}; i++ )); do
+    LNAME=$(getField -i ${LABEL[${i}]} -f label)
+    TCSV="${DIR_SAVE}/${IDPFX}_label-${LNAME}_CBF.tsv"
+    FNAME="${IDPFX}_label-${LNAME}_CBF"
     echo '```{r}' >> ${RMD}
     echo 'data <- read.csv("'${TCSV}'", sep="\t")' >> ${RMD}
     echo 'download_this(.data=data,' >> ${RMD}
@@ -811,6 +797,26 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
     echo '```' >> ${RMD}
     echo '' >> ${RMD}
+  done
+
+  # show PWI
+  if [[ ${NO_PWI} == "false" ]]; then
+    echo '### Relative Cerebral Blood Flow (processed on scanner)' >> ${RMD}
+    echo -e '!['${IDPFX}_${PWI_LABEL}.nii.gz']('${DIR_SAVE}/${IDPFX}_${PWI_LABEL}.png')\n' >> ${RMD}
+    for (( i=0; i<${#LABEL[@]}; i++ )); do
+      LNAME=$(getField -i ${LABEL[${i}]} -f label)
+      TCSV="${DIR_SAVE}/${IDPFX}_label-${LNAME}_${PWI_LABEL}.tsv"
+      FNAME="${IDPFX}_label-${LNAME}_${PWI_LABEL}"
+      echo '```{r}' >> ${RMD}
+      echo 'data <- read.csv("'${TCSV}'", sep="\t")' >> ${RMD}
+      echo 'download_this(.data=data,' >> ${RMD}
+      echo '  output_name = "'${FNAME}'",' >> ${RMD}
+      echo '  output_extension = ".csv",' >> ${RMD}
+      echo '  button_label = "Download '${FNAME}' CSV",' >> ${RMD}
+      echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
+      echo '```' >> ${RMD}
+      echo '' >> ${RMD}
+    done
   fi
 
   #Processing Steps tabs

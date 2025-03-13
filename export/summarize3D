@@ -207,7 +207,7 @@ if [[ "${APPEND}" == "false" ]] || [[ "${APPEND}" == "both" ]]; then
     fi
   fi
   mkdir -p ${DIR_SAVE}
-  TFILE=${DIR_SAVE}/${PREFIX}_${SUFFIX}.tsv
+  TFILE=${DIR_SAVE}/${PREFIX}_label-${LABEL_NAME}_${SUFFIX}.tsv
   if [[ ! -f ${TFILE} ]]; then echo -e "${HDR_STR[@]}" >> ${TFILE}; fi
   cat ${OUTPUT} >> ${TFILE}
 fi
