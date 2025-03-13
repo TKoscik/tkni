@@ -37,7 +37,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvla --long prefix:,\
+OPTS=$(getopt -o hvla --long prefix:,suffix:,\
 label:,value:,stats:,lut:,append:,append-to:,\
 dir-save:,dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
@@ -49,6 +49,7 @@ eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
 PREFIX=
+SUFFIX=
 LABEL=
 VALUE=
 STATS="volume"
@@ -73,6 +74,7 @@ while true; do
     --append) APPEND="$2" ; shift 2 ;;
     --append-to) APPEND_TO="$2" ; shift 2 ;;
     --prefix) PREFIX="$2" ; shift 2 ;;
+    --suffix) SUFFIX="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -173,6 +175,7 @@ if [[ -z "${VALUE}" ]]; then
 else
   MOD=$(getField -i ${VALUE} -f "modality")
 fi
+if [[ -z ${SUFFIX} ]]; then SUFFIX=${MOD}; fi
 
 LABEL_NAME=($(getField -i ${LABEL} -f "label"))
 
@@ -188,7 +191,7 @@ if [[ "${APPEND}" == "true" ]] || [[ "${APPEND}" == "both" ]]; then
   if [[ -z ${APPEND_TO} ]]; then
     TDIR=$(getDir -i $(realpath ${LABEL}))
     TPRO=$(getProject -i $(realpath ${LABEL}))
-    APPEND_TO="${TDIR}/summary/${TPRO}_${MOD}_label-${LABEL_NAME}.tsv"
+    APPEND_TO="${TDIR}/summary/${TPRO}_${SUFFIX}_label-${LABEL_NAME}.tsv"
   fi
   mkdir -p $(dirname ${APPEND_TO})
   if [[ ! -f ${APPEND_TO} ]]; then echo -e "${HDR_STR[@]}" >> ${APPEND_TO}; fi
@@ -204,7 +207,7 @@ if [[ "${APPEND}" == "false" ]] || [[ "${APPEND}" == "both" ]]; then
     fi
   fi
   mkdir -p ${DIR_SAVE}
-  TFILE=${DIR_SAVE}/${PREFIX}_${MOD}.tsv
+  TFILE=${DIR_SAVE}/${PREFIX}_${SUFFIX}.tsv
   if [[ ! -f ${TFILE} ]]; then echo -e "${HDR_STR[@]}" >> ${TFILE}; fi
   cat ${OUTPUT} >> ${TFILE}
 fi

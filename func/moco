@@ -141,17 +141,18 @@ mkdir -p ${DIR_RGR}
 if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tgathering TS info"; fi
 NTR=$(niiInfo -i ${TS} -f numTR)
 TR=$(niiInfo -i ${TS} -f TR)
-TS_MOCO=${DIR_SCRATCH}/${PREFIX}_bold.nii.gz
-TS_MEAN=${DIR_SCRATCH}/${PREFIX}_proc-mean_bold.nii.gz
+MOD=$(getField -i ${TS} -f modality)
+TS_MOCO=${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz
+TS_MEAN=${DIR_SCRATCH}/${PREFIX}_proc-mean_${MOD}.nii.gz
 TS_NULL=${DIR_SCRATCH}/${PREFIX}_null_
 if [[ "${VERBOSE}" == "true" ]]; then echo -e "\t\t#TR=${NTR}\n\t\tTR=${TR}"; fi
 
-# intialize mean bold ----------------------------------------------------------
-if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tinitialize mean bold"; fi
+# intialize mean ---------------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tinitialize mean ${MOD}"; fi
 antsMotionCorr -d 3 -a ${TS} -o ${TS_MEAN}
 
 # rigid motion correction ------------------------------------------------------
-## parameters: -u 1 -> use a fixed reference image, i.e., mean bold
+## parameters: -u 1 -> use a fixed reference image, i.e., mean image
 ##             -e 1 -> use scale estimator to control optimization
 if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\trigid motion correction"; fi
 antsMotionCorr \
@@ -242,22 +243,21 @@ echo -e ">>>\tPREFIX == ${PREFIX}"
 echo -e ">>>\tDIR_SAVE == ${DIR_SAVE}"
 echo -e ">>>\tTS_MEAN == ${TS_MEAN}"
 echo -e ">>>\t***********************"
-mv ${TS_MOCO} ${DIR_SAVE}/${PREFIX}_bold.nii.gz
-mv ${TS_MEAN} ${DIR_SAVE}/${PREFIX}_proc-mean_bold.nii.gz
+mv ${TS_MOCO} ${DIR_SAVE}/${PREFIX}_${MOD}.nii.gz
+mv ${TS_MEAN} ${DIR_SAVE}/${PREFIX}_proc-mean_${MOD}.nii.gz
 
 # generate PNGs ----------------------------------------------------------------
 if [[ "${NO_PNG}" == "false" ]]; then
   ## mean bold
   if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tgenerate mean BOLD PNG"; fi
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_proc-mean_bold.nii.gz \
+  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_proc-mean_${MOD}.nii.gz \
     --bg-color "hot" \
     --layout "6:x;6:x;6:y;6:y;6:z;6:z" \
-    --offset "0,0,0" \
     --no-slice-label --no-lr-label
   ## image of slices in 4d
   if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tgenerate TS PNG"; fi
   make4Dpng \
-    --fg ${DIR_SAVE}/${PREFIX}_bold.nii.gz \
+    --fg ${DIR_SAVE}/${PREFIX}_${MOD}.nii.gz \
     --fg-color "hot" --fg-alpha 50 --layout "5x11" --plane "z" --slice 0.51 \
     --no-slice-label --no-lr-label
   ## make regressor plot
