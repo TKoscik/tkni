@@ -21,23 +21,26 @@
         │   │       └───XFM/
         │   └───tkni/
         │       ├───anat/
+        │       │   ├───cleaned/
+        │       │   │   └───${IDPFX}_qalas.nii.gz
         │       │   ├───label/
-        │       │   │   ├───ANTSCX/
         │       │   │   ├───fsSynth/
         │       │   │   ├───MALF/
-        │       │   │   ├───REFINE/
+        │       │   │   ├───MATS/
         │       │   │   └───${IDPFX}_label-*.nii.gz
         │       │   ├───mask/
         │       │   │   ├───AINIT/
-        │       │   │   ├───ANTSCX/
         │       │   │   ├───fsSynth/
         │       │   │   ├───MALF/
+        │       │   │   ├───QALAS/
         │       │   │   ├───${IDPFX}_mask-fg.nii.gz
         │       │   │   └───${IDPFX}_mask-brain.nii.gz
         │       │   ├───native/
         │       │   │   ├───dwi/
         │       │   │   └───fsSynth/
-        │       │   ├───outcome/
+        │       │   ├───native_qmri/
+        │       │   ├───native_synth/
+        │       │   ├───outcomes/
         │       │   │   ├───jacobian_${TEMPLATE}/
         │       │   │   ├───myelin/
         │       │   │   ├───thickness/
@@ -46,7 +49,13 @@
         │       │   │   │   └───${IDPFX}_thickness.nii.gz
         │       │   │   └───<misc. scalar maps>
         │       │   ├───posterior/
-        │       │   └───reg_${TEMPLATE}/
+        │       │   │   ├───5TT/
+        │       │   │   ├───ANTS/
+        │       │   │   ├───QALAS/
+        │       │   │   └───SYNTHSEG/
+        │       │   ├───reg_${TEMPLATE}/
+        │       │   └───surface/
+        │       │       └───sent_to_print/
         │       ├───dwi/
         │       │   ├───connectome/
         │       │   ├───preproc/
@@ -79,13 +88,18 @@
         │       │   ├───stbs/ # task only
         │       │   └───ts/
         │       │       └───${IDPFX}_label-${LABEL}_ts.csv
+        │       ├───mrs/
+        │       │   ├───mask/
+        │       │   ├───${IDPFX}_MRSfit.csv
+        │       │   ├───${IDPFX}_MRSfit.rds
+        │       │   └───${IDPFX}_ratio-tCR_MRSfit.csv
         │       ├───prep\
         │       │   └───${IDDIR}/
-        │       │       └───<WORKFLOW>\
+        │       │       └───<WORKFLOW>/
         │       └───xfm/
         │           └───${IDDIR}/
         ├───qc/
-        │   └───${IDDIR}
+        │   └───<WORKFLOW>/
         ├───rawdata/
         │   └───${IDDIR}
         │       ├───anat/
@@ -94,7 +108,7 @@
         │       ├───func/
         │       └───mrs/
         ├───status/
-        │   └───<WORKFLOW>\
+        │   └───<WORKFLOW>/
         ├───sourcedata/
         │   └───${IDPFX}_dicom.zip
         ├───summary

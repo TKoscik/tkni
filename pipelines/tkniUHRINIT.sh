@@ -92,7 +92,7 @@ DENOISE_PATCH="1x1x1"
 DENOISE_SEARCH="3x3x3"
 
 DIR_SAVE=
-DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${PI}_${PROJECT}_${DATE_SUFFIX}
+DIR_SCRATCH=
 
 KEEP="false"
 HELP="false"
@@ -302,7 +302,7 @@ if [[ ${VERBOSE} == "true" ]]; then
   done
 fi
 
-DIRTMP=${DIR_SCRATCH}
+DIRTMP=${DIR_SCRATCH}/tmp
 mkdir -p ${DIRTMP}
 
 if [[ ${NO_RMD} == "false" ]]; then
@@ -335,8 +335,6 @@ if [[ ${NO_RMD} == "false" ]]; then
 fi
 
 for (( i=0; i<${NIMG}; i++ )); do
-
-  rm ${DIRTMP}/*
   IMG=${IMAGE[${i}]}
 
   # initialize outputs ---------------------------------------------------------
