@@ -155,8 +155,13 @@ optQALAS <- function(INPUT, ...) {
   MZ <- c(M6, M8, M10, M12)
   T2e <- -(T2PREP)/(log(Mobs[1]/M1))
   penalty <- 1
-  if (T1 <= T2e) { penalty <- 10}
-  if (T2e <= 0) { penalty <- 10}
+  print(sprintf("T1=%0.4g; M0=%0.4g; T2e=%0.4g, M1=%0.4g; Mobs[1]=%0.4g", T1, M0, T2e, M1, Mobs[1]))
+  if (is.na(T2e)) {
+    penalty <- 100
+  } else {
+    if (T1 <= T2e) { penalty <- 10}
+    if (T2e <= 0) { penalty <- 10}
+  }
   sum(((Mobs[2:length(Mobs)] - MZ)^2)*penalty)
 }
 

@@ -8,10 +8,9 @@ PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
 FCN_NAME=($(basename "$0"))
 DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
 OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
 KERNEL="$(uname -s)"
 HARDWARE="$(uname -m)"
-HPC_Q=${QUEUE}
-HPC_SLOTS=${NSLOTS}
 NO_LOG=false
 umask 007
 
@@ -19,10 +18,20 @@ umask 007
 function egress {
   EXIT_CODE=$?
   PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
   if [[ "${NO_LOG}" == "false" ]]; then
-    unset LOGSTR
-    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
-    writeLog --benchmark --string ${LOGSTR}
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
   fi
 }
 trap egress EXIT
@@ -30,7 +39,7 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvl --long \
 dir-input:,lut-json:,skip:,dir-project:,\
-id:,\
+id:,id-field:,add-resolution,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -44,6 +53,8 @@ LUT_JSON=${TKNI_LUT}/series_description.json
 SKIP="cal,loc"
 DIR_PROJECT=
 IDPFX=
+IDFIELD="sub,ses"
+ADD_RES="false"
 HELP=false
 VERBOSE=false
 
@@ -53,6 +64,8 @@ while true; do
     -v | --verbose) VERBOSE=true ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
     --id) IDPFX="$2" ; shift 2 ;;
+    --id-field) IDFIELD="$2" ; shift 2 ;;
+    --add-resolution) ADD_RES="true" ; shift ;;
     --dir-input) DIR_INPUT="$2" ; shift 2 ;;
     --lut-json) LUT_JSON="$2" ; shift 2 ;;
     --skip) SKIP="$2" ; shift 2 ;;
@@ -101,13 +114,17 @@ if [[ -z ${IDPFX} ]]; then
   echo "ERROR [TKNI:${FCN_NAME}] ID Prefix must be provided"
   exit 1
 fi
+IDFIELD=(${IDFIELD//,/ })
 if [[ -z ${IDDIR} ]]; then
-  TSUB=$(getField -i ${IDPFX} -f sub)
-  TSES=$(getField -i ${IDPFX} -f ses)
-  IDDIR=sub-${TSUB}
-  if [[ -n ${TSES} ]]; then
-    IDDIR="${IDDIR}/ses-${TSES}"
-  fi
+  TID=$(getField -i ${IDPFX} -f ${IDFIELD[0]})
+  IDDIR="${IDFIELD[0]}-${TID}"
+  for (( i=1; i<${#IDFIELD[@]}; i++)); do
+    unset TID
+    TID=$(getField -i ${IDPFX} -f ${IDFIELD[${i}]})
+    if [[ -n ${TID} ]]; then
+      IDDIR="${IDDIR}/${IDFIELD[${i}]}-${TID}"
+    fi
+  done
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e "\tID:\t${IDPFX}"
@@ -232,7 +249,7 @@ for (( i=0; i<${N_NII}; i++ )); do
     NBOLD=$((${NBOLD}+1))
     FTMP=$(modField -i ${FTMP} -a -f run -v ${NBOLD})
   fi
-  
+
   ## save new file name to array - - - - - - - - - - - - - - - - - - - - - - - -
   F_AUTO+=(${FTMP})
   echo ${F_AUTO[${i}]}
@@ -264,6 +281,18 @@ for (( i=0; i<${N_NII}; i++ )); do
     echo ${F_AUTO[${i}]}
   fi
 done
+
+# Add dimensions if requested --------------------------------------------------
+if [[ ${ADD_RES} == "true" ]]; then
+  for (( i=0; i<${N_NII}; i++ )); do
+    SPACE=($(niiInfo -i ${DIR_INPUT}/${FNAME[${i}]}.nii.gz -f spacing))
+    SPACE[0]=$(echo "scale=0; ${SPACE[0]} * 1000 / 1" | bc -l)
+    SPACE[1]=$(echo "scale=0; ${SPACE[1]} * 1000 / 1" | bc -l)
+    SPACE[2]=$(echo "scale=0; ${SPACE[2]} * 1000 / 1" | bc -l)
+    SPACE_STR="${SPACE[0]}x${SPACE[1]}x${SPACE[2]}um"
+    F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v ${SPACE_STR})
+  done
+fi
 
 # check auto name for duplicates, add run --------------------------------------
 for (( i=0; i<${N_NII}; i++ )); do
@@ -319,13 +348,34 @@ for (( i=0; i<${N_NII}; i++ )); do
   fi
 done
 
+# add shell information to DWI -------------------------------------------------
+## is this duplicative to section above?
+for (( i=0; i<${N_NII}; i++ )); do
+  unset MOD
+  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
+  if [[ ${MOD} == "dwi" ]]; then
+    BVALS=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
+    B0ALL="true"
+    for (( j=0; j<${#BVALS[@]}; j++ )); do
+      if [[ ${BVALS[${j}]} -ne 0 ]]; then
+        B0ALL="false"
+      fi
+    done
+    if [[ "${B0ALL}" == "true" ]]; then
+      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v b0)
+    else
+      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v multishell)
+    fi
+  fi
+done
+
 # final Autonames --------------------------------------------------------------
 for (( i=0; i<${N_NII}; i++ )); do
   echo -e "ORIG:\t${FNAME[${i}]}"
   echo -e "NEW:\t${F_AUTO[${i}]}\n"
 done
 
-# rename output files --------------------------------------------------------
+# rename output files ----------------------------------------------------------
 SKIP_LS=(${SKIP//,/ })
 if [[ "${VERBOSE}" == "true" ]]; then echo -e "\tauto-renaming files"; fi
 for (( i=0; i<${N_NII}; i++ )); do
@@ -336,27 +386,12 @@ for (( i=0; i<${N_NII}; i++ )); do
     echo "Skipping Copy of ${SUBDIR[${i}]}"
   else
     mkdir -p ${DIR_SAVE}
-
     unset MOD
     MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
     if [[ ${MOD} == "dwi" ]]; then
-      ### add shell information to dwi
-      BVALS=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
-      B0ALL="true"
-      for (( j=0; j<${#BVALS[@]}; j++ )); do
-        if [[ ${BVALS[${j}]} -ne 0 ]]; then
-          B0ALL="false"
-        fi
-      done
-      if [[ "${B0ALL}" == "true" ]]; then
-        F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v b0)
-      else
-        F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v multishell)
-      fi
       cp ${DIR_INPUT}/${FNAME[${i}]}.bval ${DIR_SAVE}/${F_AUTO[${i}]}.bval
       cp ${DIR_INPUT}/${FNAME[${i}]}.bvec ${DIR_SAVE}/${F_AUTO[${i}]}.bvec
     fi
-
     cp ${DIR_INPUT}/${FNAME[${i}]}.nii.gz ${DIR_SAVE}/${F_AUTO[${i}]}.nii.gz
     cp ${DIR_INPUT}/${FNAME[${i}]}.json ${DIR_SAVE}/${F_AUTO[${i}]}.json
   fi

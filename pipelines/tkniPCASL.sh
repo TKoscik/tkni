@@ -734,6 +734,7 @@ mv ${DIR_SCRATCH}/${IDPFX}_CBF.* ${DIR_SAVE}/
 if [[ ${NO_PWI} == "false" ]]; then
   mv ${DIR_SCRATCH}/${IDPFX}_${PWI_LABEL}.* ${DIR_SAVE}/
 fi
+mv ${DIR_SCRATCH}/*.tsv ${DIR_SAVE}/
 
 mkdir -p ${DIR_SAVE}/moco/${IDDIR}
 mv ${DIR_SCRATCH}/*.1D ${DIR_SAVE}/moco/${IDDIR}/
@@ -749,6 +750,7 @@ if [[ ${NO_NORM,,} == "false" ]]; then
     fi
   done
 fi
+
 mv ${DIR_SCRATCH}/xfm/* ${DIR_XFM}/
 
 # initialize RMD output --------------------------------------------------------
@@ -824,47 +826,53 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### Click to View -->' >> ${RMD}
   echo '#### Raw' >> ${RMD}
   echo -e '![Raw]('${DIR_SCRATCH}'/'${IDPFX}'_prep-raw_asl.png)\n' >> ${RMD}
+  echo '' >> ${RMD}
 
   if [[ ${NO_REORIENT} == "false" ]]; then
     echo '#### Reorient' >> ${RMD}
     echo -e '![Reorient]('${DIR_SCRATCH}'/'${IDPFX}'_prep-reorient_asl.png)\n' >> ${RMD}
+    echo '' >> ${RMD}
   fi
 
   echo '#### Motion Correction'
   echo -e '![MOCO]('${DIR_SCRATCH}'/'${IDPFX}'_prep-moco_asl.png)\n' >> ${RMD}
   echo -e '![Regressors]('${DIR_SCRATCH}'/'${IDPFX}'_regressors.png)\n' >> ${RMD}
+  echo '' >> ${RMD}
 
   if [[ ${NO_DENOISE} == "false" ]]; then
     echo '#### Denoise {.tabset}' >> ${RMD}
     echo '##### Control' >> ${RMD}
     echo -e '![Denoise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+denoise_asl.png)\n' >> ${RMD}
     echo -e '![Noise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+noise_asl.png)\n' >> ${RMD}
+    echo '' >> ${RMD}
     echo '##### Labeled' >> ${RMD}
     echo -e '![Denoise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+denoise_asl.png)\n' >> ${RMD}
     echo -e '![Noise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+noise_asl.png)\n' >> ${RMD}
+    echo '' >> ${RMD}
   fi
 
-  if [[ ${NO_Debias} == "false" ]]; then
+  if [[ ${NO_DEBIAS} == "false" ]]; then
     echo '#### Debias {.tabset}' >> ${RMD}
     echo '##### Control' >> ${RMD}
     echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+debias_asl.png)\n' >> ${RMD}
     echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+biasField_asl.png)\n' >> ${RMD}
+    echo '' >> ${RMD}
     echo '##### Labeled' >> ${RMD}
     echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+debias_asl.png)\n' >> ${RMD}
     echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+biasField_asl.png)\n' >> ${RMD}
+    echo '' >> ${RMD}
   fi
 
   echo '#### Coregistration' >> ${RMD}
-    echo -e '![Coregistration]('${DIR_SCRATCH}'/'${IDPFX}'_reg-${COREG_RECIPE}+native.png)\n' >> ${RMD}
-    echo -e '![Control]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+coreg_asl.png)\n' >> ${RMD}
-    echo -e '![Labeled]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+coreg_asl.png)\n' >> ${RMD}
-  fi
+  echo -e '![Coregistration]('${DIR_SCRATCH}'/'${IDPFX}'_reg-'${COREG_RECIPE}'+native.png)\n' >> ${RMD}
+  echo -e '![Control]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+coreg_asl.png)\n' >> ${RMD}
+  echo -e '![Labeled]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+coreg_asl.png)\n' >> ${RMD}
+  echo '' >> ${RMD}
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
   mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
   mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
-  mv ${DIR_SCRATCH}/*.html ${DIR_PROJECT}/qc/${PIPE}${FLOW}/
 fi
 
 # set status file --------------------------------------------------------------

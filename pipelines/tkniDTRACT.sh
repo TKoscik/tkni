@@ -180,15 +180,6 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e "Start Time:\t${PROC_START}"
 fi
 
-TMP_ANAT=${DIR_SCRATCH}/ANAT
-TMP_DWI=${DIR_SCRATCH}/DWI
-TMP_FOD=${DIR_SCRATCH}/FOD
-TMP_TCK=${DIR_SCRATCH}/TCK
-mkdir -p ${TMP_ANAT}
-mkdir -p ${TMP_DWI}
-mkdir -p ${TMP_FOD}
-mkdir -p ${TMP_TCK}
-
 # Check ID ---------------------------------------------------------------------
 if [[ -z ${IDPFX} ]]; then
   echo "ERROR [TKNI:${FCN_NAME}] ID Prefix must be provided"
@@ -270,7 +261,15 @@ if [[ ! -f ${LABEL} ]]; then
   exit 2
 fi
 
-# copy data to scratch
+# copy data to scratch ---------------------------------------------------------
+TMP_ANAT=${DIR_SCRATCH}/ANAT
+TMP_DWI=${DIR_SCRATCH}/DWI
+TMP_FOD=${DIR_SCRATCH}/FOD
+TMP_TCK=${DIR_SCRATCH}/TCK
+mkdir -p ${TMP_ANAT}
+mkdir -p ${TMP_DWI}
+mkdir -p ${TMP_FOD}
+mkdir -p ${TMP_TCK}
 cp -r ${DIR_MRTRIX}/* ${TMP_DWI}/
 
 # Fiber Orientation Distribution ===============================================

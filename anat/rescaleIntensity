@@ -37,12 +37,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvkln --long prefix:,\
-image:,mask:,\
-nan:,keep-neg,\
-truncate:,lo:,hi:,not-p,zero-value:,\
-max:,datatype:,\
-dir-save:,dir-scratch:,\
+OPTS=$(getopt -o hvkln --long image:,mask:,\
+nan:,keep-neg,truncate:,lo:,hi:,not-p,zero-value:,max:,datatype:,\
+filename:,dir-save:,dir-scratch:,\
 help,verbose,no-log,no-png -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -51,7 +48,6 @@ fi
 eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
-PREFIX=
 IMAGE=
 MASK=
 NAN=0
@@ -63,6 +59,8 @@ NOT_P=false
 ZERO_VALUE="lo"
 MAX="10000"
 DATATYPE="short"
+
+FILENAME=
 DIR_SAVE=
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
@@ -76,7 +74,6 @@ while true; do
     -v | --verbose) VERBOSE=true ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
-    --prefix)  PREFIX="$2" ; shift 2 ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --mask) MASK="$2" ; shift 2 ;;
     --nan) NAN="$2" ; shift 2 ;;
@@ -88,6 +85,7 @@ while true; do
     --zero-value) ZERO_VALUE="$2" ; shift 2 ;;
     --max) MAX="$2" ; shift 2 ;;
     --datatype) DATATYPE="$2" ; shift 2 ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -106,8 +104,8 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  -k | --keep      keep preliminary processing steps'
   echo '  -l | --no-log    disable writing to output log'
   echo '  -n | --no-png    disable making png of output'
-  echo '  --prefix         prefix for output'
-  echo '                     default: sub-123_ses-1234abcd_prep-rescale'
+  echo '  --filename       filename for output'
+  echo '                     default: sub-123_ses-1234abcd_prep-rescale_modality'
   echo '  --image          input nii.gz file'
   echo '  --mask           binary mask of region for calculating rescale values'
   echo '  --nan            NANs must be removed before rescaling, specify value'
@@ -181,17 +179,13 @@ if [[ "${DATATYPE,,}" == "int" ]] && [[ ${MAX} -gt 2147483648 ]]; then
 fi
 
 # Set up BIDs compliant variables and workspace --------------------------------
-if [[ "${VERBOSE}" == "true" ]]; then
-  echo "[TKNI: ${FCN_NAME}] setup BIDS information"
-fi
-#DIR_PROJECT=$(getDir -i ${IMAGE})
-#PID=$(getField -i ${IMAGE} -f sub)
-#SID=$(getField -i ${IMAGE} -f ses)
-#DIRPID=sub-${PID}
-#if [ -n "${SID}" ]; then DIRPID=${DIRPID}/ses-${SID}; fi
-if [[ -z "${PREFIX}" ]]; then
-  PREFIX=$(getBidsBase -s -i ${IMAGE})
-  PREFIX=$(modField -i ${PREFIX} -a -f prep -v rescale)
+
+if [[ -z "${FILENAME}" ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then
+    echo "[TKNI: ${FCN_NAME}] generating filename"
+  fi
+  FILENAME=$(getBidsBase -i ${IMAGE})
+  FILENAME=$(modField -i ${FILENAME} -a -f prep -v rescale)
 fi
 if [[ -z "${DIR_SAVE}" ]]; then
   DIR_SAVE=$(dirname ${IMAGE})
@@ -199,17 +193,8 @@ fi
 mkdir -p ${DIR_SCRATCH}
 mkdir -p ${DIR_SAVE}
 
-# gather modality for output ---------------------------------------------------
-if [[ "${VERBOSE}" == "true" ]]; then
-  echo "[TKNI: ${FCN_NAME}] get MODALITY for output filename"
-fi
-MOD=($(getField -i ${IMAGE} -f "modality"))
-if [[ "${VERBOSE}" == "true" ]]; then
-  echo -e "\t${MOD}"
-fi
-
 # temporary filename
-IMGRS=${DIR_SCRATCH}/${PREFIX}_${MOD}.nii.gz
+IMGRS=${DIR_SCRATCH}/${FILENAME}.nii.gz
 
 # deal with NANs ---------------------------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then
@@ -248,7 +233,7 @@ if [[ ${TRUNCATE,,} == "true" ]]; then
     niimath ${IMGRS} -uthr ${LO} -bin -mul ${LO} ${DIR_SCRATCH}/lo.nii.gz
     niimath ${IMGRS} -thr ${HI} -bin -mul ${HI} ${DIR_SCRATCH}/hi.nii.gz
     niimath ${IMGRS} -thr ${LO} -uthr ${HI} \
-      -add ${DIR_SCRATCH}/lo.nii.gz -add ${DIR_SCRATCH}/hi.nii.gz ${IMGRS} 
+      -add ${DIR_SCRATCH}/lo.nii.gz -add ${DIR_SCRATCH}/hi.nii.gz ${IMGRS}
   else
     if [[ "${VERBOSE}" == "true" ]]; then
       echo "[TKNI: ${FCN_NAME}] truncating by INTENSITY PERCENTILE"
@@ -285,11 +270,12 @@ if [[ "${VERBOSE}" == "true" ]]; then
   echo "[TKNI: ${FCN_NAME}] get denominators for NORMALIZING values"
 fi
 if [[ -n ${MASK} ]]; then
-  MINMAX=($(fslstats ${IMGRS} -k ${MASK} -R))
+  MINMAX=($(3dBrickStat -mask ${MASK} -slow -min -max ${IMAGE}))
 else
-  MINMAX=($(fslstats ${IMGRS} -R))
+  MINMAX=($(3dBrickStat -slow -min -max ${IMAGE}))
 fi
-DENOM=$(ezMath -x "${MINMAX[1]}-${MINMAX[0]}" -d 4)
+DENOM=$(echo "scale=4; ${MINMAX[1]} - ${MINMAX[0]}" | bc -l)
+
 if [[ "${VERBOSE}" == "true" ]]; then
   echo -e "\tdenominator=${DENOM}"
 fi
@@ -305,16 +291,15 @@ if [[ "${KEEP_NEG}" == "true" ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then
     echo "[TKNI: ${FCN_NAME}] restore NEGATIVE VALUES"
   fi
-  niimath ${IMGRS} -mul ${DIR_SCRATCH}/mask-neg.nii.gz \
-    ${IMGRS} -odt ${DATATYPE}
+  niimath ${IMGRS} -mul ${DIR_SCRATCH}/mask-neg.nii.gz ${IMGRS} -odt ${DATATYPE}
 fi
 
 # final verbose output ---------------------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then
-  MINMAX=($(fslstats ${IMGRS} -R))
+  MINMAX=($(3dBrickStat -slow -min -max ${IMAGE}))
   echo -e "\tFINAL RANGE: ${MINMAX[0]} - ${MINMAX[1]}"
   if [[ -n ${MASK} ]]; then
-    MINMAX=($(fslstats ${IMGRS} -k ${MASK} -R))
+    MINMAX=($(3dBrickStat -mask ${MASK} -slow -min -max ${IMAGE}))
     echo -e "\tFINAL RANGE IN MASK: ${MINMAX[0]} - ${MINMAX[1]}"
   fi
 fi
@@ -327,7 +312,7 @@ mv ${IMGRS} ${DIR_SAVE}/
 
 # generate out PNG -------------------------------------------------------------
 if [[ "${NO_PNG}" == "false" ]]; then
-  make3Dpng --bg ${DIR_SAVE}/${PREFIX}_${MOD}.nii.gz
+  make3Dpng --bg ${DIR_SAVE}/${FILENAME}.nii.gz
 fi
 
 #===============================================================================

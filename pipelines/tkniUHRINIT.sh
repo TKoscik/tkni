@@ -45,11 +45,14 @@ trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
-id:,dir-id:,image:,threads:,\
-no-debias:,no-denoise:,no-rescale:\
+id:,dir-id:,id-field:,\
+image:,threads:,\
+no-reorient,no-debias,no-denoise,\
+reorient-code:,reorient-deoblique,\
 debias-bspline:,debias-shrink:,debias-convergence:,debias-histmatch:\
+denoise-model:,denoise-shrink:,denoise-patch:,denoise-search:,\
 dir-save:,dir-scratch:,\
-keep,help,verbose,no-png -n 'parse-options' -- "$@")
+keep,help,verbose,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -85,27 +88,8 @@ DEBIAS_HISTMATCH="[0.3,0.01,200]"
 
 DENOISE_MODEL="Rician"
 DENOISE_SHRINK="1"
-DONOISE_PATCH="1x1x1"
+DENOISE_PATCH="1x1x1"
 DENOISE_SEARCH="3x3x3"
-
-RESCALE_LO=0
-RESCALE_HI=1
-RESCALE_MAX=32767
-RESCALE_TYPE="int16"
-
-MASK_CLFRAC=0.25
-
-RESIZE=
-RESIZE_PRECISION=100000
-
-SMOOTH_ITER=10
-SMOOTH_SIGMA1=0.5
-SMOOTH_SIGMA2=1.0
-SMOOTH_DELTAT=0.25
-SMOOTH_EDGEFRAC=0.5
-
-ALIGN_FIXED=${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_T1w.nii.gz
-ALIGN_MASK=${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_mask-brain.nii.gz
 
 DIR_SAVE=
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${PI}_${PROJECT}_${DATE_SUFFIX}
@@ -114,6 +98,7 @@ KEEP="false"
 HELP="false"
 VERBOSE="false"
 NO_PNG="false"
+NO_RMD="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//${PIPE}}
@@ -126,14 +111,27 @@ while true; do
     -v | --verbose) VERBOSE="true" ; shift ;;
     -n | --no-png) NO_PNG="true" ; shift ;;
     -r | --no-rmd) NO_PNG="true" ; shift ;;
-    -k | --keep) KEEP="true" ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
+    --id-field) IDFIELD="$2" ; shift 2 ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --threads) THREADS="$2" ; shift 2 ;;
+    --no-reorient) NO_REORIENT="true" ; shift ;;
+    --no-debias) NO_DEBIAS="true" ; shift ;;
+    --no-denoise) NO_DENOISE="true" ; shift ;;
+    --reorient-code) REORIENT_CODE="$2" ; shift 2 ;;
+    --reorient-deoblique) REORIENT_DEOBLIQUE="true" ; shift ;;
+    --debias-bspline) DEBIAS_BSPLINE="$2" ; shift 2 ;;
+    --debias-shrink) DEBIAS_SHRINK="$2" ; shift 2 ;;
+    --debias-convergence) DEBIAS_CONVERGENCE="$2" ; shift 2 ;;
+    --debias-histmatch) DEBIAS_HISTMATCH="$2" ; shift 2 ;;
+    --denoise-model) DENOISE_MODEL="$2" ; shift 2 ;;
+    --denoise-shrink) DENOISE_SHRINK="$2" ; shift 2 ;;
+    --denoise-patch) DENOISE_PATCH="$2" ; shift 2 ;;
+    --denoise-search) DENOISE_SEARCH="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -153,18 +151,30 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  --pi               folder name for PI, no underscores'
   echo '                       default=evanderplas'
   echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --pid              unique individual identifier'
-  echo '  --sid              session identifier'
-  echo '  --input-dcm        full path to DICOMs, may be directory or zip-file'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --dir-scratch      directory for temporary workspace'
+  echo '  --dir-project'
+  echo '  --id'
+  echo '  --dir-id'
+  echo '  --id-field'
+  echo '  --image'
+  echo '  --threads'
+  echo '  --no-reorient'
+  echo '  --no-debias'
+  echo '  --no-denoise'
+  echo '  --reorient-code'
+  echo '  --reorient-deoblique'
+  echo '  --debias-bspline'
+  echo '  --debias-shrink'
+  echo '  --debias-convergence'
+  echo '  --debias-histmatch'
+  echo '  --denoise-model'
+  echo '  --denoise-shrink'
+  echo '  --denoise-patch'
+  echo '  --denoise-search'
   echo ''
   echo 'Procedure: '
-  echo '(1) denoise image'
-  echo '(2) rough tissue segmentation for WM mask using synthseg'
-  echo '(3) intensity debias'
+  echo '(1) Reorient'
+  echo '(2) Debias'
+  echo '(3) Denoise'
   echo ''
   NO_LOG=true
   exit 0
@@ -251,6 +261,9 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
 
+# Default save directory -------------------------------------------------------
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}; fi
+
 # Identify UHR Inputs ----------------------------------------------------------
 if [[ -z ${IMAGE} ]]; then
   IMAGE=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/anat/${IDPFX}*swi.nii.gz))
@@ -289,10 +302,40 @@ if [[ ${VERBOSE} == "true" ]]; then
   done
 fi
 
-DIRTMP=${DIR_SCRATCH}/tmp
+DIRTMP=${DIR_SCRATCH}
 mkdir -p ${DIRTMP}
 
+if [[ ${NO_RMD} == "false" ]]; then
+  RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
+
+  echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
+  echo '```{r setup, include=FALSE}' >> ${RMD}
+  echo 'knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, comment=NA)' >> ${RMD}
+  echo -e '```\n' >> ${RMD}
+  echo '```{r, out.width = "400px", fig.align="right"}' >> ${RMD}
+  echo 'knitr::include_graphics("'${TKNIPATH}'/TK_BRAINLab_logo.png")' >> ${RMD}
+  echo -e '```\n' >> ${RMD}
+  echo '```{r, echo=FALSE}' >> ${RMD}
+  echo 'library(DT)' >> ${RMD}
+  echo "create_dt <- function(x){" >> ${RMD}
+  echo "  DT::datatable(x, extensions='Buttons'," >> ${RMD}
+  echo "    options=list(dom='Blfrtip'," >> ${RMD}
+  echo "    buttons=c('copy', 'csv', 'excel', 'pdf', 'print')," >> ${RMD}
+  echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
+  echo -e '```\n' >> ${RMD}
+
+  echo '## Initial Ultra-High Resolution Processing' >> ${RMD}
+  echo -e '\n---\n' >> ${RMD}
+
+  echo 'PI: **'${PI}'**\' >> ${RMD}
+  echo 'PROJECT: **'${PROJECT}'**\' >> ${RMD}
+  echo 'IDENTIFIER: **'${IDPFX}'**\' >> ${RMD}
+  echo 'DATE: **`r Sys.time()`**\' >> ${RMD}
+  echo '' >> ${RMD}
+fi
+
 for (( i=0; i<${NIMG}; i++ )); do
+
   rm ${DIRTMP}/*
   IMG=${IMAGE[${i}]}
 
@@ -300,12 +343,34 @@ for (( i=0; i<${NIMG}; i++ )); do
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
 
+  # get Image Dimensions, and plane of acquisition -------------------------
+  DIM=($(niiInfo -i ${IMG} -f "voxels"))
+  if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
+  if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
+  if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
+  if [[ -z ${PLANE} ]]; then PLANE="z"; fi
+
   # Copy RAW image to scratch --------------------------------------------------
   TIMG=${DIRTMP}/image_raw.nii.gz
   cp ${IMG} ${TIMG}
   if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-    make3Dpng --bg ${DIRTMP}/image_raw.nii.gz
+    make3Dpng --bg ${DIRTMP}/image_raw.nii.gz \
+      --layout "1:${PLANE}" --max-pixels 1024 \
+      --filename ${PFX}_raw --dir-save ${DIR_SCRATCH}
+    if [[ ${NO_RMD} == false ]]; then
+        echo -e '### Raw UHR Image' >> ${RMD}
+        echo -e '![Raw: '${PFX}'_'${MOD}']('${DIR_SCRATCH}'/'${PFX}'image_raw.png)\n' >> ${RMD}
+        echo "#### Processing ${PFX}_${MOD} {.tabset}" >> ${RMD}
+        echo "##### Click to View -->" >> ${RMD}
+    fi
   fi
+
+  # Re-Get Image Dimensions, and plane of acquisition -------------------------
+  DIM=($(niiInfo -i ${TIMG} -f "voxels"))
+  if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
+  if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
+  if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
+  if [[ -z ${PLANE} ]]; then PLANE="z"; fi
 
   # Fix Orientation ------------------------------------------------------------
   if [[ ${NO_REORIENT} == "false" ]]; then
@@ -323,18 +388,17 @@ for (( i=0; i<${NIMG}; i++ )); do
         -input ${DIRTMP}/image_reorient.nii.gz
     fi
     if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-      make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz
+      make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz \
+      --layout "1:${PLANE}" --max-pixels 1024 \
+      --filename ${PFX}_reorient --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Reorient' >> ${RMD}
+        echo -e '![Reorient]('${DIR_SCRATCH}'/'${PFX}'_reorient.png)\n' >> ${RMD}
+      fi
     fi
     TIMG=${DIRTMP}/image_reorient.nii.gz
   fi
 
-  # get Image Dimensions, and plane of acquisition -------------------------
-  DIM=($(niiInfo -i ${TIMG} -f "voxels"))
-  if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
-  if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
-  if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
-  if [[ -z ${PLANE} ]]; then PLANE="z"; fi
-  #*** be sure to updata filename to reflect this reorientation!
 
   # Debias ---------------------------------------------------------------------
   if [[ ${NO_DEBIAS} == "false" ]]; then
@@ -349,9 +413,17 @@ for (( i=0; i<${NIMG}; i++ )); do
       --histogram-sharpening ${DEBIAS_HISTMATCH}
     rm ${DIRTMP}/tmp.nii.gz
     if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-      make3Dpng --bg ${DIRTMP}/image_debias.nii.gz --layout "1:${PLANE}"
+      make3Dpng --bg ${DIRTMP}/image_debias.nii.gz \
+      --layout "1:${PLANE}" --max-pixels 1024 \
+      --filename ${PFX}_debias --dir-save ${DIR_SCRATCH}
       make3Dpng --bg ${DIRTMP}/image_biasField.nii.gz \
-        --layout "1:${PLANE}" --bg-color "plasma"
+        --layout "1:${PLANE}" --bg-color "plasma" --max-pixels 1024 \
+      --filename ${PFX}_biasField --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Debias' >> ${RMD}
+        echo -e '![Debias]('${DIR_SCRATCH}'/'${PFX}'_debias.png)\n' >> ${RMD}
+        echo -e '![Bias Field]('${DIR_SCRATCH}'/'${PFX}'_biasField.png)\n' >> ${RMD}
+      fi
     fi
     TIMG=${DIRTMP}/image_debias.nii.gz
   fi
@@ -366,135 +438,70 @@ for (( i=0; i<${NIMG}; i++ )); do
       -i ${TIMG} \
       -o [${DIRTMP}/image_denoise.nii.gz,${DIRTMP}/image_noise.nii.gz]
     if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-      make3Dpng --bg ${DIRTMP}/image_denoise.nii.gz --layout "1:${PLANE}" --max-pixels 1024
+      make3Dpng --bg ${DIRTMP}/image_denoise.nii.gz \
+        --layout "1:${PLANE}" --max-pixels 1024 \
+        --filename ${PFX}_denoise --dir-save ${DIR_SCRATCH}
       make3Dpng --bg ${DIRTMP}/image_noise.nii.gz \
-        --layout "1:${PLANE}" --bg-cbar "true" --bg-color "virid-esque" --max-pixels 1024
+        --bg-cbar "true" --bg-color "virid-esque" \
+        --layout "1:${PLANE}" --max-pixels 1024 \
+        --filename ${PFX}_noise --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Denoise' >> ${RMD}
+        echo -e '![Denoise]('${DIR_SCRATCH}'/'${PFX}'_denoise.png)\n' >> ${RMD}
+        echo -e '![Noise]('${DIR_SCRATCH}'/'${PFX}'_noise.png)\n' >> ${RMD}
+      fi
     fi
     TIMG=${DIRTMP}/image_denoise.nii.gz
   fi
 
-  # make preliminary FG mask ---------------------------------------------------
-  ##3dAutomask -prefix ${DIR_SCRATCH}/mask.nii.gz -overwrite -q -clfrac ${MASK_CLFRAC} ${TIMG}
-
   # Attempt brain extraction ---------------------------------------------------
   ResampleImage 3 ${TIMG} ${DIRTMP}/image_downsample.nii.gz 1x1x1 0 4
-  brainExtraction --image ${TIMG} --method "skullstrip,autmask,ants,bet,synth" \
-    --dir-save ${DIRTMP}/mask
-
-  # Coregistration -------------------------------------------------------------
-  coregistrationChef --recipe-name intermodalRigid \
-    --fixed ${ALIGN_FIXED} --fixed-mask ${FIXED_MASK} --fixed-mask-dilation 3 \
-    --moving ${DIRTMP}/image_downsample.nii.gz \
-    --moving-mask ${DIRTMP}/mask/image_mask-brain+MALF.nii.gz \
-    --moving-mask-dilation 3 \
-    --dir-save ${DIRTMP}/xfm
-
-  # Resize ---------------------------------------------------------------------
-  if [[ ${NO_RESIZE} == "false" ]]; then
-    if [[ -z ${RESIZE} ]]; then
-      TSZ=($(niiInfo -i ${IMG} -f "spacing"))
-      X=$(printf '%.0f' $(echo "scale=0; ${TSZ[0]} * ${RESIZE_PRECISION}" | bc -l))
-      Y=$(printf '%.0f' $(echo "scale=0; ${TSZ[1]} * ${RESIZE_PRECISION}" | bc -l))
-      Z=$(printf '%.0f' $(echo "scale=0; ${TSZ[2]} * ${RESIZE_PRECISION}" | bc -l))
-      if [[ ${X} -le ${Y} ]] && [[ ${X} -le ${Z} ]]; then SZ=${TSZ[0]}; fi
-      if [[ ${Y} -le ${X} ]] && [[ ${Y} -le ${Z} ]]; then SZ=${TSZ[1]}; fi
-      if [[ ${Z} -le ${X} ]] && [[ ${Z} -le ${Y} ]]; then SZ=${TSZ[2]}; fi
-      RESIZE="${SZ}x${SZ}x${SZ}"
+  brainExtraction --image ${DIRTMP}/image_downsample.nii.gz \
+    --method "skullstrip,autmask,ants,bet,synth" \
+    --dir-save ${DIRTMP}/mask --no-png
+  antsApplyTransforms -d 3 -n MultiLabel \
+    -i ${DIRTMP}/mask/image_mask-brain+VENN.nii.gz \
+    -o ${DIRTMP}/image_mask-brain+INIT.nii.gz \
+    -r ${TIMG}
+  if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
+      make3Dpng --bg ${TIMG} \
+        --fg ${DIRTMP}/image_mask-brain+INIT.nii.gz \
+        --fg-mask ${DIRTMP}/image_mask-brain+INIT.nii.gz \
+        --fg-color "timbow:rnd" \
+        --fg-alpha 50 --fg-cbar "false" \
+        --layout "1:${PLANE}" --max-pixels 1024 \
+        --filename ${PFX}_mask-brain+INIT.nii.gz \
+        --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Initial Mask' >> ${RMD}
+        echo -e '![Initial Mask]('${DIR_SCRATCH}'/'${PFX}'_mask-brain+INIT.png)\n' >> ${RMD}
+      fi
     fi
-    SZSTR=(${RESIZE//x/ })
-    for i in {0..2}; do
-      SZSTR[${i}]=$(echo "scale=0; ${SZSTR[${i}]} * 1000 / 1" | bc -l)
-    done
-    SZSTR=$(echo ${SZSTR[@]})
-    SZSTR="${SZSTR// /x}um"
-    ResampleImage 3 ${TIMG} ${DIRTMP}/image_resize.nii.gz ${RESIZE} 0 4
 
-    #antsApplyTransforms -d 3 -n GenericLabel \
-    #  -i ${DIR_SCRATCH}/mask.nii.gz -o ${DIR_SCRATCH}/mask.nii.gz \
-    #  -r ${DIR_SCRATCH}/image_resize.nii.gz
-    if [[ ${NO_PNG} == "false" ]]; then
-      make3Dpng --bg ${DIRTMP}/image_resize.nii.gz --layout "1:${PLANE}" \
-        --no-reorient --max-pixels 1024
-    fi
-    TIMG=${DIRTMP}/image_resize.nii.gz
-  fi
+  # Save result ----------------------------------------------------------------
+  mkdir -p ${DIR_SAVE}/anat/raw_clean
+  mv ${TIMG} ${DIR_SAVE}/raw_clean/${PFX}_${MOD}.nii.gz
+  mv ${DIRTMP}/image_mask-brain+VENN.nii.gz \
+    ${DIR_SAVE}/raw_clean/${PFX}_mask-brain+INIT.nii.gz
 
-
-
-  # Rescale to Short integer ---------------------------------------------------
-  if [[ ${NO_RESCALE} == "false" ]]; then
-    rescaleIntensity --lo ${RESCALE_LO} --hi ${RESCALE_HI} \
-      --max ${RESCALE_MAX} --datatype ${RESCALE_TYPE} \
-      --image ${TIMG} --mask ${DIR_SCRATCH}/mask.nii.gz \
-      --filename image_rescale
-    mv ${DIR_SCRATCH}/image_rescale.nii.gz ${DIR_SCRATCH}/image.nii.gz
-  fi
-
-
-
-
-  # Anisotropic Smoothing ------------------------------------------------------
-  if [[ ${NO_SMOOTH} == "false" ]]; then
-    SMOOTH_ITER=10
-    SMOOTH_SIGMA1=0.5
-    SMOOTH_SIGMA2=1.0
-    SMOOTH_DELTAT=0.0004
-    SMOOTH_EDGEFRAC=0; #0
-    3danisosmooth -prefix ${DIR_SCRATCH}/image_anisosmooth.nii.gz \
-      -mask ${DIR_SCRATCH}/mask.nii.gz \
-      -3D -phiding -matchorig \
-      -iters ${SMOOTH_ITER} \
-      -sigma1 ${SMOOTH_SIGMA1} \
-      -sigma2 ${SMOOTH_SIGMA2} \
-      -deltat ${SMOOTH_DELTAT} \
-      -edgefraction ${SMOOTH_EDGEFRAC} \
-      ${DIR_SCRATCH}/image.nii.gz
-
-    #SIF_CIVET="/data/neuroimage_containers/civet_v2.1.1.sif"
-    #gunzip ${DIR_SCRATCH}/image.nii.gz
-    #singularity instance start --bind ${DIR_SCRATCH}:/mnt ${SIF_CIVET} civet
-    #singularity exec instance://civet nii2mnc /mnt/image.nii /mnt/tmp.mnc
-    #singularity exec instance://civet geo_smooth 0.0004 6 /mnt/tmp.mnc /mnt/tmpsmooth.mnc
-    #singularity exec instance://civet mnc2nii /mnt/tmpsmooth.mnc /mnt/smooth.nii
-    #singularity instance stop civet
-    #gzip ${DIR_SCRATCH}/smooth.nii
-    #reorientRPI --image ${DIR_SCRATCH}/smooth.nii.gz
-    #mv ${DIR_SCRATCH}/smooth.nii.gz ${DIR_SCRATCH}/image.nii.gz
-    #rm ${DIR_SCRATCH}/tmp*
-
-    if [[ ${NO_PNG} == "false" ]]; then
-      make3Dpng --bg ${DIR_SCRATCH}/image_anisosmooth.nii.gz --layout "1:${PLANE}" --max-pixels 1024
-    fi
-    mv ${DIR_SCRATCH}/image_anisosmooth.nii.gz ${DIR_SCRATCH}/image.nii.gz
-  fi
-
-
-
-  # Align to template ----------------------------------------------------------
-  if [[ ${NO_ALIGN} == "false" ]]; then
-    if [[ -z ${ALIGN_FIXED} ]]; then
-      ALIGN_FIXED=${DIR_SCRATCH}/fixed.nii.gz
-      niimath ${ALIGN_ATLAS} -mas ${ALIGN_MASK} ${DIR_SCRATCH}/fixed.nii.gz
-    fi
-    antsAI -d 3 \
-      --transform Rigid[0.3] \
-      --metric Mattes[${ALIGN_FIXED},${DIR_SCRATCH}/image.nii.gz] \
-      --align-blobs 1 \
-      --output ${DIR_SCRATCH}/image_aligned.nii.gz
-  fi
-
-  # Save Output
-
-  ## add size string
-  LSZ=(${RESIZE//x/ })
-  LSZ[0]=$(echo "scale=0; ${LSZ[0]} * 1000" | bc -l)
-  LSZ[1]=$(echo "scale=0; ${LSZ[1]} * 1000" | bc -l)
-  LSZ[2]=$(echo "scale=0; ${LSZ[2]} * 1000" | bc -l)
-  RESIZE_LABEL="${LSZ[0]}x${LSZ[1]}x${LSZ[2]}um"
-
+  rm ${DIRTMP}/mask/*
+  rm ${DIRTMP}/*
+  rmdir ${DIRTMP}/mask
+  rmdir ${DIRTMP}
 done
 
+## knit RMD
+Rscript -e "rmarkdown::render('${RMD}')"
+mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
+mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+mv ${DIRTMP}/*.html ${DIR_PROJECT}/qc/${PIPE}${FLOW}/
 
+mkdir -p ${DIR_SAVE}/prep/${IDDIR}
+mv ${DIR_SCRATCH}/*.png ${DIR_SAVE}/prep/${IDDIR}/
+
+# set status file --------------------------------------------------------------
+mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
+touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function

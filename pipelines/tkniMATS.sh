@@ -56,7 +56,7 @@ id:,dir-id:,\
 image:,mod:,mask:,mask-dil:,\
 method:,atlas:,roi:,prob:,prior:,k-class:,\
 weight-ants:,weight-5tt:,weight-synth:,pthresh:,fmed:,\
-no-keep,no-jac,no-thickness,no-png,no-rmd,\
+no-keep,no-jac,no-thickness,refine:,no-png,no-rmd,\
 dir-scratch:,requires:,\
 help,verbose,loquacious,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -94,7 +94,8 @@ FMED=3
 NO_JAC="false"
 NO_THICKNESS="false"
 
-REFINE="DKT+MALF,wmparc+MALF,hcpmmp1+MALF"
+REFINE="false"
+#REFINE="DKT+MALF,wmparc+MALF,hcpmmp1+MALF"
 
 HELP=false
 VERBOSE=false
@@ -140,6 +141,7 @@ while true; do
     --weight-synth) WEIGHT_SYNTH="$2" ; shift 2 ;;
     --no-keep) KEEP_PARTS="false" ; shift ;;
     --no-thickness) NO_THICKNESS="true" ; shift ;;
+    --refine) REFINE="$2" ; shift 2 ;;
     --keep-parts) KEEP_PARTS="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -354,7 +356,8 @@ if [[ ${METHOD^^} == *"ANTS"* ]]; then
         make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz \
           --fg ${TDIR}/${IDPFX}_posterior-${ROI}+${TM}.nii.gz \
           --fg-mask ${TDIR}/mask-png-fg.nii.gz \
-          --fg-color "timbow:hue=${HUE[${i}]}:lum=0,85" --fg-cbar "true" --fg-alpha 50 \
+          --fg-color "timbow:hue=${HUE[${i}]}:lum=0,85" \
+          --fg-cbar "true" --fg-alpha 50 \
           --layout "9:z;9:z;9:z" \
           --filename ${IDPFX}_posterior-${ROI}+${TM} \
           --dir-save ${TDIR}
@@ -418,7 +421,7 @@ if [[ ${METHOD^^} == *"5TT"* ]]; then
           --fg-cbar "true" --fg-alpha 50 \
           --layout "9:z;9:z;9:z" \
           --filename ${IDPFX}_posterior-${ROI}+${TM} \
-          --dir-save ${TDIR}
+          --dir-save ${TDIR} -v
       done
       niimath ${TDIR}/${IDPFX}_label-tissue+${TM}.nii.gz \
         -bin ${TDIR}/mask-png-fg.nii.gz -odt char
@@ -428,7 +431,7 @@ if [[ ${METHOD^^} == *"5TT"* ]]; then
         --fg-cbar "false" --fg-alpha 75 \
         --layout "9:z;9:z;9:z" \
         --filename ${IDPFX}_label-tissue+${TM} \
-          --dir-save ${TDIR}
+          --dir-save ${TDIR} -v
     fi
   fi
 fi
@@ -639,7 +642,7 @@ if [[ ${NO_THICKNESS} == "false" ]]; then
 fi
 
 ## Refine Labels if requested --------------------------------------------------
-if [[ -n ${REFINE} ]]; then
+if [[ ${REFINE} != "false" ]]; then
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> refine existing labels"
   fi
@@ -674,7 +677,7 @@ fi
 mv ${DIR_SCRATCH}/${IDPFX}_posterior-* ${DIR_POSTERIOR}/
 mv ${DIR_SCRATCH}/${IDPFX}_label-tissue* ${DIR_ANAT}/label/
 
-if [[ -n ${REFINE} ]]; then
+if [[ ${REFINE} != "false" ]]; then
   mv ${DIR_SCRATCH}/${IDPFX}_label-* ${DIR_ANAT}/label/MATS/
 fi
 
@@ -859,7 +862,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     fi
   fi
 
-  if [[ -n ${REFINE} ]]; then
+  if [[ ${REFINE} != "false" ]]; then
     echo '### Refined Labels {.tabset}' >> ${RMD}
     echo '#### Click to View ->' >> ${RMD}
     LABELS=(${REFINE//,/ })

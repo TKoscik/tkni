@@ -43,7 +43,7 @@ bg:,bg-volume:,bg-mask:,bg-mask-volume:,bg-threshold:,bg-color:,bg-cbar,\
 fg:,fg-volume:,fg-mask:,fg-mask-volume:,fg-threshold:,fg-alpha:,fg-color:,fg-cbar:,\
 roi:,roi-volume:,roi-value:,roi-color:,\
 layout:,edge-clip:,limits:,\
-no-slice-label,use-vox-label,no-lr-label,label-decimal:,\
+no-reorient,no-slice-label,use-vox-label,no-lr-label,label-decimal:,\
 color-panel:,color-text:,color-decimal:,font:,font-size:,max-pixels:,\
 keep-slice,keep-cbar,\
 filename:,dir-save:,dir-scratch: -n 'parse-options' -- "$@")
@@ -80,6 +80,7 @@ ROI_COLOR="timbow:random"
 LAYOUT=1:y,1:z,1:x
 EDGE_CLIP=5
 LIMITS=
+NO_REORIENT="false"
 LABEL_NO_SLICE="false"
 LABEL_USE_VOX="false"
 LABEL_NO_LR="false"
@@ -128,6 +129,7 @@ while true; do
     --layout) LAYOUT="$2" ; shift 2 ;;
     --edge-clip) EDGE_CLIP="$2" ; shift 2 ;;
     --limits) LIMITS="$2" ; shift 2 ;;
+    --no-reorient) NO_REORIENT="true" ; shift ;;
     --no-slice-label) LABEL_NO_SLICE="true" ; shift ;;
     --use-vox-label) LABEL_USE_VOX="true" ; shift ;;
     --no-lr-label) LABEL_NO_LR="true" ; shift ;;
@@ -542,22 +544,24 @@ if [[ -n ${ROI} ]]; then
 fi
 
 ## Push all to RAS orientation -------------------------------------------------
-3dresample -orient RAS -overwrite -prefix ${BG} -input ${BG}
-if [[ -n ${BG_MASK} ]]; then
-  3dresample -orient RAS -overwrite -prefix ${BG_MASK} -input ${BG_MASK}
-fi
-if [[ -n ${FG} ]]; then
-  for (( i=0; i<${#FG[@]}; i++ )); do
-    3dresample -orient RAS -overwrite -prefix ${FG[${i}]} -input ${FG[${i}]}
-  done
-fi
-if [[ -n ${FG_MASK} ]]; then
-  for (( i=0; i<${#FG_MASK[@]}; i++ )); do
-    3dresample -orient RAS -overwrite -prefix ${FG_MASK[${i}]} -input ${FG_MASK[${i}]}
-  done
-fi
-if [[ -n ${ROI} ]]; then
-  3dresample -orient RAS -overwrite -prefix ${ROI} -input ${ROI}
+if [[ ${NO_REORIENT} == "false" ]]; then
+  3dresample -orient RAS -overwrite -prefix ${BG} -input ${BG}
+  if [[ -n ${BG_MASK} ]]; then
+    3dresample -orient RAS -overwrite -prefix ${BG_MASK} -input ${BG_MASK}
+  fi
+  if [[ -n ${FG} ]]; then
+    for (( i=0; i<${#FG[@]}; i++ )); do
+      3dresample -orient RAS -overwrite -prefix ${FG[${i}]} -input ${FG[${i}]}
+    done
+  fi
+  if [[ -n ${FG_MASK} ]]; then
+    for (( i=0; i<${#FG_MASK[@]}; i++ )); do
+      3dresample -orient RAS -overwrite -prefix ${FG_MASK[${i}]} -input ${FG_MASK[${i}]}
+    done
+  fi
+  if [[ -n ${ROI} ]]; then
+    3dresample -orient RAS -overwrite -prefix ${ROI} -input ${ROI}
+  fi
 fi
 
 # Calculate slices to plot =====================================================
@@ -655,6 +659,10 @@ if [[ ${NX} -gt 0 ]]; then
     XSLICE="${X0}:${XS}:${XN}"
   else
     XS=$(echo "scale=0; (${XN} - ${X0}) / (${NX} - 1)" | bc -l)
+    if [[ ${XS} -eq 0 ]]; then
+      XS=1
+      NX=$((${XN} - ${X0}))
+	fi
     XX=$(echo "scale=0; (${XN} - ${X0} - (${XS} * (${NX} - 1))) / 2" | bc -l)
     X0=$((${X0} + ${XX}))
     XN=$((${XN} - ${XX}))
@@ -679,6 +687,10 @@ if [[ ${NY} -gt 0 ]]; then
     YSLICE="${Y0}:${YS}:${YN}"
   else
     YS=$(echo "scale=0; (${YN} - ${Y0}) / (${NY} - 1)" | bc -l)
+    if [[ ${YS} -eq 0 ]]; then
+      YS=1
+      NY=$((${YN} - ${Y0}))
+	fi
     YY=$(echo "scale=0; (${YN} - ${Y0} - (${YS} * (${NY} - 1))) / 2" | bc -l)
     Y0=$((${Y0} + ${YY}))
     YN=$((${YN} - ${YY}))
@@ -703,6 +715,10 @@ if [[ ${NZ} -gt 0 ]]; then
     ZSLICE="${Z0}:${ZS}:${ZN}"
   else
     ZS=$(echo "scale=0; (${ZN} - ${Z0}) / (${NZ} - 1)" | bc -l)
+    if [[ ${ZS} -eq 0 ]]; then
+      ZS=1
+      NZ=$((${ZN} - ${Z0}))
+	fi
     ZZ=$(echo "scale=0; (${ZN} - ${Z0} - (${ZS} * (${NZ} - 1))) / 2" | bc -l)
     Z0=$((${Z0} + ${ZZ}))
     ZN=$((${ZN} - ${ZZ}))
@@ -1257,20 +1273,26 @@ for (( i=0; i<${#ROW_LAYOUT[@]}; i++ )); do
      TEMP=(${COL_LAYOUT[${j}]//\:/ })
      if [[ "${TEMP[1]}" =~ "x" ]]; then
        for (( k=0; k<${TEMP[0]}; k++ )); do
-         montage_fcn="${montage_fcn} ${DIR_SCRATCH}/X${XCOUNT}.png"
-         XCOUNT=$((${XCOUNT}+1))
+         if [[ -f ${DIR_SCRATCH}/X${XCOUNT}.png ]]; then
+           montage_fcn="${montage_fcn} ${DIR_SCRATCH}/X${XCOUNT}.png"
+           XCOUNT=$((${XCOUNT}+1))
+         fi
        done
      fi
      if [[ "${TEMP[1]}" =~ "y" ]]; then
        for (( k=0; k<${TEMP[0]}; k++ )); do
-         montage_fcn="${montage_fcn} ${DIR_SCRATCH}/Y${YCOUNT}.png"
-         YCOUNT=$((${YCOUNT}+1))
+         if [[ -f ${DIR_SCRATCH}/Y${YCOUNT}.png ]]; then
+           montage_fcn="${montage_fcn} ${DIR_SCRATCH}/Y${YCOUNT}.png"
+           YCOUNT=$((${YCOUNT}+1))
+         fi
        done
      fi
      if [[ "${TEMP[1]}" =~ "z" ]]; then
        for (( k=0; k<${TEMP[0]}; k++ )); do
-         montage_fcn="${montage_fcn} ${DIR_SCRATCH}/Z${ZCOUNT}.png"
-         ZCOUNT=$((${ZCOUNT}+1))
+         if [[ -f ${DIR_SCRATCH}/Z${ZCOUNT}.png ]]; then
+           montage_fcn="${montage_fcn} ${DIR_SCRATCH}/Z${ZCOUNT}.png"
+           ZCOUNT=$((${ZCOUNT}+1))
+         fi
        done
      fi
   done
