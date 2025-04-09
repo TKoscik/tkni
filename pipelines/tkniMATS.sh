@@ -143,6 +143,7 @@ while true; do
     --no-thickness) NO_THICKNESS="true" ; shift ;;
     --refine) REFINE="$2" ; shift 2 ;;
     --keep-parts) KEEP_PARTS="true" ; shift ;;
+    --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;

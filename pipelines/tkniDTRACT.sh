@@ -88,7 +88,6 @@ FORCE=false
 HELP=false
 VERBOSE=false
 LOQUACIOUS=false
-FORCE=false
 NO_PNG=false
 NO_RMD=false
 

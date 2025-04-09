@@ -483,6 +483,7 @@ if [[ -n ${FG_MASK} ]]; then
       cp ${FG_MASK[${i}]} ${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
     fi
     FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}_ORIG.nii.gz
+    niimath ${FG_MASK[${i}]} -bin ${FG_MASK[${i}]} -odt char
   done
 else
   for (( i=0; i<${FG_N}; i++ )); do

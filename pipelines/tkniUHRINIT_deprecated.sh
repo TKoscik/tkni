@@ -72,13 +72,28 @@ IDFIELD="uid,ses"
 IMAGE=
 THREADS=4
 
+NO_REORIENT="false"
+NO_DEBIAS="false"
+NO_DENOISE="false"
+NO_SEGMENT="false"
+
 REORIENT_CODE="LSA"
 REORIENT_DEOBLIQUE="false"
 
-SEGMENT_RESCALE=1x1x1
+DEBIAS_BSPLINE="[300,3,0.0,0.5]"
+DEBIAS_SHRINK=16
+DEBIAS_CONVERGENCE="[500x500x500x500,0.001]"
+DEBIAS_HISTMATCH="[0.3,0.01,200]"
+
+DENOISE_MODEL="Rician"
+DENOISE_SHRINK="1"
+DENOISE_PATCH="1x1x1"
+DENOISE_SEARCH="3x3x3"
+
+SEGMENT_RESCALE=0.5x0.5x0.5
 SEGMENT_MASKCLFRAC=0.15
 SEGMENT_INIT=KMeans
-SEGMENT_N=12
+SEGMENT_N=5
 SEGMENT_FORM=Socrates[0]
 SEGMENT_CONVERGENCE=[5,0.001]
 SEGMENT_LIKELIHOOD=Gaussian
@@ -112,8 +127,20 @@ while true; do
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --id-field) IDFIELD="$2" ; shift 2 ;;
     --image) IMAGE="$2" ; shift 2 ;;
+    --threads) THREADS="$2" ; shift 2 ;;
+    --no-reorient) NO_REORIENT="true" ; shift ;;
+    --no-debias) NO_DEBIAS="true" ; shift ;;
+    --no-denoise) NO_DENOISE="true" ; shift ;;
     --reorient-code) REORIENT_CODE="$2" ; shift 2 ;;
     --reorient-deoblique) REORIENT_DEOBLIQUE="true" ; shift ;;
+    --debias-bspline) DEBIAS_BSPLINE="$2" ; shift 2 ;;
+    --debias-shrink) DEBIAS_SHRINK="$2" ; shift 2 ;;
+    --debias-convergence) DEBIAS_CONVERGENCE="$2" ; shift 2 ;;
+    --debias-histmatch) DEBIAS_HISTMATCH="$2" ; shift 2 ;;
+    --denoise-model) DENOISE_MODEL="$2" ; shift 2 ;;
+    --denoise-shrink) DENOISE_SHRINK="$2" ; shift 2 ;;
+    --denoise-patch) DENOISE_PATCH="$2" ; shift 2 ;;
+    --denoise-search) DENOISE_SEARCH="$2" ; shift 2 ;;
     --segment-rescale) SEGMENT_RESCALE="$2" ; shift 2 ;;
     --segment-maskclfrac) SEGMENT_MASKCLFRAC="$2" ; shift 2 ;;
     --segment-init) SEGMENT_INIT="$2" ; shift 2 ;;
@@ -147,8 +174,20 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  --dir-id'
   echo '  --id-field'
   echo '  --image'
+  echo '  --threads'
+  echo '  --no-reorient'
+  echo '  --no-debias'
+  echo '  --no-denoise'
   echo '  --reorient-code'
   echo '  --reorient-deoblique'
+  echo '  --debias-bspline'
+  echo '  --debias-shrink'
+  echo '  --debias-convergence'
+  echo '  --debias-histmatch'
+  echo '  --denoise-model'
+  echo '  --denoise-shrink'
+  echo '  --denoise-patch'
+  echo '  --denoise-search'
   echo '  --segment-rescale'
   echo '  --segment-maskclfrac'
   echo '  --segment-init'
@@ -292,9 +331,9 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 DIRTMP=${DIR_SCRATCH}/tmp
-DIROUT=${DIR_SCRATCH}/out
+DIRCLEAN=${DIR_SCRATCH}/clean
 mkdir -p ${DIRTMP}
-mkdir -p ${DIROUT}
+mkdir -p ${DIRCLEAN}
 
 if [[ ${NO_RMD} == "false" ]]; then
   RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
@@ -349,97 +388,175 @@ for (( i=0; i<${NIMG}; i++ )); do
     if [[ ${NO_RMD} == false ]]; then
         echo -e '### Raw UHR Image' >> ${RMD}
         echo -e '![Raw: '${PFX}'_'${MOD}']('${DIR_SCRATCH}'/'${PFX}'_raw.png)\n' >> ${RMD}
+        echo "#### Processing ${PFX}_${MOD} {.tabset}" >> ${RMD}
+        echo "##### Click to View -->" >> ${RMD}
     fi
   fi
 
   # Fix Orientation ------------------------------------------------------------
-  3dresample -orient ${REORIENT_CODE} -overwrite \
-    -prefix ${DIRTMP}/image_reorient.nii.gz -input ${TIMG}
-  CopyImageHeaderInformation ${TIMG} \
-    ${DIRTMP}/image_reorient.nii.gz \
-    ${DIRTMP}/image_reorient.nii.gz 1 0 0
-  3dresample -orient RPI -overwrite \
-    -prefix ${DIRTMP}/image_reorient.nii.gz \
-    -input ${DIRTMP}/image_reorient.nii.gz
-  if [[ ${REORIENT_DEOBLIQUE} == "true" ]]; then
-    3dWarp -deoblique -overwrite \
+  if [[ ${NO_REORIENT} == "false" ]]; then
+    3dresample -orient ${REORIENT_CODE} -overwrite \
+      -prefix ${DIRTMP}/image_reorient.nii.gz -input ${TIMG}
+    CopyImageHeaderInformation ${TIMG} \
+      ${DIRTMP}/image_reorient.nii.gz \
+      ${DIRTMP}/image_reorient.nii.gz 1 0 0
+    3dresample -orient RPI -overwrite \
       -prefix ${DIRTMP}/image_reorient.nii.gz \
       -input ${DIRTMP}/image_reorient.nii.gz
-  fi
-  # Re-Get Image Dimensions, and plane of acquisition ------------------------
-  DIM=($(niiInfo -i ${DIRTMP}/image_reorient.nii.gz -f "voxels"))
-  if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
-  if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
-  if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
-  if [[ -z ${PLANE} ]]; then PLANE="z"; fi
-
-  if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-    make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz \
-    --layout "1:${PLANE}" --max-pixels 1024 \
-    --filename ${PFX}_reorient --dir-save ${DIR_SCRATCH}
-    if [[ ${NO_RMD} == false ]]; then
-      echo -e '#### Reorient' >> ${RMD}
-      echo -e '![Reorient]('${DIR_SCRATCH}'/'${PFX}'_reorient.png)\n' >> ${RMD}
+    if [[ ${REORIENT_DEOBLIQUE} == "true" ]]; then
+      3dWarp -deoblique -overwrite \
+        -prefix ${DIRTMP}/image_reorient.nii.gz \
+        -input ${DIRTMP}/image_reorient.nii.gz
     fi
+    # Re-Get Image Dimensions, and plane of acquisition ------------------------
+    DIM=($(niiInfo -i ${DIRTMP}/image_reorient.nii.gz -f "voxels"))
+    if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
+    if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
+    if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
+    if [[ -z ${PLANE} ]]; then PLANE="z"; fi
+
+    if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
+      make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz \
+      --layout "1:${PLANE}" --max-pixels 1024 \
+      --filename ${PFX}_reorient --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Reorient' >> ${RMD}
+        echo -e '![Reorient]('${DIR_SCRATCH}'/'${PFX}'_reorient.png)\n' >> ${RMD}
+      fi
+    fi
+    TIMG=${DIRTMP}/image_reorient.nii.gz
   fi
 
-  # Intensity Segmentation -----------------------------------------------------
-  ## Debias first
-  DEBIAS_BSPLINE="[300,3,0.0,0.5]"
-  DEBIAS_SHRINK=16
-  DEBIAS_CONVERGENCE="[500x500x500x500,0.001]"
-  DEBIAS_HISTMATCH="[0.3,0.01,200]"
-  MIN=$(3dBrickStat -slow -min ${DIRTMP}/image_reorient.nii.gz)
-  niimath ${DIRTMP}/image_reorient.nii.gz -add ${MIN//-} -add 10 ${DIRTMP}/image_tmp.nii.gz
-  N4BiasFieldCorrection -d 3 \
-    -i ${DIRTMP}/image_tmp.nii.gz \
-    -o ${DIRTMP}/image_debias.nii.gz \
-    --bspline-fitting ${DEBIAS_BSPLINE} \
-    --shrink-factor ${DEBIAS_SHRINK} \
-    --convergence ${DEBIAS_CONVERGENCE} \
-    --histogram-sharpening ${DEBIAS_HISTMATCH}
 
-  ResampleImage 3 ${DIRTMP}/image_debias.nii.gz ${DIRTMP}/image_downsample.nii.gz ${SEGMENT_RESCALE} 0 4
-  3dAutomask -prefix ${DIRTMP}/image_mask-fg.nii.gz -overwrite -clfrac ${SEGMENT_MASKCLFRAC} ${DIRTMP}/image_downsample.nii.gz
-  Atropos --image-dimensionality 3 \
-    --intensity-image ${DIRTMP}/image_downsample.nii.gz \
-    --mask-image ${DIRTMP}/image_mask-fg.nii.gz \
-    --initialization ${SEGMENT_INIT}[${SEGMENT_N}] \
-    --posterior-formulation ${SEGMENT_FORM} \
-    --convergence ${SEGMENT_CONVERGENCE} \
-    --likelihood-model ${SEGMENT_LIKELIHOOD} \
-    --mrf ${SEGMENT_MRF} \
-    --use-random-seed ${SEGMENT_RANDOM} \
-    --verbose 1 \
-    --output ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz
-  antsApplyTransforms -d 3 -n MultiLabel \
-    -i ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-    -o ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-    -r ${DIRTMP}/image_reorient.nii.gz
-  if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-    make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz \
-      --fg ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-      --fg-mask ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-      --fg-color "timbow:rnd" \
-      --fg-alpha 50 --fg-cbar "false" \
+  # Debias ---------------------------------------------------------------------
+  if [[ ${NO_DEBIAS} == "false" ]]; then
+    MIN=$(3dBrickStat -slow -min ${TIMG})
+    niimath ${TIMG} -add ${MIN//-} -add 10 ${DIRTMP}/tmp.nii.gz
+    N4BiasFieldCorrection -d 3 \
+      -i ${DIRTMP}/tmp.nii.gz  \
+      -o [${DIRTMP}/image_debias.nii.gz,${DIRTMP}/image_biasField.nii.gz ] \
+      --bspline-fitting ${DEBIAS_BSPLINE} \
+      --shrink-factor ${DEBIAS_SHRINK} \
+      --convergence ${DEBIAS_CONVERGENCE} \
+      --histogram-sharpening ${DEBIAS_HISTMATCH}
+    rm ${DIRTMP}/tmp.nii.gz
+    if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
+      make3Dpng --bg ${DIRTMP}/image_debias.nii.gz \
       --layout "1:${PLANE}" --max-pixels 1024 \
-      --filename ${PFX}_label-atropos+${SEGMENT_N} \
-      --dir-save ${DIR_SCRATCH}
-    if [[ ${NO_RMD} == false ]]; then
-      echo -e '#### Intensity Segmentation' >> ${RMD}
-      echo -e '![Segmentation]('${DIR_SCRATCH}'/'${PFX}'_label-atropos+'${SEGMENT_N}'.png)\n' >> ${RMD}
+      --filename ${PFX}_debias --dir-save ${DIR_SCRATCH}
+      make3Dpng --bg ${DIRTMP}/image_biasField.nii.gz \
+        --layout "1:${PLANE}" --bg-color "plasma" --max-pixels 1024 \
+      --filename ${PFX}_biasField --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Debias' >> ${RMD}
+        echo -e '![Debias]('${DIR_SCRATCH}'/'${PFX}'_debias.png)\n' >> ${RMD}
+        echo -e '![Bias Field]('${DIR_SCRATCH}'/'${PFX}'_biasField.png)\n' >> ${RMD}
+      fi
+    fi
+    TIMG=${DIRTMP}/image_debias.nii.gz
+  fi
+
+  # Denoise --------------------------------------------------------------------
+  if [[ ${NO_DENOISE} == "false" ]]; then
+    if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>Denoising"; fi
+    DenoiseImage -d 3 -n ${DENOISE_MODEL} \
+      --shrink-factor ${DENOISE_SHRINK} \
+      --patch-radius ${DENOISE_PATCH} \
+      --search-radius ${DENOISE_SEARCH} \
+      -i ${TIMG} \
+      -o [${DIRTMP}/image_denoise.nii.gz,${DIRTMP}/image_noise.nii.gz]
+    if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
+      make3Dpng --bg ${DIRTMP}/image_denoise.nii.gz \
+        --layout "1:${PLANE}" --max-pixels 1024 \
+        --filename ${PFX}_denoise --dir-save ${DIR_SCRATCH}
+      make3Dpng --bg ${DIRTMP}/image_noise.nii.gz \
+        --bg-cbar "true" --bg-color "virid-esque" \
+        --layout "1:${PLANE}" --max-pixels 1024 \
+        --filename ${PFX}_noise --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Denoise' >> ${RMD}
+        echo -e '![Denoise]('${DIR_SCRATCH}'/'${PFX}'_denoise.png)\n' >> ${RMD}
+        echo -e '![Noise]('${DIR_SCRATCH}'/'${PFX}'_noise.png)\n' >> ${RMD}
+      fi
+    fi
+    TIMG=${DIRTMP}/image_denoise.nii.gz
+  fi
+
+  # Attempt brain extraction ---------------------------------------------------
+#  ResampleImage 3 ${TIMG} ${DIRTMP}/image_downsample.nii.gz 1x1x1 0 4
+#  brainExtraction --image ${DIRTMP}/image_downsample.nii.gz \
+#    --method "skullstrip,autmask,ants,bet,synth" \
+#    --dir-save ${DIRTMP}/mask --no-png
+#  antsApplyTransforms -d 3 -n MultiLabel \
+#    -i ${DIRTMP}/mask/image_mask-brain+VENN.nii.gz \
+#    -o ${DIRTMP}/image_mask-brain+INIT.nii.gz \
+#    -r ${TIMG}
+#  if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
+#    make3Dpng --bg ${TIMG} \
+#      --fg ${DIRTMP}/image_mask-brain+INIT.nii.gz \
+#      --fg-mask ${DIRTMP}/image_mask-brain+INIT.nii.gz \
+#      --fg-color "timbow:rnd" \
+#      --fg-alpha 50 --fg-cbar "false" \
+#      --layout "1:${PLANE}" --max-pixels 1024 \
+#      --filename ${PFX}_mask-brain+INIT \
+#      --dir-save ${DIR_SCRATCH}
+#    if [[ ${NO_RMD} == false ]]; then
+#      echo -e '##### Initial Mask' >> ${RMD}
+#      echo -e '![Initial Mask]('${DIR_SCRATCH}'/'${PFX}'_mask-brain+INIT.png)\n' >> ${RMD}
+#    fi
+#  fi
+
+  # Intensity Segmentation
+  if [[ ${NO_SEGMENT} == "false" ]]; then
+    ResampleImage 3 ${TIMG} ${DIRTMP}/image_downsample.nii.gz ${SEGMENT_RESCALE} 0 4
+    3dAutomask -prefix ${DIRTMP}/image_mask-fg.nii.gz -overwrite \
+      -clfrac ${SEGMENT_MASKCLFRAC} ${DIRTMP}/image_downsample.nii.gz
+    Atropos --image-dimensionality 3 \
+      --intensity-image ${DIRTMP}/image_downsample.nii.gz \
+      --mask-image ${DIRTMP}/image_mask-fg.nii.gz \
+      --initialization ${SEGMENT_INIT}[${SEGMENT_N}] \
+      --posterior-formulation ${SEGMENT_FORM} \
+      --convergence ${SEGMENT_CONVERGENCE} \
+      --likelihood-model ${SEGMENT_LIKELIHOOD} \
+      --mrf ${SEGMENT_MRF} \
+      --use-random-seed ${SEGMENT_RANDOM} \
+      --verbose 1 \
+      --output ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz
+    antsApplyTransforms -d 3 -n MultiLabel \
+      -i ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
+      -o ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
+      -r ${TIMG}
+    if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
+      make3Dpng --bg ${TIMG} \
+        --fg ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
+        --fg-mask ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
+        --fg-color "timbow:rnd" \
+        --fg-alpha 50 --fg-cbar "false" \
+        --layout "1:${PLANE}" --max-pixels 1024 \
+        --filename image_label-atropos+${SEGMENT_N} \
+        --dir-save ${DIR_SCRATCH}
+      if [[ ${NO_RMD} == false ]]; then
+        echo -e '##### Intensity Segmentation' >> ${RMD}
+        echo -e '![Segmentation]('${DIR_SCRATCH}'/'${PFX}'_label-atropos+${SEGMENT_N}.png)\n' >> ${RMD}
+      fi
     fi
   fi
 
   # Save result ----------------------------------------------------------------
-  mv ${DIRTMP}/image_reorient.nii.gz ${DIROUT}/${PFX}_${MOD}.nii.gz
-  mv ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-     ${DIROUT}/${PFX}_label-atropos+${SEGMENT_N}.nii.gz
+  mv ${TIMG} ${DIRCLEAN}/${PFX}_${MOD}.nii.gz
+  if [[ ${NO_SEGMENTATION} == "false" ]]; then
+    mv ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
+      ${DIRCLEAN}/${PFX}_label-atropos+${SEGMENT_N}.nii.gz
+  fi
+  # mv ${DIRTMP}/mask/image_mask-brain+VENN.nii.gz ${DIRCLEAN}/${PFX}_mask-brain+INIT.nii.gz
+
+  rm ${DIRTMP}/mask/*
+  rmdir ${DIRTMP}/mask
   rm ${DIRTMP}/*
 done
 
-mkdir -p ${DIR_SAVE}/anat/init
-mv ${DIROUT}/* ${DIR_SAVE}/anat/init
+mkdir -p ${DIR_SAVE}/anat/raw_clean
+mv ${DIRCLEAN}/* ${DIR_SAVE}/anat/raw_clean/
 
 ## knit RMD
 Rscript -e "rmarkdown::render('${RMD}')"

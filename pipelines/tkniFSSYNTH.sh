@@ -46,6 +46,7 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvn --long pi:,project:,dir-project:,\
 id:,dir-id:,image:,nthreads:,labels:,\
+requires:,force,\
 dir-scratch:,dir-fs:,dir-save:,\
 help,verbose,no-png -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -78,6 +79,7 @@ FSPIPE=fsSynth
 PIPE=tkni
 FLOW=${FCN_NAME//${PIPE}}
 REQUIRES="tkniDICOM,tkniAINIT"
+FORCE="false"
 
 # gather input options ---------------------------------------------------------
 while true; do
@@ -85,6 +87,7 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
+    -r | --no-rmd) NO_RMD=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -97,6 +100,8 @@ while true; do
     --dir-fs) DIR_FS="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    --force) FORCE="true" ; shift ;;
+    --requires) REQUIRES="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
   esac
