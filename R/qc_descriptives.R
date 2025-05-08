@@ -1,3 +1,4 @@
+
 args <- commandArgs(trailingOnly = TRUE)
 
 vol <- 1
@@ -16,16 +17,10 @@ for (i in seq(1,length(args))) {
   }
 }
 
-suppressPackageStartupMessages({
-    require(nifti.io)
-    require(tools)
-    require(R.utils)
-    require(moments)
-})
-#try(library(nifti.io, quietly=T, verbose=F), silent=T)
-#try(library(tools, quietly=T, verbose=F), silent=T)
-#try(library(R.utils, quietly=T, verbose=F), silent=T)
-#try(library(moments, quietly=T, verbose=F), silent=T)
+require(nifti.io)
+require(tools)
+require(R.utils)
+require(moments)
 
 # read in image data, unzip as needed ------------------------------------------
 if (file_ext(img) == "gz") {

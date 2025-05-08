@@ -19,7 +19,7 @@ umask 007
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvn --long pi:,project:,dir-project:,\
-id:,dir-id:,id-field:,add-resolution,input-dcm:,dir-scratch:,\
+id:,dir-id:,id-field:,reorient:,add-resolution,input-dcm:,dir-scratch:,\
 help,verbose,no-png,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -35,6 +35,7 @@ DIR_SCRATCH=
 IDPFX=
 IDDIR=
 IDFIELD="sub,ses"
+REORIENT="false"
 ADD_RES="false"
 INPUT_DCM=
 HELP=false
@@ -58,6 +59,7 @@ while true; do
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --id-field) IDFIELD="$2" ; shift 2 ;;
+    --reorient) REORIENT="$2" ; shift 2 ;;
     --add-resolution) ADD_RES="true" ; shift ;;
     --input-dcm) INPUT_DCM="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -196,6 +198,22 @@ fi
 
 # Convert DICOMS ---------------------------------------------------------------
 dicomConvert --input ${INPUT_DCM} --depth 10 --dir-save ${DIR_SCRATCH}
+
+# Reorient images if requested -------------------------------------------------
+if [[ ${REORIENT} != "false" ]]; then
+  FLS=($(ls ${DIR_SCRATCH}/*.nii.gz))
+  for (( i=0; i<${#FLS[@]}; i++ )); do
+    3dresample -orient ${REORIENT} -overwrite \
+      -prefix ${DIR_SCRATCH}/tmp.nii.gz -input ${FLS[${i}]}
+    CopyImageHeaderInformation ${FLS[${i}]} \
+      ${DIR_SCRATCH}/tmp.nii.gz \
+      ${DIR_SCRATCH}/tmp.nii.gz 1 0 0
+    3dresample -orient RPI -overwrite \
+      -prefix ${DIR_SCRATCH}/tmp.nii.gz \
+      -input ${DIR_SCRATCH}/tmp.nii.gz
+    mv ${DIR_SCRATCH}/tmp.nii.gz ${FLS[${i}]}
+  done
+fi
 
 # Autoname NIFTIs --------------------------------------------------------------
 if [[ ${ADD_RES} == "false" ]]; then

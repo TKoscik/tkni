@@ -612,6 +612,7 @@ if [[ ${NO_PNG} == "false" ]]; then
     -bin ${DIR_SCRATCH}/mask-png-fg.nii.gz -odt char
   make3Dpng --bg ${DIR_SCRATCH}/image.nii.gz --bg-threshold 2.5,97.5 \
     --fg ${DIR_SCRATCH}/${IDPFX}_label-tissue.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/${IDPFX}_label-tissue.nii.gz \
     --fg-color "timbow:hue=#FF0000;lum=65,65:cyc=4/6" \
     --fg-cbar "true" --fg-alpha 75 \
     --layout "9:z;9:z;9:z" \

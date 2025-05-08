@@ -481,7 +481,7 @@ niimath ${DIR_SCRATCH}/mask-brain+NATIVE+nocsf.nii.gz \
 ImageMath 4 ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz TimeSeriesAssemble ${TR} 0 ${QPROC[@]}
 
 # Calculate constants: T1, T2, PDunscaled --------------------------------------
-Rscript /usr/local/tkni/private/R/qalasConstants.R \
+Rscript /usr/local/tkni/private/qalasConstants.R \
   "tr" ${OPT_TR} \
   "fa" ${OPT_FA} \
   "turbo" ${OPT_TURBO} \

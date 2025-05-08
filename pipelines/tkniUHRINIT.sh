@@ -47,14 +47,11 @@ trap egress EXIT
 OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
 id:,dir-id:,id-field:,\
 image:,threads:,\
-no-reorient,no-debias,no-denoise,no-segment,\
-reorient-code:,reorient-deoblique,\
 debias-bspline:,debias-shrink:,debias-convergence:,debias-histmatch:\
-denoise-model:,denoise-shrink:,denoise-patch:,denoise-search:,\
 segment-rescale:,segment-maskclfrac:,segment-init:,segment-n:,segment-form:,\
 segment-convergence:,segment-likelihood:,segment-mrf:,segment-random:,\
 dir-save:,dir-scratch:,\
-keep,help,verbose,no-png,no-rmd -n 'parse-options' -- "$@")
+keep,help,verbose,no-png,no-rmd,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -70,10 +67,13 @@ IDDIR=
 IDFIELD="uid,ses"
 
 IMAGE=
+UHR_THRESH=0.1
 THREADS=4
 
-REORIENT_CODE="LSA"
-REORIENT_DEOBLIQUE="false"
+DEBIAS_BSPLINE="[300,3,0.0,0.5]"
+DEBIAS_SHRINK=16
+DEBIAS_CONVERGENCE="[500x500x500x500,0.001]"
+DEBIAS_HISTMATCH="[0.3,0.01,200]"
 
 SEGMENT_RESCALE=1x1x1
 SEGMENT_MASKCLFRAC=0.15
@@ -105,6 +105,7 @@ while true; do
     -v | --verbose) VERBOSE="true" ; shift ;;
     -n | --no-png) NO_PNG="true" ; shift ;;
     -r | --no-rmd) NO_PNG="true" ; shift ;;
+    --force) FORCE="true" ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -112,6 +113,7 @@ while true; do
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --id-field) IDFIELD="$2" ; shift 2 ;;
     --image) IMAGE="$2" ; shift 2 ;;
+    --no-reorient) NO_REORIENT="true" ; shift ;;
     --reorient-code) REORIENT_CODE="$2" ; shift 2 ;;
     --reorient-deoblique) REORIENT_DEOBLIQUE="true" ; shift ;;
     --segment-rescale) SEGMENT_RESCALE="$2" ; shift 2 ;;
@@ -296,9 +298,19 @@ DIROUT=${DIR_SCRATCH}/out
 mkdir -p ${DIRTMP}
 mkdir -p ${DIROUT}
 
+# Identify UHR images ----------------------------------------------------------
+UHR_THRESH=0.1
+unset UHRLS
+for (( i=0; i<${NIMG}; i++ )); do
+  SZ=$(niiInfo -i ${IMAGE[${i}]} -f mm3)
+  if [[ $(echo "${SZ} < ${UHR_THRESH}" | bc) -eq 1 ]]; then
+    UHRLS+=(${IMAGE[${i}]})
+  fi
+done
+NUHR=${#UHRLS[@]}
+
 if [[ ${NO_RMD} == "false" ]]; then
   RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
-
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
   echo '```{r setup, include=FALSE}' >> ${RMD}
   echo 'knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, comment=NA)' >> ${RMD}
@@ -314,10 +326,8 @@ if [[ ${NO_RMD} == "false" ]]; then
   echo "    buttons=c('copy', 'csv', 'excel', 'pdf', 'print')," >> ${RMD}
   echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
   echo -e '```\n' >> ${RMD}
-
   echo '## Initial Ultra-High Resolution Processing' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
-
   echo 'PI: **'${PI}'**\' >> ${RMD}
   echo 'PROJECT: **'${PROJECT}'**\' >> ${RMD}
   echo 'IDENTIFIER: **'${IDPFX}'**\' >> ${RMD}
@@ -325,8 +335,8 @@ if [[ ${NO_RMD} == "false" ]]; then
   echo '' >> ${RMD}
 fi
 
-for (( i=0; i<${NIMG}; i++ )); do
-  IMG=${IMAGE[${i}]}
+for (( i=0; i<${NUHR}; i++ )); do
+  IMG=${UHRLS[${i}]}
 
   # initialize outputs ---------------------------------------------------------
   PFX=$(getBidsBase -i ${IMG} -s)
@@ -341,56 +351,12 @@ for (( i=0; i<${NIMG}; i++ )); do
 
   # Copy RAW image to scratch --------------------------------------------------
   TIMG=${DIRTMP}/image_raw.nii.gz
-  cp ${IMG} ${TIMG}
-  if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-    make3Dpng --bg ${DIRTMP}/image_raw.nii.gz \
-      --layout "1:${PLANE}" --max-pixels 1024 \
-      --filename ${PFX}_raw --dir-save ${DIR_SCRATCH}
-    if [[ ${NO_RMD} == false ]]; then
-        echo -e '### Raw UHR Image' >> ${RMD}
-        echo -e '![Raw: '${PFX}'_'${MOD}']('${DIR_SCRATCH}'/'${PFX}'_raw.png)\n' >> ${RMD}
-    fi
-  fi
-
-  # Fix Orientation ------------------------------------------------------------
-  3dresample -orient ${REORIENT_CODE} -overwrite \
-    -prefix ${DIRTMP}/image_reorient.nii.gz -input ${TIMG}
-  CopyImageHeaderInformation ${TIMG} \
-    ${DIRTMP}/image_reorient.nii.gz \
-    ${DIRTMP}/image_reorient.nii.gz 1 0 0
-  3dresample -orient RPI -overwrite \
-    -prefix ${DIRTMP}/image_reorient.nii.gz \
-    -input ${DIRTMP}/image_reorient.nii.gz
-  if [[ ${REORIENT_DEOBLIQUE} == "true" ]]; then
-    3dWarp -deoblique -overwrite \
-      -prefix ${DIRTMP}/image_reorient.nii.gz \
-      -input ${DIRTMP}/image_reorient.nii.gz
-  fi
-  # Re-Get Image Dimensions, and plane of acquisition ------------------------
-  DIM=($(niiInfo -i ${DIRTMP}/image_reorient.nii.gz -f "voxels"))
-  if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
-  if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
-  if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
-  if [[ -z ${PLANE} ]]; then PLANE="z"; fi
-
-  if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-    make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz \
-    --layout "1:${PLANE}" --max-pixels 1024 \
-    --filename ${PFX}_reorient --dir-save ${DIR_SCRATCH}
-    if [[ ${NO_RMD} == false ]]; then
-      echo -e '#### Reorient' >> ${RMD}
-      echo -e '![Reorient]('${DIR_SCRATCH}'/'${PFX}'_reorient.png)\n' >> ${RMD}
-    fi
-  fi
+  cp ${IMG} ${DIRTMP}/image_raw.nii.gz
 
   # Intensity Segmentation -----------------------------------------------------
   ## Debias first
-  DEBIAS_BSPLINE="[300,3,0.0,0.5]"
-  DEBIAS_SHRINK=16
-  DEBIAS_CONVERGENCE="[500x500x500x500,0.001]"
-  DEBIAS_HISTMATCH="[0.3,0.01,200]"
-  MIN=$(3dBrickStat -slow -min ${DIRTMP}/image_reorient.nii.gz)
-  niimath ${DIRTMP}/image_reorient.nii.gz -add ${MIN//-} -add 10 ${DIRTMP}/image_tmp.nii.gz
+  MIN=$(3dBrickStat -slow -min ${DIRTMP}/image_raw.nii.gz)
+  niimath ${DIRTMP}/image_raw.nii.gz -add ${MIN//-} -add 10 ${DIRTMP}/image_tmp.nii.gz
   N4BiasFieldCorrection -d 3 \
     -i ${DIRTMP}/image_tmp.nii.gz \
     -o ${DIRTMP}/image_debias.nii.gz \
@@ -398,9 +364,11 @@ for (( i=0; i<${NIMG}; i++ )); do
     --shrink-factor ${DEBIAS_SHRINK} \
     --convergence ${DEBIAS_CONVERGENCE} \
     --histogram-sharpening ${DEBIAS_HISTMATCH}
-
-  ResampleImage 3 ${DIRTMP}/image_debias.nii.gz ${DIRTMP}/image_downsample.nii.gz ${SEGMENT_RESCALE} 0 4
-  3dAutomask -prefix ${DIRTMP}/image_mask-fg.nii.gz -overwrite -clfrac ${SEGMENT_MASKCLFRAC} ${DIRTMP}/image_downsample.nii.gz
+  ResampleImage 3 ${DIRTMP}/image_debias.nii.gz \
+    ${DIRTMP}/image_downsample.nii.gz ${SEGMENT_RESCALE} 0 4
+  3dAutomask -prefix ${DIRTMP}/image_mask-fg.nii.gz \
+    -overwrite -clfrac ${SEGMENT_MASKCLFRAC} \
+    ${DIRTMP}/image_downsample.nii.gz
   Atropos --image-dimensionality 3 \
     --intensity-image ${DIRTMP}/image_downsample.nii.gz \
     --mask-image ${DIRTMP}/image_mask-fg.nii.gz \
@@ -412,12 +380,8 @@ for (( i=0; i<${NIMG}; i++ )); do
     --use-random-seed ${SEGMENT_RANDOM} \
     --verbose 1 \
     --output ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz
-  antsApplyTransforms -d 3 -n MultiLabel \
-    -i ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-    -o ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
-    -r ${DIRTMP}/image_reorient.nii.gz
   if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == false ]]; then
-    make3Dpng --bg ${DIRTMP}/image_reorient.nii.gz \
+    make3Dpng --bg ${DIRTMP}/image_downsample.nii.gz \
       --fg ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
       --fg-mask ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
       --fg-color "timbow:rnd" \
@@ -432,7 +396,7 @@ for (( i=0; i<${NIMG}; i++ )); do
   fi
 
   # Save result ----------------------------------------------------------------
-  mv ${DIRTMP}/image_reorient.nii.gz ${DIROUT}/${PFX}_${MOD}.nii.gz
+  ResampleImage 3 ${DIRTMP}/image_raw.nii.gz ${DIROUT}/${PFX}_${MOD}.nii.gz ${SEGMENT_RESCALE} 0 4
   mv ${DIRTMP}/image_label-atropos+${SEGMENT_N}.nii.gz \
      ${DIROUT}/${PFX}_label-atropos+${SEGMENT_N}.nii.gz
   rm ${DIRTMP}/*
@@ -445,7 +409,7 @@ mv ${DIROUT}/* ${DIR_SAVE}/anat/init
 Rscript -e "rmarkdown::render('${RMD}')"
 mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
 mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
-mv ${DIRTMP}/*.html ${DIR_PROJECT}/qc/${PIPE}${FLOW}/
+mv ${DIR_SCRATCH}/*.html ${DIR_PROJECT}/qc/${PIPE}${FLOW}/
 
 mkdir -p ${DIR_SAVE}/prep/${IDDIR}/${PIPE}${FLOW}
 mv ${DIR_SCRATCH}/*.png ${DIR_SAVE}/prep/${IDDIR}/${PIPE}${FLOW}/

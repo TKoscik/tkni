@@ -160,6 +160,7 @@ mv ${DIR_SCRATCH}/${PREFIX}_myelin.nii.gz ${DIR_SAVE}
 
 if [[ "${NO_PNG}" == "false" ]]; then
   make3Dpng --bg ${DIR_SAVE}/${PREFIX}_myelin.nii.gz \
+    --bg-mask ${DIR_SCRATCH}/label.nii \
     --bg-color "timbow" --bg-cbar "true"
 fi
 
