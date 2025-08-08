@@ -10,19 +10,17 @@ PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
 FCN_NAME=($(basename "$0"))
 DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
 OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
 KERNEL="$(uname -s)"
 HARDWARE="$(uname -m)"
-HPC_Q=${QUEUE}
-HPC_SLOTS=${NSLOTS}
-KEEP=false
 NO_LOG=false
 umask 007
 
-# actions on exit, write to logs, clean scratch
+# actions on exit, write to logs, clean scratch --------------------------------
 function egress {
   EXIT_CODE=$?
   PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
-  if [[ "${KEEP}" == "false" ]]; then
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
     if [[ -n ${DIR_SCRATCH} ]]; then
       if [[ -d ${DIR_SCRATCH} ]]; then
         if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
@@ -34,9 +32,8 @@ function egress {
     fi
   fi
   if [[ "${NO_LOG}" == "false" ]]; then
-    unset LOGSTR
-    LOGSTR="${OPERATOR},${DIR_PROJECT},${PID},${SID},${HARDWARE},${KERNEL},${HPC_Q},${HPC_SLOTS},${FCN_NAME},${PROC_START},${PROC_STOP},${EXIT_CODE}"
-    writeLog --benchmark --string ${LOGSTR}
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
   fi
 }
 trap egress EXIT
@@ -64,7 +61,7 @@ DIRECTION="bidirectional"
 MIN_SZ=
 USE_MM="false"
 DIR_SAVE=
-DIR_SCRATCH=${INC_SCRATCH}/${OPERATOR}_${DATE_SUFFIX}
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
 
@@ -93,7 +90,7 @@ done
 if [[ "${HELP}" == "true" ]]; then
   echo ''
   echo '------------------------------------------------------------------------'
-  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo "TKNI: ${FCN_NAME}"
   echo "  Splits values into clusters based on 'watershed' lines, such that"
   echo "  adjacent peaks or clusters that touch and are combined by standard"
   echo "  clustering methods are separate by local troughs or valleys."
@@ -152,9 +149,9 @@ fi
 # Start of Function
 #===============================================================================
 # SET UP BIDS COMPLIANT VARIABLES AND WORKSPACE --------------------------------
-DIR_PROJECT=$(getDir -i ${VALUE_NII})
-PID=$(getField -i ${VALUE_NII} -f sub)
-SID=$(getField -i ${VALUE_NII} -f ses)
+#DIR_PROJECT=$(getDir -i ${VALUE_NII})
+#PID=$(getField -i ${VALUE_NII} -f sub)
+#SID=$(getField -i ${VALUE_NII} -f ses)
 if [[ -z ${PREFIX} ]]; then
   FBASE=$(basename ${VALUE_NII})
   PREFIX=${FBASE%%.*}
@@ -166,33 +163,33 @@ mkdir -p ${DIR_SAVE}
 mkdir -p ${DIR_SCRATCH}
 
 # EXTRACT VOLUMES FOR PROCESSING ===============================================
-MASK_START=$((${MASK_VOL} - 1))
-VALUE_START=$((${VALUE_VOL} - 1))
-fslroi ${MASK_NII} ${DIR_SCRATCH}/MASK.nii.gz ${MASK_START} 1
-fslroi ${VALUE_NII} ${DIR_SCRATCH}/VALUE.nii.gz ${VALUE_START} 1
+#MASK_START=$((${MASK_VOL} - 1))
+#VALUE_START=$((${VALUE_VOL} - 1))
+#fslroi ${MASK_NII} ${DIR_SCRATCH}/MASK.nii.gz ${MASK_START} 1
+#fslroi ${VALUE_NII} ${DIR_SCRATCH}/VALUE.nii.gz ${VALUE_START} 1
 
 # PREP VALUES FOR WATERSHED ALGORITHM ==========================================
 ## REMOVE NANS & MAKE NAN MASK -------------------------------------------------
-fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -nanm -binv ${DIR_SCRATCH}/NANMASK.nii.gz
-fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -nan ${DIR_SCRATCH}/VALUE.nii.gz
+niimath ${DIR_SCRATCH}/VALUE.nii.gz -nanm -binv ${DIR_SCRATCH}/NANMASK.nii.gz
+niimath ${DIR_SCRATCH}/VALUE.nii.gz -nan ${DIR_SCRATCH}/VALUE.nii.gz
 
 ## CENTER ON DATUM -------------------------------------------------------------
-fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -sub ${DATUM} ${DIR_SCRATCH}/VALUE.nii.gz
+niimath ${DIR_SCRATCH}/VALUE.nii.gz -sub ${DATUM} ${DIR_SCRATCH}/VALUE.nii.gz
 
 ## APPLY DIRECTION & MASK ------------------------------------------------------
 case ${DIRECTION,,} in
   i|inc|increase|p|pos|positive)
-    fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -thr 0 ${DIR_SCRATCH}/VALUE_dir-pos.nii.gz
+    niimath ${DIR_SCRATCH}/VALUE.nii.gz -thr 0 ${DIR_SCRATCH}/VALUE_dir-pos.nii.gz
     ;;
   d|dec|decrease|n|neg|negative)
-    fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -uthr 0 ${DIR_SCRATCH}/VALUE_dir-neg.nii.gz
+    niimath ${DIR_SCRATCH}/VALUE.nii.gz -uthr 0 ${DIR_SCRATCH}/VALUE_dir-neg.nii.gz
     ;;
   b|bi|bidirectional|both|duplex)
-    fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -thr 0 ${DIR_SCRATCH}/VALUE_dir-pos.nii.gz
-    fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -uthr 0 ${DIR_SCRATCH}/VALUE_dir-neg.nii.gz
+    niimath ${DIR_SCRATCH}/VALUE.nii.gz -thr 0 ${DIR_SCRATCH}/VALUE_dir-pos.nii.gz
+    niimath ${DIR_SCRATCH}/VALUE.nii.gz -uthr 0 ${DIR_SCRATCH}/VALUE_dir-neg.nii.gz
     ;;
   a|abs|absolute)
-    fslmaths ${DIR_SCRATCH}/VALUE.nii.gz -abs ${DIR_SCRATCH}/VALUE_dir-abs.nii.gz
+    niimath ${DIR_SCRATCH}/VALUE.nii.gz -abs ${DIR_SCRATCH}/VALUE_dir-abs.nii.gz
     ;;
 esac
 
@@ -200,7 +197,7 @@ esac
 unset FLS
 FLS=($(ls ${DIR_SCRATCH}/VALUE_*))
 for (( i=0; i<${#FLS[@]}; i++ )); do
-  fslmaths ${FLS[${i}]} \
+  niimath ${FLS[${i}]} \
     -mas ${DIR_SCRATCH}/MASK.nii.gz \
     -mas ${DIR_SCRATCH}/NANMASK.nii.gz \
     ${FLS[${i}]}
@@ -287,10 +284,10 @@ if [[ -n ${MIN_SZ} ]]; then
     fi
 
 ## MAKE CLUSTER THRESHOLD MASK -------------------------------------------------
-    fslmaths ${DIR_SCRATCH}/TSIZE.nii.gz -thr ${MIN_SZ} -bin ${DIR_SCRATCH}/TSIZE_MASK.nii.gz
+    niimath ${DIR_SCRATCH}/TSIZE.nii.gz -thr ${MIN_SZ} -bin ${DIR_SCRATCH}/TSIZE_MASK.nii.gz
 
 ## APPLY CLUSTER THRESHOLD MASK ------------------------------------------------
-    fslmaths ${FLS[${i}]} -mas ${DIR_SCRATCH}/TSIZE_MASK.nii.gz ${FLS[${i}]}
+    niimath ${FLS[${i}]} -mas ${DIR_SCRATCH}/TSIZE_MASK.nii.gz ${FLS[${i}]}
 
 ## RENUMBER CLUSTERS -----------------------------------------------------------
     cluster --in=${FLS[${i}]} --thresh=1 --no_table --oindex=${FLS[${i}]}

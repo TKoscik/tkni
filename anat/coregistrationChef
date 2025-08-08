@@ -617,11 +617,11 @@ if [[ "${VERBOSE}" == "true" ]]; then echo " DONE"; fi
 
 # set reference spacing for output ----------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo -ne ">>>setting spacing for output"; fi
-if [[ "${SPACE_TARGET}" == "fixed" ]]; then
+if [[ "${SPACE_TARGET,,}" == "fixed" ]]; then
   REF_IMAGE=${FIXED[0]}
   SPACE_REF=$(niiInfo -i ${REF_IMAGE} -f spacing)
   SPACE_REF="${SPACE_REF// /x}"
-elif [[ "${SPACE_TARGET}" == "moving" ]]; then
+elif [[ "${SPACE_TARGET,,}" == "moving" ]]; then
   SPACE_TMP=$(niiInfo -i ${MOVING[0]} -f spacing)
   SPACE_REF="${SPACE_TMP// /x}"
   REF_IMAGE=${DIR_SCRATCH}/REFERENCE_IMAGE.nii.gz

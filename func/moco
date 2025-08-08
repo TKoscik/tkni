@@ -178,7 +178,7 @@ antsMotionCorr \
 
 # nonlinear motion correction --------------------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tnonlinear motion correction"; fi
-antsMotionCorr \
+antsMotionCorr --random-seed 31526 \
   -d 3 -u 1 -e 1 -n ${NTR} -v ${ANTS_VERBOSE} \
   -o [${TS_NULL},${TS_MOCO},${TS_MEAN}] \
   -t Rigid[0.25] \
@@ -195,7 +195,7 @@ antsMotionCorr \
 # NOTE; REGRESSOR OUTPUT IS ${PREFIX}_MOCOparams.csv (no 'rigid_' or 'affine_' prefix)
 if [[ "${RGR_TYPE,,}" == *"rigid"* ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tcalculate RIGID motion regressors"; fi
-  antsMotionCorr \
+  antsMotionCorr --random-seed 31526 \
     -d 3 -u 1 -e 1 -n ${NTR} -v ${ANTS_VERBOSE} \
     -o [${TS_NULL},${DIR_SCRATCH}/discard.nii.gz,${TS_MEAN}] \
     -t Rigid[0.1] \
@@ -215,7 +215,7 @@ if [[ "${RGR_TYPE,,}" == *"rigid"* ]]; then
 fi
 if [[ "${RGR_TYPE,,}" == *"affine"* ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tcalculate affine motion regressors"; fi
-  antsMotionCorr \
+  antsMotionCorr --random-seed 31526 \
     -d 3 -u 1 -e 1 -n ${NTR} -v ${ANTS_VERBOSE} \
     -o [${TS_NULL},${DIR_SCRATCH}/discard.nii.gz,${TS_MEAN}] \
     -t Rigid[0.1] \

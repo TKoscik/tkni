@@ -567,35 +567,35 @@ if [[ ${NO_DENOISE} == "false" ]]; then
 fi
 
 # Bias Correction --------------------------------------------------------------
-if [[ ${NO_DEBIAS} == "false" ]]; then
-  for (( i=1; i<=${NPAIR}; i++ )); do
-    inuCorrection --image ${DIR_SCRATCH}/C${i}.nii.gz --method N4 \
-      --prefix C${i} --dir-save ${DIR_SCRATCH} --keep
-    rename "s/prep-biasN4_C${i}_C${i}/C${i}_debias/g" ${DIR_SCRATCH}/*
-    rename "s/mod-C${i}_prep-biasN4_//g" ${DIR_SCRATCH}/*
-    inuCorrection --image ${DIR_SCRATCH}/L${i}.nii.gz --method N4 \
-      --prefix L${i} --dir-save ${DIR_SCRATCH} --keep
-    rename "s/prep-biasN4_L${i}_L${i}/L${i}_debias/g" ${DIR_SCRATCH}/*
-    rename "s/mod-L${i}_prep-biasN4_//g" ${DIR_SCRATCH}/*
-    mv ${DIR_SCRATCH}/C${i}_debias.nii.gz ${DIR_SCRATCH}/C${i}.nii.gz
-    mv ${DIR_SCRATCH}/L${i}_debias.nii.gz ${DIR_SCRATCH}/L${i}.nii.gz
-  done
-  montage ${DIR_SCRATCH}/C*_debias.png \
-    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-    ${DIR_SCRATCH}/${IDPFX}_prep-control+debias_asl.png
-  montage ${DIR_SCRATCH}/L*_debias.png \
-    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-    ${DIR_SCRATCH}/${IDPFX}_prep-label+debias_asl.png
-  montage ${DIR_SCRATCH}/C*_biasField.png \
-    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-    ${DIR_SCRATCH}/${IDPFX}_prep-control+biasField_asl.png
-  montage ${DIR_SCRATCH}/L*_biasField.png \
-    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-    ${DIR_SCRATCH}/${IDPFX}_prep-label+biasField_asl.png
-  rm ${DIR_SCRATCH}/C*.png
-  rm ${DIR_SCRATCH}/L*.png
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Non-uniformity corrected"; fi
-fi
+#if [[ ${NO_DEBIAS} == "false" ]]; then
+#  for (( i=1; i<=${NPAIR}; i++ )); do
+#    inuCorrection --image ${DIR_SCRATCH}/C${i}.nii.gz --method N4 \
+#      --prefix C${i} --dir-save ${DIR_SCRATCH} --keep
+#    rename "s/prep-biasN4_C${i}_C${i}/C${i}_debias/g" ${DIR_SCRATCH}/*
+#    rename "s/mod-C${i}_prep-biasN4_//g" ${DIR_SCRATCH}/*
+#    inuCorrection --image ${DIR_SCRATCH}/L${i}.nii.gz --method N4 \
+#      --prefix L${i} --dir-save ${DIR_SCRATCH} --keep
+#    rename "s/prep-biasN4_L${i}_L${i}/L${i}_debias/g" ${DIR_SCRATCH}/*
+#    rename "s/mod-L${i}_prep-biasN4_//g" ${DIR_SCRATCH}/*
+#    mv ${DIR_SCRATCH}/C${i}_debias.nii.gz ${DIR_SCRATCH}/C${i}.nii.gz
+#    mv ${DIR_SCRATCH}/L${i}_debias.nii.gz ${DIR_SCRATCH}/L${i}.nii.gz
+#  done
+#  montage ${DIR_SCRATCH}/C*_debias.png \
+#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+#    ${DIR_SCRATCH}/${IDPFX}_prep-control+debias_asl.png
+#  montage ${DIR_SCRATCH}/L*_debias.png \
+#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+#    ${DIR_SCRATCH}/${IDPFX}_prep-label+debias_asl.png
+#  montage ${DIR_SCRATCH}/C*_biasField.png \
+#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+#    ${DIR_SCRATCH}/${IDPFX}_prep-control+biasField_asl.png
+#  montage ${DIR_SCRATCH}/L*_biasField.png \
+#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
+#    ${DIR_SCRATCH}/${IDPFX}_prep-label+biasField_asl.png
+#  rm ${DIR_SCRATCH}/C*.png
+#  rm ${DIR_SCRATCH}/L*.png
+#  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Non-uniformity corrected"; fi
+#fi
 
 # Calculate M0, mean control image ---------------------------------------------
 if [[ ${ASL_M0} == "false" ]]; then
@@ -617,7 +617,8 @@ coregistrationChef --recipe-name ${COREG_RECIPE} \
   --space-target "fixed" --interpolation "Linear" \
   --prefix ${IDPFX} --label-from asl --label-to native \
   --dir-save ${DIR_SCRATCH} \
-  --dir-xfm ${DIR_SCRATCH}/xfm
+  --dir-xfm ${DIR_SCRATCH}/xfm \
+  --random-seed 572354
 
 rm ${DIR_SCRATCH}/*${COREG_RECIPE}*
 mv ${DIR_SCRATCH}/xfm/*.png ${DIR_SCRATCH}/
@@ -834,7 +835,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '' >> ${RMD}
   fi
 
-  echo '#### Motion Correction'
+  echo '#### Motion Correction' >> ${RMD}
   echo -e '![MOCO]('${DIR_SCRATCH}'/'${IDPFX}'_prep-moco_asl.png)\n' >> ${RMD}
   echo -e '![Regressors]('${DIR_SCRATCH}'/'${IDPFX}'_regressors.png)\n' >> ${RMD}
   echo '' >> ${RMD}
@@ -851,17 +852,17 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '' >> ${RMD}
   fi
 
-  if [[ ${NO_DEBIAS} == "false" ]]; then
-    echo '#### Debias {.tabset}' >> ${RMD}
-    echo '##### Control' >> ${RMD}
-    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+debias_asl.png)\n' >> ${RMD}
-    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+biasField_asl.png)\n' >> ${RMD}
-    echo '' >> ${RMD}
-    echo '##### Labeled' >> ${RMD}
-    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+debias_asl.png)\n' >> ${RMD}
-    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+biasField_asl.png)\n' >> ${RMD}
-    echo '' >> ${RMD}
-  fi
+#  if [[ ${NO_DEBIAS} == "false" ]]; then
+#    echo '#### Debias {.tabset}' >> ${RMD}
+#    echo '##### Control' >> ${RMD}
+#    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+debias_asl.png)\n' >> ${RMD}
+#    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+biasField_asl.png)\n' >> ${RMD}
+#    echo '' >> ${RMD}
+#    echo '##### Labeled' >> ${RMD}
+#    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+debias_asl.png)\n' >> ${RMD}
+#    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+biasField_asl.png)\n' >> ${RMD}
+#    echo '' >> ${RMD}
+#  fi
 
   echo '#### Coregistration' >> ${RMD}
   echo -e '![Coregistration]('${DIR_SCRATCH}'/'${IDPFX}'_reg-'${COREG_RECIPE}'+native.png)\n' >> ${RMD}
