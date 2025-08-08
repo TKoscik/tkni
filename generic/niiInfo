@@ -36,6 +36,14 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  -h | --help              display command help'
   echo '  -i | --image <value>     nii or nii.gz file'
   echo '  -f | --field <value>     string indicating information to extract'
+  echo '    named NIfTI header fields'
+  echo '    "origin"'
+  echo '    "spacing" | "space"                   3D voxel size in mm'
+  echo '    "size" | "voxels"                     3D voxel number'
+  echo '    "voxel size" | "mm3"                  voxel volume'
+  echo '    "vols" | "volumes" | "numtr" | "trs"  number of volumes, 4th dimension'
+  echo '    "tr"                                  TR timing (s)'
+  echo '    "orient" | "orientation"              image orientation'
   echo ''
   NO_LOG=true
   exit 0

@@ -1,0 +1,205 @@
+{
+  "pipe": {
+    "tkni": {
+      "flow": {
+        "DICOM": {
+          "Description": ["DICOM Conversion"],
+          "Processing Steps": [
+            "1. Convert DICOM to NIfTI",
+            "2. Identify images using a customizable series description lookup table",
+            "3. Name and sort images in BIDS format"
+            "4. Generate PNGs for of raw acquired images for initial quality control."],
+          "Procedure": [
+            "MR images are stored in th DICOM format [1] that is standard across medical imaging devices but is complicated and interpreted differently by different vendors. By contrast, NIfTI-1 [2] format is relatively simple and explicit, and uid-UIA19348_ses-20240412_acq-161x400x161um_run-1_preferred by the majority of human neuroimaging researchers. To convert DICOM images to NIfTI, we use dcm2niix [3] open source software which is the de facto standard in the field. In addition to NIfTI conversion, dcm2niix generates JSON sidecar files that contain information relevant for researchers in human readable form according to the Brain Imaging Data Structure (BIDS) [4]. Images are named and sorted into appropriate directories according to BIDS specification."],
+          "Citations": [
+            "[1] NEMA PS3 / ISO 12052, Digital Imaging and Communications in Medicine (DICOM) Standard, National Electrical Manufacturers Association, Rosslyn, VA, USA. http://www.dicomstandard.org/",
+            "[2] NIfTI: Neuroimaging Informatics Technology Initiative. https://nifti.nimh.nih.gov/index.html",
+            "[3] Li X, Morgan P, Ashburner J, Smith J, Rorden C. The First Step for Neuroimaging Data Analysis: DICOM to NIfTI Conversion. J Neurosci Methods. 2016;264:47-56. doi:10.1016/j.jneumeth.2016.03.001",
+            "[4] Gorgolewski KJ, Auer T, Calhoun VD, Craddock RC, Das S, Duff EP, et al. The brain imaging data structure, a format for organizing and describing outputs of neuroimaging experiments. Sci Data. 2016;3: 160044. doi:10.1038/sdata.2016.44"]},
+        "AINIT": {
+          "Description": ["Initial Anatomical Processing"],
+          "Processing Steps": [
+            "1. Reorient to RPI",
+            "2. Denoise Image",
+            "3. Generate Foreground Mask",
+            "4. Non-Uniformity Correction",
+            "5. Rigid Alignment, Base Image to Template",
+            "6. Rescale Intensity",
+            "7. Brain Extraction",
+            "8. Save Results: a) Native Space, Clean, Base Image; b) Foreground Mask; c) Brain Mask(s); d) Rigid Alignment Transform",
+            "9. Generate PNGs, QC Metrics, and HTML Report"],
+          "Procedure": [
+            "The base anatomical image was processed using a robust, standardized protocol that utilizes multiple neuroimaging software packages including AFNI [1,2], Advanced Normalization Tools (ANTs) [3,4], FreeSurfer [5], and FSL [6] (note that FSL is not used in commercial applications due to license encumberance). In addition, we utilize a variety of helper-functions, wrappers, pipelines and workflows available in our TKNI package [7]. First, images are conformed to standard RPI orientation. Second, images are denoised using a non-local, spatially adaptive procedure [8] implemented in ANTs. Third, we generate a binary foreground mask using an automated clipping procedure based on image intensity implemented in AFNI (3dAutomask). This foreground mask asists in constraining the region for subsequent steps to a reasonable representation of the individuals head and provides an initial focal region for subsequent alignment. Fourth, MRI images often contain low frequency intensity nonuniformity, or bias. We use the N4 algorithm [9] implemented in ANTs which essentially fits low frequency intensity variations with a B-spline model, which can then be subtracted from the image. Fifth, typically neuroimages are aligned to an arbitrary line connecting the anterior and posterior commissures, ACPC alignment. Identification of these landmarks may require manual intervention and neuroanatomical expertise. Instead of ACPC alignment, we leverage modern advancements in image registration and perform a rigid body alignment to a common space template using ANTs. This has the advantage of eliminating manual intervention and rigid transformations do not distort native brain shape or size. For cases where rigid alignment fails, while rare, manual ACPC alignment is substituted. Six, some of the preceding steps include interpolation of the image data and may be rescaled by software packages. To eliminate this as a factor all images are rescaled such that values range from 0 to 10000 and are stored as signed 16-bit integers. Seven, segmentation of brain from non-brain tissue is critical for neuro-analysis. We use SynthStrip [10,11], which is a deep learning based brain labeling strategy agnostic to image acquisition, to generate accurate brain masks. Should SynthStrip fail to generate an accurate brain mask, which all brain segmentation tools fail under certain circumstances and cases, we leverage a mutli-approach technique to improve brain mask accuracy. Fortunately, different brain segmentation tools tend to fail in distinct ways. As needed, we leverage these distinct errors in brain segmentation using a joint label fusion technique [12] in order to cancel out non-shared errors across brain segmentation tools [1,3,13,14]. (Note: We are currently evaluating emerging machine learning methods that may supplant this method). Next, we use custom softwar to generate PNG images to represent our results using itk-SNAP c3d [15] and ImageMagick [16]. Lastly, we calculate image quality metrics based on MRIQC but implemented independently using neuroimaging software tools and niimath [17] for voxelwise operations."],
+          "Citations": [
+            "[1] Cox RW. AFNI: software for analysis and visualization of functional magnetic resonance neuroimages. Comput Biomed Res. 1996;29: 162–173. Available: https://www.ncbi.nlm.nih.gov/pubmed/8812068",
+            "[2] Cox RW, Hyde JS. Software tools for analysis and visualization of fMRI data. NMR Biomed. 1997;10: 171–178. doi:10.1002/(sici)1099-1492(199706/08)10:4/5&#60;171::aid-nbm453&#62;3.0.co;2-l",
+            "[3] Tustison NJ, Cook PA, Holbrook AJ, Johnson HJ, Muschelli J, Devenyi GA, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11: 9068. doi:10.1038/s41598-021-87564-6",
+            "[4] Tustison NJ, Yassa MA, Rizvi B, Cook PA, Holbrook AJ, Sathishkumar MT, et al. ANTsX neuroimaging-derived structural phenotypes of UK Biobank. Sci Rep. 2024;14: 8848. doi:10.1038/s41598-024-59440-6",
+            "[5] Fischl B. FreeSurfer. Neuroimage. 2012;62: 774–781. doi:10.1016/j.neuroimage.2012.01.021",
+            "[6] Smith SM, Jenkinson M, Woolrich MW, Beckmann CF, Behrens TEJ, Johansen-Berg H, et al. Advances in functional and structural MR image analysis and implementation as FSL. Neuroimage. 2004;23 Suppl 1: S208-19. doi:10.1016/j.neuroimage.2004.07.051",
+            "[7] Koscik, TR. TKNI [Computer Software]. 2024. www.github.com/tkoscik/tkni.",
+            "[8] Manjón JV, Coupé P, Martí-Bonmatí L, Collins DL, Robles M. Adaptive non-local means denoising of MR images with spatially varying noise levels. J Magn Reson Imaging. 2010;31: 192–203. doi:10.1002/jmri.22003",
+            "[9] Tustison NJ, Avants BB, Cook PA, Zheng Y, Egan A, Yushkevich PA, et al. N4ITK: improved N3 bias correction. IEEE Trans Med Imaging. 2010;29: 1310–1320. doi:10.1109/TMI.2010.2046908",
+            "[10] Hoopes A, Mora JS, Dalca AV, Fischl B*, Hoffmann M* (*equal contribution). SynthStrip: Skull-Stripping for Any Brain Image. NeuroImage 2022; 260, 119474. doi.org/10.1016/j.neuroimage.2022.119474",
+            "[11] Kelley W, Ngo N, Dalca AV, Fischl B, Zöllei L*, Hoffmann M* (*equal contribution). Boosting skull-stripping performance for pediatric brain images. IEEE International Symposium on Biomedical Imaging (ISBI), 2024, forthcoming. https://arxiv.org/abs/2402.16634"
+            "[12] Wang H, Suh JW, Das SR, Pluta JB, Craige C, Yushkevich PA. Multi-Atlas Segmentation with Joint Label Fusion. IEEE Trans Pattern Anal Mach Intell. 2013;35: 611–623. doi:10.1109/TPAMI.2012.143",
+            "[13] Smith SM. Fast robust automated brain extraction. Hum Brain Mapp. 2002;17: 143–155. doi:10.1002/hbm.10062",
+            "[14] Puonti O, Iglesias JE, Van Leemput K. Fast and sequence-adaptive whole-brain segmentation using parametric Bayesian modeling. Neuroimage. 2016;143: 235–249. doi:10.1016/j.neuroimage.2016.09.011",
+            "[15] Yushkevich PA, Piven J, Hazlett HC, Smith RG, Ho S, Gee JC, et al. User-guided 3D active contour segmentation of anatomical structures: significantly improved efficiency and reliability. Neuroimage. 2006;31: 1116–1128. doi:10.1016/j.neuroimage.2006.01.015",
+            "[16] Mastering digital image alchemy. In: ImageMagick [Internet]. [cited 14 Feb 2025]. Available: https://imagemagick.org",
+            "[17] Rorden C, Webster M, Drake C, Jenkinson M, Clayden JD, Li N, et al. Niimath and fslmaths: Replication as a method to enhance popular neuroimaging tools. Apert Neuro. 2024;4. doi:10.52294/001c.94384"]},
+        "MALF": {
+          "Description": ["**S**ingle-Registration **M**ulti-Exemplar **A**natomical **L**abeling [**SMALL**]"],
+          "Processing Steps": [
+            "1. Dilate brain masks to include brain edges in coregistration",
+            "2. Apply dilated brain masks to exclude non-brain regions from coregistration",
+            "3. Multistage coregistration to atlas template and atlas exemplars",
+            "4. Push unmasked images to normalized atlas space",
+            "5. Push atlas exemplars and exemplar labels to participant's native space",
+            "6. Generate native space labels using joint label fusion",
+            "7. Calculate Jacobian Determinants of the deformation matrix from native participant space to normalized atlas space, excluding the rigid alignment component"],
+          "Procedure": [
+            "In order to generate anatomically accurate labels of neuroanatomical structures, we employ a version of multi-atlas label fusion. Conceptually, this approach is similar to the MAGeT (multiple automatically generated templates) procedure [1] and the MAGMA (multiple, automatically generated, morphologically matched atlas) procedure [2], but accomplishes normalization with a single coregistration process rather than separate coreegistrations to multiple exemplars. To accomplish this, labelled exemplars [3-7] are pre-normalized to atlas space, for which we used an unbiased template of 1113 brain images from the Human Connectome Project [8], and is similar to the CIT168 template [9]. Coregistration to the atlas is a multistep procedure using Advanced Normalization Tools (ANTs) [10]. First, brain masks are dilated in order to include edges in the estimate of registration quality at each step. Second, dilated brain masks are appled to the atlas template, atlas exemplars, and the native space participant image to eliminate contributions from non-brain structures to coregistration metrics. Thirdly, the first three stages of ANTs registration are similar to standard registration of a participant's MRI image to an atlas template, including: rigid alignment, affine transformation, and symmetric normalization. The entire field of view is included in registration metrics to emphasize aligning and normalizing the brain to template space. The fourth and final stage of the coregistration procedure uses the normalized atlas exemplars as simultaneous targets for further symmetric normalization, where registration accuracy is a product of accuracy registration across exemplars. The critical component of this step is that each of these atlas exemplars will have some esoteric error in their normalization to the atlas template, and since the unique normalization errors specific to each exemplar, these errors tend to cancel out and result in a more accruate normalization to the template based. Once transformations are estimated to map the participant's image to the atlas, the unmasked native space image is warped to generate a spatially normalized participant image. Next, atlas exemplars and exemplar label sets are pushed to the participant's native space using the inverse normalization transformation. Once in native space, joint label fusion [11] is used to generate native space anatomical labels. Basically, this procedure applies a majority voting procedure that is weighted according to image similarity and accounts for similarity in errors. Lastly, we calculate Jacobian determinants of the deformation matrix from native space to the atlas template, which provides a voxelwise measurment of the magnitude of the deformation needed to transform the participan'ts brain to the atlas, which is useful for tensor based morphometry [12-14]."],
+          "Citations": [
+            "[1] Chakravarty MM, Steadman P, van Eede MC, Calcott RD, Gu V, Shaw P, et al. Performing label-fusion-based segmentation using multiple automatically generated templates. Hum Brain Mapp. 2012;34: 2635–2654. doi:10.1002/hbm.22092",
+            "[2] Koscik TR, Sloat L, van der Plas E, Joers JM, Deelchand DK, Lenglet C, et al. Brainstem and striatal volume changes are detectable in under 1 year and predict motor decline in spinocerebellar ataxia type 1. Brain Commun. 2020;2: fcaa184. doi:10.1093/braincomms/fcaa184",
+            "[3] Tullo S, Devenyi GA, Patel R, Park MTM, Collins DL, Chakravarty MM. Warping an atlas derived from serial histology to 5 high-resolution MRIs. Sci Data. 2018;5: 180107. doi:10.1038/sdata.2018.107",
+            "[4] Treadway MT, Waskom ML, Dillon DG, Holmes AJ, Park MTM, Chakravarty MM, et al. Illness progression, recent stress, and morphometry of hippocampal subfields and medial prefrontal cortex in major depression. Biol Psychiatry. 2015;77: 285–294. doi:10.1016/j.biopsych.2014.06.018",
+            "[5] Chakravarty MM, Bertrand G, Hodge CP, Sadikot AF, Collins DL. The creation of a brain atlas for image guided neurosurgery using serial histological data. Neuroimage. 2006;30: 359–376. doi:10.1016/j.neuroimage.2005.09.041",
+            "[6] Winterburn JL, Pruessner JC, Chavez S, Schira MM, Lobaugh NJ, Voineskos AN, et al. A novel in vivo atlas of human hippocampal subfields using high-resolution 3 T magnetic resonance imaging. Neuroimage. 2013;74: 254–265. doi:10.1016/j.neuroimage.2013.02.003",
+            "[7] Amaral RSC, Park MTM, Devenyi GA, Lynn V, Pipitone J, Winterburn J, et al. Manual segmentation of the fornix, fimbria, and alveus on high-resolution 3T MRI: Application via fully-automated mapping of the human memory circuit white and grey matter in healthy and pathological aging. Neuroimage. 2018;170: 132–150. doi:10.1016/j.neuroimage.2016.10.027",
+            "[8] Van Essen DC, Smith SM, Barch DM, Behrens TEJ, Yacoub E, Ugurbil K, et al. The WU-Minn Human Connectome Project: an overview. Neuroimage. 2013;80: 62–79. doi:10.1016/j.neuroimage.2013.05.041",
+            "[9] Pauli WM, Nili AN, Tyszka JM. A high-resolution probabilistic in vivo atlas of human subcortical brain nuclei. Sci Data. 2018;5: 180063. doi:10.1038/sdata.2018.63",
+            "[10] Tustison NJ, Cook PA, Holbrook AJ, Johnson HJ, Muschelli J, Devenyi GA, et al. The ANTsX ecosystem for quantitative biological and medical imaging. Sci Rep. 2021;11: 9068. doi:10.1038/s41598-021-87564-6",
+            "[11] Wang H, Suh JW, Das SR, Pluta JB, Craige C, Yushkevich PA. Multi-Atlas Segmentation with Joint Label Fusion. IEEE Trans Pattern Anal Mach Intell. 2013;35: 611–623. doi:10.1109/TPAMI.2012.143",
+            "[12] Davatzikos C, Vaillant M, Resnick S, Prince JL, Letovsky S, Bryan R. A computerized approach for morphological analysis of the corpus callosum. J Comput Assist Tomogr. 1996;20: 88–97. doi:10.1097/00004728-199601000-00017",
+            "[13] Ashburner J, Hutton C, Frackowiak R, Johnsrude I, Price C, Friston K. Identifying global anatomical differences: Deformation‐based morphometry. Hum Brain Mapp. 1998;6: 348–357. doi:10.1002/(sici)1097-0193(1998)6:5/6&#60;348::aid-hbm4&#62;3.3.co;2-g",
+            "[14] Ashburner J, Friston KJ, Penny W. Human brain function. New York: Academic. 2003. Available: http://www.fil.ion.ucl.ac.uk/spm/doc/books/hbf2/"]},
+        "MATS": {
+          "Description": ["**M**ulti-**A**pproach **T**issue **S**egmentation [**MATS**]"],
+          "Processing Steps": [
+            "1. Dilate and apply brain masks",
+            "2. Multi-Approach Tissue Segmentation, ANTs, FAST, SynthSeg",
+            "3. Weighted-average tissue posteriors",
+            "4. Most-likely tissue segmentation",
+            "5. Deformation-based cortical thickness"],
+          "Procedure": [],
+          "Citations": []
+        },
+        "FSSYNTH": {
+          "Description": ["FreeSurfer Image Invariant Surface Reconstruction, recon-all-clinical"],
+          "Processing Steps": [
+            "1. recon-all-clinical",
+            "2. Convert synthetic image to native NIfTI",
+            "3. Convert cortical ribbon and regional labels to NIfTI",
+            "4. Generate surface tesselation in STL format for 3D printing"],
+          "Procedure": [],
+          "Citations": ["Cortical analysis of heterogeneous clinical brain MRI scans for large-scale neuroimaging studies. K Gopinath, DN Greeve, S Das, S Arnold, C Magdamo, JE Iglesias
+
+SynthSeg: Segmentation of brain MRI scans of any contrast and resolution without retraining. B Billot, DN Greve, O Puonti, A Thielscher, K Van Leemput, B Fischl, AV Dalca, JE Iglesias. Medical Image Analysis, 83, 102789 (2023).
+
+Robust machine learning segmentation for large-scale analysis of heterogeneous clinical brain MRI datasets. B Billot, C Magdamo, SE Arnold, S Das, JE Iglesias. PNAS, 120(9), e2216399120 (2023).
+
+SynthSR: a public AI tool to turn heterogeneous clinical brain scans into high-resolution T1-weighted images for 3D morphometry. JE Iglesias, B Billot, Y Balbastre, C Magdamo, S Arnold, S Das, B Edlow, D Alexander, P Golland, B Fischl. Science Advances, 9(5), eadd3607 (2023)."]
+        },
+        "AMOD": {
+          "Description": [],
+          "Processing Steps": [],
+          "Procedure": [],
+          "Citations": []
+        },
+        "QALAS": {
+          "Description": ["Quantitative MRI - QALAS"],
+          "Processing Steps": [
+            "1. Split QALAS acquisition into separate volumes for each echo",
+            "2. Denoise echo volumes",
+            "3. Generate foreground mask",
+            "4. Correct intensity non-uniformity using B1 map, alternatively using N4 if B1 unavailable",
+            "5. Generate brain mask",
+            "6. Fit qMRI constants",
+            "7. Coregister to participant native space",
+            "8. Scale PDmap"
+            "9. Synthesize images"],
+          "Procedure": [],
+          "Citations": []
+        },
+        "DPREP": {
+          "Description": [],
+          "Processing Steps": [],
+          "Procedure": [],
+          "Citations": []
+        },
+        "DSCALE": {
+          "Description": [],
+          "Processing Steps": [],
+          "Procedure": [],
+          "Citations": []
+        },
+        "DTRACT": {
+          "Description": [],
+          "Processing Steps": [],
+          "Procedure": [],
+          "Citations": []
+        },
+        "FUNK": {
+          "Description": ["TKNI BOLD fMRI PreProcessing"],
+          "Processing Steps": [
+            "1. Resize anatomical images for desired native spacing",
+            "2. [Optional] 4D denoising, default is to skip"
+            "3. Multi-stage motion correction using ANTs, rigid, affine, non-linear",
+            "4. Calculate motion derivatives, displacement",
+            "5. Generate brain mask, synthstrip",
+            "6. Coregister to native anatomical"
+            "7. Use existing tissue segmentation to extract CompCorr regressors",
+            "8. [Optional] generate global signal regressor (GSR), or gray matter-based (GSR)",
+            "9. [Optional] pike censoring",
+            "10. Nuisance regression, 6df motion and derivatives, CompCorr CSF and WM components, optional GSR",
+            "11. [Optional] Normalize residual time-series",
+            "12. [Optional] Concatenate runs"],
+          "Procedure": [],
+          "Citations": ["Aquino KM, Fulcher BD, Parkes L, Sabaroedin K, Fornito A. Identifying and removing widespread signal deflections from fMRI data: Rethinking the global signal regression problem. Neuroimage [Internet]. 2020 May 15 [cited 2024 Sep 13];212(116614):116614. Available from: http://dx.doi.org/10.1016/j.neuroimage.2020.116614"]
+        },
+        "FCON": {
+          "Description": ["Resting-state Functional Connectivity"],
+          "Processing Steps": [],
+          "Procedure": [],
+          "Citations": []
+        },
+        "PCASL": {
+          "Description": ["Perfusion Processing for Pseudo-Continuous Arterial Spin Labeling (PCASL)"],
+          "Processing Steps": [
+            "1. Reorient image to RPI",
+            "2. Motion correction, multi-stage: rigid, affine, non-linear",
+            "3. Parse perfusion acquisition into control and labeled pairs",
+            "4. Denoise volumes separately",
+            "5. N4 bias correction",
+            "6. Calculate M0 as average of control images (if not provided)",
+            "7. Generate brain mask",
+            "8. Coregister to native space",
+            "9. Calculate change within control/label pairs",
+            "10. Calculate cerbral blood flow",
+            "11. Apply normalization transforms to CBF and perfusion estimates",
+            "12. Calculate regional CBF using anatomical labels"],
+          "Procedure": [],
+          "Citations": []
+        },
+        "MRS": {
+          "Description": ["Neuro-Metabolites using Magnetic Resonance Spectroscopy"],
+          "Processing Steps": [
+            "1. Coregister anatomical localizer to participant's native space",
+            "2. Push MRS volume of interest (VOI) to native space",
+            "3. Calculate partial tissue volumes within VOI from existing tissue segmentation (e.g., MATS)",
+            "4. Fit MRS basis functions using Spectroscopy Analysis Tools (SPANT) in R"],
+          "Procedure": [],
+          "Citations": []
+        },
+        "SUMMARY": {
+          "Description": [],
+          "Processing Steps": [],
+          "Procedure": [],
+          "Citations": []
+        }
+      }
+    }
+  }
+}

@@ -56,7 +56,7 @@ label:,label-name:,lut-orig:,lut-sort:,\
 do-rsfc,con-metric:,\
 no-z,z-lo:,z-hi:,\
 dir-save:,dir-scratch:,\
-help,verbose,loquacious,no-png -n 'parse-options' -- "$@")
+help,verbose,loquacious,requires:,force,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -119,6 +119,8 @@ while true; do
     --no-z) NO_Z="true" ; shift ;;
     --z-lo) Z_LO="$2" ; shift 2 ;;
     --x-hi) Z_HI="$2" ; shift 2 ;;
+    --force) FORCE="true" ; shift ;;
+    --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;

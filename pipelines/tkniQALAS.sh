@@ -58,7 +58,7 @@ trap egress EXIT
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,qalas:,b1:,native:,brain:,csf:,\
 opt-tr:,opt-fa:,opt-turbo:,opt-echo-spacing:,opt-t2prep:,opt-t1init:,opt-m0init:,\
-no-b1:,b1k:,do-n4:,\
+no-b1,b1k:,do-n4,\
 no-denoise,no-norm,atlas:atlas-xfm:,\
 dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
@@ -311,28 +311,28 @@ if [[ -n ${CSF} ]]; then
   fi
 fi
 
-if [[ ${NO_NORM} == "false" ]]; then
-  if [[ ! -f ${ATLAS} ]]; then
-    echo "ERROR [${PIPE}:${FLOW}] ATLAS reference image not found"
-    exit 4
-  fi
-  if [[ -n ${ATLAS_XFM} ]]; then
-    ATLAS_XFM=(${ATLAS_XFM//,/ })
-    DO_EXIT="false"
-    for (( i=0; i<${#ATLAS_XFM[@]}; i++ )); do
-      if [[ ! -f ${ATLAS_XFM[${i}]} ]]; then
-        echo "ERROR [${PIPE}:${FLOW}] ATLAS XFM ${ATLAS_XFM[${i}]} not found"
-        DO_EXIT="true"
-      fi
-    done
-    if [[ ${DO_EXIT} == "true" ]]; then exit 5; fi
-  else
-    TX=($(ls ${DIR_PIPE}/xfm/${IDDIR}/${IDPFX}_from-native*xfm-affine.mat))
-    ATLAS_XFM+=(${TX[0]})
-    TX=($(ls ${DIR_PIPE}/xfm/${IDDIR}/${IDPFX}_from-native*xfm-syn.nii.gz))
-    ATLAS_XFM+=(${TX[0]})
-  fi
-fi
+#if [[ ${NO_NORM} == "false" ]]; then
+#  if [[ ! -f ${ATLAS} ]]; then
+#    echo "ERROR [${PIPE}:${FLOW}] ATLAS reference image not found"
+#    exit 4
+#  fi
+#  if [[ -n ${ATLAS_XFM} ]]; then
+#    ATLAS_XFM=(${ATLAS_XFM//,/ })
+#    DO_EXIT="false"
+#    for (( i=0; i<${#ATLAS_XFM[@]}; i++ )); do
+#      if [[ ! -f ${ATLAS_XFM[${i}]} ]]; then
+#        echo "ERROR [${PIPE}:${FLOW}] ATLAS XFM ${ATLAS_XFM[${i}]} not found"
+#        DO_EXIT="true"
+#      fi
+#    done
+#    if [[ ${DO_EXIT} == "true" ]]; then exit 5; fi
+#  else
+#    TX=($(ls ${DIR_PIPE}/xfm/${IDDIR}/${IDPFX}_from-native*xfm-affine.mat))
+#    ATLAS_XFM+=(${TX[0]})
+#    TX=($(ls ${DIR_PIPE}/xfm/${IDDIR}/${IDPFX}_from-native*xfm-syn.nii.gz))
+#    ATLAS_XFM+=(${TX[0]})
+#  fi
+#fi
 
 # Copy QALAS to scratch --------------------------------------------------------
 QALAS_RAW=${DIR_SCRATCH}/$(modField -i $(basename ${QALAS}) -a -f prep -v raw)
@@ -481,7 +481,7 @@ niimath ${DIR_SCRATCH}/mask-brain+NATIVE+nocsf.nii.gz \
 ImageMath 4 ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz TimeSeriesAssemble ${TR} 0 ${QPROC[@]}
 
 # Calculate constants: T1, T2, PDunscaled --------------------------------------
-Rscript ${TKNIPATH}/R/qalasConstants.R \
+Rscript /usr/local/tkni/private/qalasConstants.R \
   "tr" ${OPT_TR} \
   "fa" ${OPT_FA} \
   "turbo" ${OPT_TURBO} \

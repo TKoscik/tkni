@@ -70,7 +70,7 @@ OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,dir-anat:,dir-dwi:,dir-xfm:,\
 image-dwi:,image-ap:,image-pa:,image-anat:,mask-brain:,mask-b0-method:,rpenone,\
 dir-scratch:,requires:,\
-help,verbose,force -n 'parse-options' -- "$@")
+help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -112,7 +112,9 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
+    -r | --no-rmd) NO_RMD=true ; shift ;;
     --force) FORCE="true" ; shift ;;
+    --requires) REQUIRES="$2" ; shift 2 ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;

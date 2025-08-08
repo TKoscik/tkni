@@ -19,7 +19,7 @@ umask 007
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvn --long pi:,project:,dir-project:,\
-id:,dir-id:,input-dcm:,dir-scratch:,\
+id:,dir-id:,id-field:,reorient:,add-resolution,input-dcm:,dir-scratch:,\
 help,verbose,no-png,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -34,6 +34,9 @@ DIR_PROJECT=
 DIR_SCRATCH=
 IDPFX=
 IDDIR=
+IDFIELD="sub,ses"
+REORIENT="false"
+ADD_RES="false"
 INPUT_DCM=
 HELP=false
 VERBOSE=false
@@ -55,6 +58,9 @@ while true; do
     --project) PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
+    --id-field) IDFIELD="$2" ; shift 2 ;;
+    --reorient) REORIENT="$2" ; shift 2 ;;
+    --add-resolution) ADD_RES="true" ; shift ;;
     --input-dcm) INPUT_DCM="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -114,12 +120,16 @@ if [[ -z ${IDPFX} ]]; then
   exit 1
 fi
 if [[ -z ${IDDIR} ]]; then
-  TSUB=$(getField -i ${IDPFX} -f sub)
-  TSES=$(getField -i ${IDPFX} -f ses)
-  IDDIR=sub-${TSUB}
-  if [[ -n ${TSES} ]]; then
-    IDDIR="${IDDIR}/ses-${TSES}"
-  fi
+  TFIELD=(${IDFIELD//,/ })
+  TID=$(getField -i ${IDPFX} -f ${TFIELD[0]})
+  IDDIR="${TFIELD[0]}-${TID}"
+  for (( i=1; i<${#TFIELD[@]}; i++)); do
+    unset TID
+    TID=$(getField -i ${IDPFX} -f ${TFIELD[${i}]})
+    if [[ -n ${TID} ]]; then
+      IDDIR="${IDDIR}/${TFIELD[${i}]}-${TID}"
+    fi
+  done
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e "\tID:\t${IDPFX}"
@@ -189,8 +199,30 @@ fi
 # Convert DICOMS ---------------------------------------------------------------
 dicomConvert --input ${INPUT_DCM} --depth 10 --dir-save ${DIR_SCRATCH}
 
+# Reorient images if requested -------------------------------------------------
+if [[ ${REORIENT} != "false" ]]; then
+  FLS=($(ls ${DIR_SCRATCH}/*.nii.gz))
+  for (( i=0; i<${#FLS[@]}; i++ )); do
+    3dresample -orient ${REORIENT} -overwrite \
+      -prefix ${DIR_SCRATCH}/tmp.nii.gz -input ${FLS[${i}]}
+    CopyImageHeaderInformation ${FLS[${i}]} \
+      ${DIR_SCRATCH}/tmp.nii.gz \
+      ${DIR_SCRATCH}/tmp.nii.gz 1 0 0
+    3dresample -orient RPI -overwrite \
+      -prefix ${DIR_SCRATCH}/tmp.nii.gz \
+      -input ${DIR_SCRATCH}/tmp.nii.gz
+    mv ${DIR_SCRATCH}/tmp.nii.gz ${FLS[${i}]}
+  done
+fi
+
 # Autoname NIFTIs --------------------------------------------------------------
-dicomAutoname --id ${IDPFX} --dir-input ${DIR_SCRATCH} --dir-project ${DIR_PROJECT}
+if [[ ${ADD_RES} == "false" ]]; then
+  dicomAutoname --id ${IDPFX} --id-field ${IDFIELD} \
+    --dir-input ${DIR_SCRATCH} --dir-project ${DIR_PROJECT}
+else
+  dicomAutoname --id ${IDPFX} --id-field ${IDFIELD} --add-resolution \
+    --dir-input ${DIR_SCRATCH} --dir-project ${DIR_PROJECT}
+fi
 
 # Copy MRS as needed -----------------------------------------------------------
 if [[ -d ${DIR_PROJECT}/rawdata/${IDDIR}/mrs ]]; then

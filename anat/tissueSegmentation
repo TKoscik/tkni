@@ -273,8 +273,9 @@ if [[ "${NO_PNG}" == "false" ]]; then
   if [[ "${VERBOSE}" == "true" ]]; then echo ">>>>>generating PNG"; fi
   make3Dpng --bg ${IMAGE[0]} \
   --fg ${DIR_SAVE}/${PREFIX}_label-atropos+${N_CLASS}.nii.gz \
-  --fg-color "timbow" --fg-order "random" --fg-cbar "false" \
-  --layout "7:z;7:z;7:z;7:z" --offset "0,0,0" \
+  --fg-mask ${DIR_SAVE}/${PREFIX}_label-atropos+${N_CLASS}.nii.gz \
+  --fg-color "timbow:rnd" --fg-cbar "false" \
+  --layout "7:z;7:z;7:z;7:z" \
   --filename ${PREFIX}_label-atropos+${N_CLASS} \
   --dir-save ${DIR_SAVE}
 fi

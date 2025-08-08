@@ -347,11 +347,8 @@ fi
 ANTSCALL="${ANTSCALL} --convergence [ 2000x2000x2000x2000x2000,1e-6,10 ]"
 ANTSCALL="${ANTSCALL} --smoothing-sigmas 4x3x2x1x0vox"
 ANTSCALL="${ANTSCALL} --shrink-factors 8x8x4x2x1"
-#ANTSCALL="${ANTSCALL} --convergence [1200x1200x100,1e-6,5]"
-#ANTSCALL="${ANTSCALL} --smoothing-sigmas 2x1x0vox"
-#ANTSCALL="${ANTSCALL} --shrink-factors 4x2x1"
+
 ANTSCALL="${ANTSCALL} --transform Affine[0.1]"
-#ANTSCALL="${ANTSCALL} --transform Affine[0.25]"
 ANTSCALL="${ANTSCALL} --metric Mattes[${FIXED},${MOVING},1,32,Regular,0.25]"
 if [[ "${MASKRESTRICT,,}" == *"affine"* ]]; then
   ANTSCALL="${ANTSCALL} --masks [${FIXED_MASK},${MOVING_MASK}]"
@@ -361,9 +358,6 @@ fi
 ANTSCALL="${ANTSCALL} --convergence [ 2000x2000x2000x2000x2000,1e-6,10 ]"
 ANTSCALL="${ANTSCALL} --smoothing-sigmas 4x3x2x1x0vox"
 ANTSCALL="${ANTSCALL} --shrink-factors 8x8x4x2x1"
-#ANTSCALL="${ANTSCALL} --convergence [200x20,1e-6,5]"
-#ANTSCALL="${ANTSCALL} --smoothing-sigmas 1x0vox"
-#ANTSCALL="${ANTSCALL} --shrink-factors 2x1"
 
 ANTSCALL="${ANTSCALL} --transform SyN[0.2,3,0]"
 ANTSCALL="${ANTSCALL} --metric CC[${FIXED},${MOVING},1,4]"
@@ -376,22 +370,7 @@ ANTSCALL="${ANTSCALL} --convergence [ 40x20x0,1e-7,8 ]"
 ANTSCALL="${ANTSCALL} --smoothing-sigmas 2x1x0vox"
 ANTSCALL="${ANTSCALL} --shrink-factors 4x2x1"
 
-#ANTSCALL="${ANTSCALL} --transform SyN[0.1,3,0]"
-##ANTSCALL="${ANTSCALL} --transform SyN[0.2,3,0]"
-#for (( i=0; i<${NEX}; i++ )); do
-#  ANTSCALL="${ANTSCALL} --metric CC[${FIXED_EXEMPLAR[${i}]},${MOVING},1,4]"
-#done
-#if [[ "${MASKRESTRICT,,}" == *"syn"* ]]; then
-#  ANTSCALL="${ANTSCALL} --masks [${FIXED_MASK},${MOVING_MASK}]"
-#elif [[ "${MASKRESTRICT,,}" != "none" ]]; then
-#  ANTSCALL="${ANTSCALL} --masks [NULL,NULL]"
-#fi
-#ANTSCALL="${ANTSCALL} --convergence [100x70x50x20,1e-6,10]"
-#ANTSCALL="${ANTSCALL} --smoothing-sigmas 3x2x1x0vox"
-#ANTSCALL="${ANTSCALL} --shrink-factors 8x4x2x1"
-
 ANTSCALL="${ANTSCALL} --transform SyN[0.1,3,0]"
-#ANTSCALL="${ANTSCALL} --transform SyN[0.2,3,0]"
 for (( i=0; i<${NEX}; i++ )); do
   ANTSCALL="${ANTSCALL} --metric CC[${DIR_SCRATCH}/atlas_ex-${i}.nii.gz,${MOVING},1,4]"
 done
@@ -471,10 +450,11 @@ antsApplyTransforms -d 3 -n GenericLabel \
 if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == "false" ]]; then
   make3Dpng --bg ${DIR_SCRATCH}/image_orig.nii.gz \
     --fg ${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
+    --fg-mask ${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
     --fg-color "gradient:#FF0000" --fg-alpha 50 --fg-cbar "false" \
     --layout "11:x;11:x;11:x" \
     --filename ${IDPFX}_mask-brain+${FLOW} \
-    --dir-save ${DIR_ANAT}/mask
+    --dir-save ${DIR_ANAT}/mask/${FLOW}
 fi
 
 if [[ ${VERBOSE} == "true" ]]; then
@@ -532,6 +512,7 @@ for (( i=0; i<${#ATLAS_LABEL[@]}; i++ )); do
   if [[ ${NO_PNG} == "false" ]]; then
     make3Dpng --bg ${DIR_SCRATCH}/image_orig.nii.gz \
       --fg ${DIR_ANAT}/label/${FLOW}/${IDPFX}_label-${LAB}+${FLOW}.nii.gz \
+      --fg-mask ${DIR_ANAT}/label/${FLOW}/${IDPFX}_label-${LAB}+${FLOW}.nii.gz \
         --fg-color "timbow:random" \
         --fg-cbar "false" --fg-alpha 50 \
       --layout "7:x;7:x;7:y;7:y;7:z;7:z" \

@@ -58,9 +58,9 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,\
-mrs:,mrs-loc:,mrs-mask:,mrs-unsupressed:,\
+mrs:,mrs-loc:,mrs-mask:,mrs-unsuppressed,\
 native:,native-mask:,tissue:,tissue-val:,\
-no-hsvd,no-eddy,no-dfp,\
+coreg-recipe:,no-hsvd,no-eddy,no-dfp,\
 dir-save:,dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -79,7 +79,7 @@ IDDIR=
 MRS=
 MRS_LOC=
 MRS_MASK=
-MRS_UNSUPRESS="false"
+MRS_UNSUPPRESS="false"
 NATIVE=
 NATIVE_MASK=
 TISSUE=
@@ -122,11 +122,12 @@ while true; do
     --mrs) MRS="$2" ; shift 2 ;;
     --mrs-loc) MRS_LOC="$2" ; shift 2 ;;
     --mrs-mask) MRS_MASK="$2" ; shift 2 ;;
-    --mrs-unsuppressed) MRS_UNSUPRESS="true" ; shift ;;
+    --mrs-unsuppressed) MRS_UNSUPPRESS="true" ; shift ;;
     --native) NATIVE="$2" ; shift 2 ;;
     --native-mask) NATIVE_MASK="$2" ; shift 2 ;;
     --tissue) TISSUE="$2" ; shift 2 ;;
     --tissue-val) TISSUE_VAL="$2" ; shift 2 ;;
+    --coreg-recipe) COREG_RECIPE="$2" ; shift 2 ;;
     --no-hsvd) NO_HSVD="true" ; shift ;;
     --no-eddy) NO_EDDY="true" ; shift ;;
     --no-dfp) NO_DFP="true" ; shift ;;
@@ -244,20 +245,21 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Identify Inputs --------------------------------------------------------------
-echo ">>>>> ${MRS}"
+echo ">>>>> ${MRS_UNSUPPRESS} "
 if [[ -z ${MRS} ]]; then
-  if [[ ${MRS_UNSUPRESS} == "false" ]]; then
+  if [[ ${MRS_UNSUPPRESS} == "false" ]]; then
     if ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35.dat 1> /dev/null 2>&1; then
       MRS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35.dat))
     fi
   else
-    if ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35_unsuppressed.dat 1> /dev/null 2>&1; then
-      MRS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35_unsuppressed.dat))
+    if ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35_unsupp*.dat 1> /dev/null 2>&1; then
+      MRS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/*PRESS35_unsupp*.dat))
     fi
   fi
 fi
 if [[ ! -f ${MRS} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] MRS data not found."
+  echo -e "\t\t${MRS}"
   exit 1
 fi
 
@@ -325,18 +327,31 @@ coregistrationChef --recipe-name ${COREG_RECIPE} \
   --space-target "fixed" --interpolation "Linear" \
   --prefix ${IDPFX} --label-from "mrs" --label-to "native" \
   --dir-save ${DIR_SCRATCH} \
-  --dir-xfm ${DIR_SCRATCH}/xfm --no-png
-XFM_AFF=${DIR_SCRATCH}/xfm/${IDPFX}_mod-${TMOD}_from-mrs_to-native_xfm-affine.mat
-XFM_SYN=${DIR_SCRATCH}/xfm/${IDPFX}_mod-${TMOD}_from-mrs_to-native_xfm-syn.nii.gz
-XFM_INV=${DIR_SCRATCH}/xfm/${IDPFX}_mod-${TMOD}_from-mrs_to-native_xfm-syn+inverse.nii.gz
+  --dir-xfm ${DIR_SCRATCH}/xfm #--no-png
+
 XFM_FWD_STR="-t identity"
 XFM_REV_STR="-t identity"
-if [[ -f ${XFM_SYN} ]]; then XFM_FWD_STR="${XFM_FWD_STR} -t ${XFM_SYN}"; fi
+if ls ${DIR_SCRATCH}/xfm/${IDPFX}_*.mat 1> /dev/null 2>&1; then
+  XFM_AFF=($(ls ${DIR_SCRATCH}/xfm/${IDPFX}_*.mat))
+fi
+if ls ${DIR_SCRATCH}/xfm/${IDPFX}_*.nii.gz 1> /dev/null 2>&1; then
+  SYNLS=($(ls ${DIR_SCRATCH}/xfm/${IDPFX}_*.nii.gz))
+fi
+if [[ ${#SYNLS[@]} -gt 0 ]]; then
+  if [[ ${SYNLS[0]} == *"inverse"* ]]; then
+    XFM_SYN=${SYNLS[1]}
+    XFM_INV=${SYNLS[0]}
+  else
+    XFM_SYN=${SYNLS[0]}
+    XFM_INV=${SYNLS[1]}
+  fi
+fi
+if [[ ${#SYNLS[@]} -gt 0 ]]; then XFM_FWD_STR="${XFM_FWD_STR} -t ${XFM_SYN}"; fi
 if [[ -f ${XFM_AFF} ]]; then
   XFM_FWD_STR="${XFM_FWD_STR} -t ${XFM_AFF}"
   XFM_REV_STR="${XFM_REV_STR} -t [${XFM_AFF},1]"
 fi
-if [[ -f ${XFM_INV} ]]; then XFM_REV_STR="${XFM_REV_STR} -t ${XFM_INV}"; fi
+if [[ ${#SYNLS[@]} -gt 0 ]]; then XFM_REV_STR="${XFM_REV_STR} -t ${XFM_INV}"; fi
 
 # get MRS VOI in native space --------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>pushing VOI to native space"; fi
@@ -497,6 +512,14 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '  button_type = "default", has_icon = TRUE, icon = "fa fa-save", csv2=F)' >> ${RMD}
   echo '```' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
+
+  # Coregistration Results
+  echo "### Coregistration to Native Space {.tabset}" >> ${RMD}
+  echo "#### Click to View -->"  >> ${RMD}
+  echo "#### Coregistration Overlay"  >> ${RMD}
+  TPNG=($(ls ${DIR_SCRATCH}/xfm/${IDPFX}*.png))
+  echo '![Overlay]('${TPNG[0]}')' >> ${RMD}
+  echo '' >> ${RMD}
 
   # load spant results ---------------------------------------------------------
   echo '### SPANT SVS Analysis Results' >> ${RMD}
@@ -800,6 +823,9 @@ cp ${DIR_SCRATCH}/spant/svs_results.rds ${DIR_SAVE}/mrs/${IDPFX}_MRSfit.rds
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>saving VOI"; fi
 mkdir -p ${DIR_SAVE}/mrs/mask
 cp ${DIR_SCRATCH}/${IDPFX}_mask-mrsVOI.* ${DIR_SAVE}/mrs/mask/
+
+mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
+cp ${DIR_SCRATCH}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}

@@ -302,7 +302,7 @@ echo "filename=${FILENAME//\.nii\.gz}"
     --fg ${DIR_SAVE}/${FILENAME} \
       --fg-color "timbow" \
       --fg-cbar "false" --fg-alpha 50 \
-    --layout "7:x;7:x;7:y;7:y;7:z;7:z" \
+    --layout "11:x;11:y;11:z" \
     --filename ${FILENAME//\.nii\.gz} \
     --dir-save ${DIR_SAVE}
 fi
