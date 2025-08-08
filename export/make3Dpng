@@ -889,11 +889,14 @@ if [[ -n ${FG} ]]; then
     if [[ "${HILO[0]}" == "0" ]]; then HILO[0]=0.001; fi
     if [[ "${HILO[1]}" == "100" ]]; then HILO[1]=99.999; fi
 
-    3dROIstats -mask ${FG_MASK[${i}]} -minmax -nomeanout ${FG[${i}]} > ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv
-    LO=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Min_1))
-    HI=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Max_1))
-    LO=${LO[1]}
-    HI=${HI[1]}
+    MINMAX=($(3dBrickStat -mask ${FG_MASK[${i}]} -slow -min -max ${FG[${i}]}))
+    LO=${MINMAX[-2]}
+    HI=${MINMAX[-1]}
+    #3dROIstats -mask ${FG_MASK[${i}]} -minmax -nomeanout ${FG[${i}]} > ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv
+    #LO=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Min_1))
+    #HI=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Max_1))
+    #LO=${LO[1]}
+    #HI=${HI[1]}
 
     if [[ ${NX} -gt 0 ]]; then
       c3d ${FG[${i}]} \
