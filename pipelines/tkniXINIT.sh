@@ -1,11 +1,13 @@
 #!/bin/bash -e
 
 #===============================================================================
-# PIPELINE:      tkniUHR
-# WORKFLOW:      UHRClean
-# DESCRIPTION:   TKNI anatomical multi-atlas labelling
+# PIPELINE:      tkniXINIT
+# WORKFLOW:      UHR Ex-Vivo Initial Processing
+# DESCRIPTION:   Cleaning ultra-high-resolution ex-vivo MRI images results are
+#                initially debiased and denoised, and intensity segmented to
+#                facilitate manual brain masking.
 # AUTHOR:        Timothy R. Koscik, PhD
-# DATE CREATED:  2024-02-07
+# DATE CREATED:  2025-07-01ish
 # README:
 # DATE MODIFIED:
 # CHANGELOG:
