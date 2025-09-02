@@ -19,7 +19,7 @@ umask 007
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvn --long pi:,project:,dir-project:,\
-id:,dir-id:,id-field:,reorient:,add-resolution,input-dcm:,dir-scratch:,\
+id:,dir-id:,id-field:,reorient:,flip:,add-resolution,input-dcm:,dir-scratch:,\
 help,verbose,no-png,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -36,6 +36,7 @@ IDPFX=
 IDDIR=
 IDFIELD="sub,ses"
 REORIENT="false"
+FLIP="false"
 ADD_RES="false"
 INPUT_DCM=
 HELP=false
@@ -60,6 +61,7 @@ while true; do
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --id-field) IDFIELD="$2" ; shift 2 ;;
     --reorient) REORIENT="$2" ; shift 2 ;;
+    --flip) FLIP="$2" ; shift 2 ;;
     --add-resolution) ADD_RES="true" ; shift ;;
     --input-dcm) INPUT_DCM="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -233,6 +235,15 @@ if [[ -d ${DIR_PROJECT}/rawdata/${IDDIR}/mrs ]]; then
   done
 fi
 rm -rf ${DIR_SCRATCH}/dicom
+
+# Flip if requested-------------------------------------------------------------
+## useful for ex vivo imaging when brains are put in the sacnner in odd orientation
+if [[ ${FLIP} != "false" ]]; then
+  FLS=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/*/*.nii.gz))
+  for (( j=0; j<${#FLS[@]}; j++ )); do
+    c3d ${FLS[${j}]} -flip ${FLIP} -o ${FLS[${j}]}
+  done
+fi
 
 # generate PNGs for QC ---------------------------------------------------------
 if [[ "${NO_PNG}" == "false" ]]; then

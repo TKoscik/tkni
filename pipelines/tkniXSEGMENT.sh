@@ -91,7 +91,7 @@ PROJECT=
 DIR_PROJECT=
 IDPFX=
 IDDIR=
-IDFIELD="uid,ses"
+IDFIELD="pid,ses"
 
 IMAGE=
 MASK=
@@ -419,16 +419,16 @@ for (( i=0; i<${NIMG}; i++ )); do
   # (3) Threshold, Stretch, Mask, convert to SHORT -----------------------------
   IMLO=${RESCALE_LO_VAL}
   if [[ -n ${IMLO} ]]; then
-    IMLO=($(3dBrickStat -mask ${MSK} -slow -perclist 1 ${RESCALE_LO_PCT}))
+    IMLO=($(3dBrickStat -mask ${MSK} -slow -perclist 1 ${RESCALE_LO_PCT} ${OUT}))
     IMLO=${IMLO[1]}
   fi
   IMHI=${RESCALE_HI_VAL}
   if [[ -n ${IMHI} ]]; then
-    IMHI=($(3dBrickStat -mask ${MSK} -slow -perclist 1 ${RESCALE_HI_PCT}))
+    IMHI=($(3dBrickStat -mask ${MSK} -slow -perclist 1 ${RESCALE_HI_PCT} ${OUT}))
     IMHI=${IMHI[1]}
   fi
-  c3d ${IMG} -stretch ${IMLO} ${IMHI} 1000 21000 -type short -o ${IMG}
-  niimath ${IMG} -mas ${MSK} ${IMG}
+  c3d ${IMG} -stretch ${IMLO} ${IMHI} 1000 21000 -type ushort -o ${IMG}
+  niimath ${IMG} -mas ${MSK} -uthr 50000 ${IMG}
 
   # Copy preprocessed image and brain mask as native anat output ---------------
   mkdir -p ${DIR_SAVE}/native

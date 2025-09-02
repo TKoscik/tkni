@@ -21,7 +21,7 @@ FIELD=
 VALUE_NEW=
 ACTION=
 NO_SORT=false
-SORT_LS="sub,pid,uid,ses,sid,aid,xid,task,acq,ce,rec,dir,run,mod,echo,recording,proc,site,mask,label,from,to,reg,prep,resid,slice,xfm"
+SORT_LS="sub,pid,uid,ses,sid,aid,xid,task,acq,ce,rec,dir,run,mod,echo,recording,proc,site,from,to,reg,prep,resid,slice,xfm,mask,label"
 HELP=false
 
 while true; do
@@ -44,7 +44,7 @@ done
 if [[ "${HELP}" == "true" ]]; then
   echo ''
   echo '------------------------------------------------------------------------'
-  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo "TKNI: ${FCN_NAME}"
   echo '------------------------------------------------------------------------'
   echo '  -h | --help              display command help'
   echo '  -i | --input <value>     BIDs compliant filepath'

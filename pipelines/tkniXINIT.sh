@@ -69,7 +69,7 @@ PROJECT=
 DIR_PROJECT=
 IDPFX=
 IDDIR=
-IDFIELD="uid,ses"
+IDFIELD="pid,ses"
 
 IMAGE=
 MOD="swi"
