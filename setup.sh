@@ -1,6 +1,13 @@
 # Setup information, might work as a script but my need lots of editing
 # sudo privileges are a must
 
+# Prerequisite clone tkni github repository
+# cd /usr/local
+# sudo mkdir -p tkni
+# git clone https://github.com/tkoscik/tkni
+# chmod -r 775 /usr/local/tkni
+
+
 # Requires Ubuntu 22.04.5 (no release for freesurfer for Ubuntu 24)
 
 # will install:
@@ -25,9 +32,7 @@ SRC_TKNIATLAS="${DIR_SRC}/tkni_atlas.zip"
 SRC_TKNIPRIVATE="${DIR_SRC}/tkni_private.zip"
 
 # install tkni software first -----------------------------------------------
-cd /usr/local
-sudo mkdir -p tkni
-git clone https://github.com/tkoscik/tkni
+
 
 ## add atlases
 sudo mkdir -p /usr/local/tkni/atlas
@@ -55,6 +60,9 @@ Rscript ${TKNIPATH}/R/r_setup.R
 sudo apt-get install git g++ python libeigen3-dev zlib1g-dev \
                      libqt5opengl5-dev libqt5svg5-dev libgl1-mesa-dev \
                      libfftw3-dev libtiff5-dev libpng-dev
+
+# Install NVIDIA Drivers and CUDA --------------------------------------------
+
 
 # install AFNI ---------------------------------------------------------------
 cd
