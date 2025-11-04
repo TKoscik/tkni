@@ -2,11 +2,10 @@
 # sudo privileges are a must
 
 # Prerequisite clone tkni github repository
-# cd /usr/local
-# sudo mkdir -p tkni
-# git clone https://github.com/tkoscik/tkni
+# sudo mkdir -p /usr/local/tkni/dev
+# cd /usr/local/tkni
+# git clone https://github.com/tkoscik/tkni.git /usr/local/tkni/dev
 # chmod -r 775 /usr/local/tkni
-
 
 # Requires Ubuntu 22.04.5 (no release for freesurfer for Ubuntu 24)
 
@@ -20,6 +19,8 @@
 ## FreeSurfer
 ## itksnap/c3d
 ## cuda
+## nnUNet
+
 
 # locate supporting software -----------------------------------------------
 ## note for niimath version number was appended manually and will need to be added to the folder structure
@@ -30,9 +31,13 @@ SRC_ITKSNAP="${DIR_SRC}/itksnap-4.4.0-20250909-Linux-x86_64.tar.gz"
 SRC_FREESURFER="${DIR_SRC}/freesurfer_ubuntu22-8.1.0_amd64.deb"
 SRC_TKNIATLAS="${DIR_SRC}/tkni_atlas.zip"
 SRC_TKNIPRIVATE="${DIR_SRC}/tkni_private.zip"
+SRC_TKNINNUNET=(${DIR_SRC}/tkni_nnunet_uhrbex.zip)
 
 # install tkni software first -----------------------------------------------
-
+if [[ -z ${TKNIPATH} ]]; then
+  echo "TKNI not found. Check it is downloaded and TKNIPATH exists in bashrc"
+  error 1
+fi
 
 ## add atlases
 sudo mkdir -p /usr/local/tkni/atlas
@@ -43,8 +48,15 @@ if [[ -n ${SRC_TKNIPRIVATE} ]] & [[ -f ${SRC_TKNIPRIVATE} ]]; then
   sudo mkdir -p /usr/local/tkni/private
   unzip ${SRC_TKNIATLAS} -d /usr/local/tkni/private
 fi
-
 ## add entries to bashrc
+
+# install LIBRARIES ----------------------------------------------------------
+#MRTRIX
+sudo apt update
+sduo apt upgrade
+sudo apt install git g++ python libeigen3-dev zlib1g-dev \
+                 libqt5opengl5-dev libqt5svg5-dev libgl1-mesa-dev \
+                 libfftw3-dev libtiff5-dev libpng-dev
 
 # install R -----------------------------------------------------------------
 ## https://cran.r-project.org/bin/linux/ubuntu/fullREADME.html
@@ -53,13 +65,6 @@ sudo apt-get update
 sudo apt-get install r-base r-base-dev
 
 Rscript ${TKNIPATH}/R/r_setup.R
-
-# install LIBRARIES ----------------------------------------------------------
-
-#MRTRIX
-sudo apt-get install git g++ python libeigen3-dev zlib1g-dev \
-                     libqt5opengl5-dev libqt5svg5-dev libgl1-mesa-dev \
-                     libfftw3-dev libtiff5-dev libpng-dev
 
 # Install NVIDIA Drivers and CUDA --------------------------------------------
 
@@ -124,3 +129,29 @@ cd /usr/local/freesurfer
 sudo apt install $(basename ${SRC_FREESURFER})
 
 sudo apt install 
+
+## CUDA -----------------------------------------------------------------------------
+
+## nnUNet ---------------------------------------------------------------------------
+##instal PYTORCH - https://pytorch.org/get-started/locally/
+sudo apt install python
+sudo apt install python3-pip
+## check pytorch install
+##pip install nnunetv2
+cd /usr/local
+git clone https://github.com/MIC-DKFZ/nnUNet.git
+cd nnUNet
+pip install -e .
+pip install --upgrade git+https://github.com/FabianIsensee/hiddenlayer.git
+
+## set environment variables:
+mkdir -p /data/nnUNet_environment
+echo "export nnUNet_raw=/data/nnUNet_environment/nnUNet_raw" >> ~/.bashrc
+echo "export nnUNet_preprocessed=/data/nnUNet_environment/nnUNet_preprocessed" >> ~/.bashrc
+echo "export nnUNet_results=/data/nnUNet_environment/nnUNet_results" >> ~/.bashrc
+
+#install pretrained models
+mkdir -p /usr/local/tkni/nnUnet
+for (( i=0; i<${#SRC_TKNINNUNET[@]}; i++ )); do
+  unzip ${SRC_TKNINNUNET[${i}]} /usr/local/tkni/nnUNet/
+done
