@@ -54,9 +54,20 @@ fi
 #===============================================================================
 unset OUTPUT
 if [[ "${FIELD,,}" == "origin" ]]; then
-  OUTPUT+=($(nifti_tool -disp_hdr -field qoffset_x -quiet -infiles ${IMAGE}))
-  OUTPUT+=($(nifti_tool -disp_hdr -field qoffset_y -quiet -infiles ${IMAGE}))
-  OUTPUT+=($(nifti_tool -disp_hdr -field qoffset_z -quiet -infiles ${IMAGE}))
+  TX=($(nifti_tool -disp_hdr -field srow_x -quiet -infiles ${IMAGE}))
+  TY=($(nifti_tool -disp_hdr -field srow_y -quiet -infiles ${IMAGE}))
+  TZ=($(nifti_tool -disp_hdr -field srow_z -quiet -infiles ${IMAGE}))
+  TORIENT=($(3dinfo -orient ${IMAGE}))
+  if [[ ${TORIENT} == *"L"* ]]; then
+    TX[-1]=$(echo "scale=3; ${TX[-1]} * -1" | bc -l)
+  fi
+  if [[ ${TORIENT} == *"P"* ]]; then
+    TY[-1]=$(echo "scale=3; ${TY[-1]} * -1" | bc -l)
+  fi
+  if [[ ${TORIENT} == *"I"* ]]; then
+    TZ[-1]=$(echo "scale=3; ${TZ[-1]} * -1" | bc -l)
+  fi
+  OUTPUT=(${TX[-1]} ${TY[-1]} ${TZ[-1]})
 elif [[ "${FIELD,,}" == "spacing" ]] || [[ "${FIELD,,}" == "space" ]]; then
   OUTPUT=($(nifti_tool -disp_hdr -field pixdim -quiet -infiles ${IMAGE}))
   OUTPUT=(${OUTPUT[@]:1:3})

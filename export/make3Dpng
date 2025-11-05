@@ -377,12 +377,14 @@ DIMS=($(niiInfo -i ${BG} -f voxels))
 PIXDIM=($(niiInfo -i ${BG} -f space))
 ORIGIN=($(niiInfo -i ${BG} -f origin))
 ORIENT=($(niiInfo -i ${BG} -f orient))
+SPACING=($(niiInfo -i ${BG} -f spacing))
 if [[ "${VERBOSE}" == "true" ]]; then
   echo ">>>pulling background information from NII header"
   echo -e "DIMS:\t${DIMS[@]}"
   echo -e "PIXDIM:\t${PIXDIM[@]}"
   echo -e "ORIGIN:\t${ORIGIN[@]}"
   echo -e "ORIENT:\t${ORIENT[@]}"
+  echo -e "SPACING:\t${SPACING[@]}"
 fi
 
 ## use mm only if image is in known standard space -----------------------------
@@ -1194,19 +1196,23 @@ if [[ ${NX} -gt 0 ]]; then
   for (( i=0; i<${NX}; i++ )); do
     if [[ "${LABEL_NO_SLICE}" == "false" ]]; then
       if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add slice labels X${i}"; fi
-      if [[ ${NX} == 1 ]]; then
-        LABEL_X=$(echo "(${XN} + ${X0}) / 2 * ${DIMS[0]} / 100" | bc -l)
-      else
-        LABEL_X=$(echo "(${X0} + ${XS} * ${i}) * ${DIMS[0]} / 100" | bc -l)
-      fi
-      if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-        LABEL_X=$(echo "${LABEL_X} * ${PIXDIM[0]}" | bc -l)
-        LABEL_X=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
-      fi
-      if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-        LABEL_X=$(printf "%0.0f" ${LABEL_X})
-      fi
-      LABEL_X="x=${LABEL_X}"
+      #if [[ ${NX} == 1 ]]; then
+      #  LABEL_X=$(echo "(${XN} + ${X0}) / 2 * ${DIMS[0]} / 100" | bc -l)
+      #else
+      #  LABEL_X=$(echo "(${X0} + ${XS} * ${i}) * ${DIMS[0]} / 100" | bc -l)
+      #fi
+      LABEL_X=$(echo "scale=0; ${DIMS[0]} - (${X0} + (${XS} * ${i}))" | bc -l)
+      LABEL_X=$(echo "scale=2; (${LABEL_X} * ${SPACING[0]}) - ${ORIGIN[0]}" | bc -l)
+      LABEL_X=$(printf "x=%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
+
+      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
+      #  LABEL_X=$(echo "${LABEL_X} * ${PIXDIM[0]}" | bc -l)
+      #  LABEL_X=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
+      #fi
+      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
+      #  LABEL_X=$(printf "%0.0f" ${LABEL_X})
+      #fi
+      #LABEL_X="x=${LABEL_X}"
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_X}" \
@@ -1218,19 +1224,22 @@ if [[ ${NY} -gt 0 ]]; then
   for (( i=0; i<${NY}; i++ )); do
     if [[ "${LABEL_NO_SLICE}" == "false" ]]; then
       if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add slice labels Y${i}"; fi
-      if [[ ${NY} == 1 ]]; then
-        LABEL_Y=$(echo "(${YN} + ${Y0}) / 2 * ${DIMS[1]} / 100" | bc -l)
-      else
-        LABEL_Y=$(echo "(${Y0} + ${YS} * ${i}) * ${DIMS[1]} / 100" | bc -l)
-      fi
-      if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-        LABEL_Y=$(echo "${LABEL_Y} * ${PIXDIM[1]}" | bc -l)
-        LABEL_Y=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_Y})
-      fi
-      if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-        LABEL_Y=$(printf "%0.0f" ${LABEL_Y})
-      fi
-      LABEL_Y="y=${LABEL_Y}"
+      #if [[ ${NY} == 1 ]]; then
+      #  LABEL_Y=$(echo "(${YN} + ${Y0}) / 2 * ${DIMS[1]} / 100" | bc -l)
+      #else
+      #  LABEL_Y=$(echo "(${Y0} + ${YS} * ${i}) * ${DIMS[1]} / 100" | bc -l)
+      #fi
+      LABEL_Y=$(echo "scale=0; ${DIMS[1]} - (${Y0} + (${YS} * ${i}))" | bc -l)
+      LABEL_Y=$(echo "scale=2; (${LABEL_Y} * ${SPACING[1]}) - ${ORIGIN[1]}" | bc -l)
+      LABEL_Y=$(printf "y=%0.${LABEL_DECIMAL}fmm" ${LABEL_Y})
+      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
+      #  LABEL_Y=$(echo "${LABEL_Y} * ${PIXDIM[1]}" | bc -l)
+      #  LABEL_Y=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_Y})
+      #fi
+      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
+      #  LABEL_Y=$(printf "%0.0f" ${LABEL_Y})
+      #fi
+      #LABEL_Y="y=${LABEL_Y}"
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_Y}" \
@@ -1242,19 +1251,23 @@ if [[ ${NZ} -gt 0 ]]; then
   for (( i=0; i<${NZ}; i++ )); do
     if [[ "${LABEL_NO_SLICE}" == "false" ]]; then
       if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add slice labels Z${i}"; fi
-      if [[ ${NZ} == 1 ]]; then
-        LABEL_Z=$(echo "(${ZN} + ${Z0}) / 2 * ${DIMS[2]} / 100" | bc -l)
-      else
-        LABEL_Z=$(echo "(${Z0} + ${ZS} * ${i}) * ${DIMS[2]} / 100" | bc -l)
-      fi
-      if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-        LABEL_Z=$(echo "${LABEL_Z} * ${PIXDIM[2]}" | bc -l)
-        LABEL_Z=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_Z})
-      fi
-      if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-        LABEL_Z=$(printf "%0.0f" ${LABEL_Z})
-      fi
-      LABEL_Z="z=${LABEL_Z}"
+#      if [[ ${NZ} == 1 ]]; then
+#        LABEL_Z=$(echo "(${ZN} + ${Z0}) / 2 * ${DIMS[2]} / 100" | bc -l)
+#      else
+#        LABEL_Z=$(echo "(${Z0} + ${ZS} * ${i}) * ${DIMS[2]} / 100" | bc -l)
+#      fi
+      #LABEL_Z=$(echo "scale=0; ${DIMS[2]} - ${Z0} + (${ZS} * ${i})" | bc -l)
+      LABEL_Z=$(echo "scale=0; ${DIMS[2]} - (${Z0} + (${ZS} * ${i}))" | bc -l)
+      LABEL_Z=$(echo "scale=2; (${LABEL_Z} * ${SPACING[2]}) - ${ORIGIN[2]}" | bc -l)
+      LABEL_Z=$(printf "z=%0.${LABEL_DECIMAL}fmm" ${LABEL_Z})
+      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
+      #  LABEL_Z=$(echo "${LABEL_Z} * ${PIXDIM[2]}" | bc -l)
+      #  LABEL_Z=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_Z})
+      #fi
+      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
+      #  LABEL_Z=$(printf "%0.0f" ${LABEL_Z})
+      #fi
+      #LABEL_Z="z=${LABEL_Z}"
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_Z}" \
@@ -1368,12 +1381,12 @@ fi
 
 # add laterality label if desired ----------------------------------------------
 if [[ "${LABEL_NO_LR}" == "false" ]]; then
-  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add laterality label"; fi
-  if [[ "${ORIENT,,}" == *"r"* ]]; then
+#  if [[ "${ViERBOSE}" == "true" ]]; then echo ">>>add laterality label"; fi
+#  if [[ "${ORIENT,,}" == *"r"* ]]; then
     TTXT="R"
-  else
-    TTXT="L"
-  fi
+#  else
+#    TTXT="L"
+#  fi
   mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
     -fill "${COLOR_TEXT}" -undercolor "transparent" \
     -gravity SouthWest -annotate +10+10 "${TTXT}" \
