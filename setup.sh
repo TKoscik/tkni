@@ -123,14 +123,45 @@ cd /usr/local/mrtrix3
 ./set_path
 
 ## install freesurfer ----------------------------------------------------------------
-mkdir -p /usr/local/freesurfer/freesurfer-8.1.0
+## - probably a better idea to set this up without sudo, but with chmod since that mnight be making pip commands fail
+## https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads
+## https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads/rel8notes
+#cd /usr/local/freesurfer/8.1.0/python/packages/ERC_bayesian_segmentation/
+#wget https://ftp.nmr.mgh.harvard.edu/pub/dist/lcnpublic/dist/Histo_Atlas_Iglesias_2023/atlas_simplified.zip
+#unzip atlas_simplified.zip
+
+
+mkdir -p /usr/local/freesurfer
 cp ${SRC_FREESURFER} /usr/local/freesurfer/
 cd /usr/local/freesurfer
-sudo apt install $(basename ${SRC_FREESURFER})
+sudo apt install ./$(basename ${SRC_FREESURFER})
 
-sudo apt install 
+sudo FREESURFER_HOME=$FREESURFER_HOME $FREESURFER_HOME/bin/fs_install_mcr R2019b
+export LD_LIBRARY_PATH=$FREESURFER_HOME/MCRv97/runtime/glnxa64:$FREESURFER_HOME/MCRv97/bin/glnxa64:$FREESURFER_HOME/MCRv97/sys/os/glnxa64:$FREESURFER_HOME/MCRv97/extern/bin/glnxa64
+#sudo FREESURFER_HOME=$FREESURFER_HOME $FREESURFER_HOME/bin/fs_install_cuda
+PYDIR=/usr/local/freesurfer/8.1.0/python/bin/python3.8
+${PYDIR} -m pip install --timeout 1000 nvidia-curand-cu12==10.3.2.106
+${PYDIR} -m pip install --timeout 1000 nvidia-cuda-runtime-cu12==12.1.105
+${PYDIR} -m pip install --timeout 1000 triton==2.1.0
+${PYDIR} -m pip install --timeout 1000 nvidia-cuda-cupti-cu12==12.1.105
+${PYDIR} -m pip install --timeout 1000 nvidia-cusolver-cu12==11.4.5.107
+${PYDIR} -m pip install --timeout 1000 typing-extensions>=4.8.0
+${PYDIR} -m pip install --timeout 1000 nvidia-cuda-nvrtc-cu12==12.1.105
+${PYDIR} -m pip install --timeout 1000 nvidia-cublas-cu12==12.1.3.1
+${PYDIR} -m pip install --timeout 1000 nvidia-cudnn-cu12==8.9.2.26
+${PYDIR} -m pip install --timeout 1000 nvidia_cusolver_cu12
+${PYDIR} -m pip install --timeout 1000 nvidia_cusparse_cu12
+${PYDIR} -m pip install --timeout 1000 torch==2.1.2
 
-## CUDA -----------------------------------------------------------------------------
+git clone https://github.com/rohitrango/fireants
+cd /usr/local/fireants
+pip install -e .
+cd fused_ops
+${PYDIR} setup.py build_ext && ${PYDIR} setup.py install
+cd ..
+
+
+
 
 ## nnUNet ---------------------------------------------------------------------------
 ##instal PYTORCH - https://pytorch.org/get-started/locally/
@@ -155,3 +186,8 @@ mkdir -p /usr/local/tkni/nnUnet
 for (( i=0; i<${#SRC_TKNINNUNET[@]}; i++ )); do
   unzip ${SRC_TKNINNUNET[${i}]} /usr/local/tkni/nnUNet/
 done
+
+# ADD UTILITIES FOR CIFS and SSH ------
+sudo apt install cifs-utils
+sudo apt install openssh-server
+sudo apt install imagemagick
