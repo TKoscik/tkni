@@ -411,6 +411,8 @@ if [[ ${NO_B1,,} == "false" ]]; then
   BIAS=${DIR_SCRATCH}/${IDPFX}_prep-biasB1_qalas.nii.gz
   antsApplyTransforms -d 3 -n Linear -i ${B1} -o ${BIAS} -t identity -r ${FG}
   niimath ${BIAS} -s ${B1K} ${BIAS}
+  # normalize bias image range
+  #ImageMath 3 ${BIAS} Normalize ${BIAS} ${FG}
   for (( i=0; i<${NVOL}; i++ )); do
     OV=($(3dROIstats -mask ${FG} -sigma ${QPROC[${i}]}))
     niimath ${QPROC[${i}]} -div ${BIAS} ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz
