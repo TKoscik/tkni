@@ -655,6 +655,7 @@ if [[ ${NX} -gt 0 ]]; then
   XN=$((${XLIM[1]} - ${EDGE_CLIP}))
   if [[ ${NX} == 1 ]]; then
     XSLICE="$(echo "scale=0; (${XN} + ${X0}) / 2" | bc -l)"
+    XS=0
   elif [[ ${NX} == 2 ]]; then
     XS=$(echo "scale=0; (${XN} - ${X0}) / (4 - 1)" | bc -l)
     X0=$((${X0} + ${XS}))
@@ -683,6 +684,7 @@ if [[ ${NY} -gt 0 ]]; then
   YN=$((${YLIM[1]} - ${EDGE_CLIP}))
   if [[ ${NY} == 1 ]]; then
     YSLICE="$(echo "scale=0; (${YN} + ${Y0}) / 2" | bc -l)"
+    YS=0
   elif [[ ${NY} == 2 ]]; then
     YS=$(echo "scale=0; (${YN} - ${Y0}) / (4 - 1)" | bc -l)
     Y0=$((${Y0} + ${YS}))
@@ -711,6 +713,7 @@ if [[ ${NZ} -gt 0 ]]; then
   ZN=$((${ZLIM[1]} - ${EDGE_CLIP}))
   if [[ ${NZ} == 1 ]]; then
     ZSLICE="$(echo "scale=0; (${ZN} + ${Z0}) / 2" | bc -l)"
+    ZS=0
   elif [[ ${NZ} == 2 ]]; then
     ZS=$(echo "scale=0; (${ZN} - ${Z0}) / (4 - 1)" | bc -l)
     Z0=$((${Z0} + ${ZS}))
@@ -1204,7 +1207,6 @@ if [[ ${NX} -gt 0 ]]; then
       LABEL_X=$(echo "scale=0; ${DIMS[0]} - (${X0} + (${XS} * ${i}))" | bc -l)
       LABEL_X=$(echo "scale=2; (${LABEL_X} * ${SPACING[0]}) - ${ORIGIN[0]}" | bc -l)
       LABEL_X=$(printf "x=%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
-
       #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
       #  LABEL_X=$(echo "${LABEL_X} * ${PIXDIM[0]}" | bc -l)
       #  LABEL_X=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
