@@ -77,41 +77,6 @@ if [[ -n ${SRC_TKNIPRIVATE} ]] & [[ -f ${SRC_TKNIPRIVATE} ]]; then
   sudo unzip ${SRC_TKNIPRIVATE} -d /usr/local/tkni/
   echo 'export PATH=${PATH}:/usr/local/tkni/private' >> ~/.bashrc
 fi
-## add entries to bashrc
-
-# install LIBRARIES ----------------------------------------------------------
-#MRTRIX
-sudo apt update
-sudo apt upgrade
-sudo apt install git g++ python libeigen3-dev zlib1g-dev \
-                 libqt5opengl5-dev libqt5svg5-dev libgl1-mesa-dev \
-                 libfftw3-dev libtiff5-dev libpng-dev jq
-
-# install R -----------------------------------------------------------------
-## https://cran.r-project.org/bin/linux/ubuntu/fullREADME.html
-deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/
-sudo apt-get update
-sudo apt-get install r-base r-base-dev
-
-PKGLS=(car devtools doParallel downloadthis effects ez.combat fastcluster ggplot2 grid gridExtra Hmisc jsonlite kableExtra lme4 lmerTest MASS mixtools moments nifti.io optimParallel R.utils RcppColors reshape2 spant tools viridis withr)
-
-APTLS=
-RLS="install.packages(c("
-for (( i=0; i<${#PKGLS[@]}; i++ )); do
-  PKG=$(echo ${PKGLS[${i}],,} | tr -dc '[:alnum:]')
-  if apt-cache show r-cran-${PKG} &>/dev/null; then
-    APTLS+=("r-cran-${PKG}")
-  else
-    RLS="${RLS}\"${PKGLS[${i}]}\","
-  fi
-done
-RLS="${RLS%?}))"
-
-sudo apt install ${APTLS[@]}
-Rscript -e ${RLS}
-Rscript -e 'devtools::install_github("tkoscik/fsurfR")'
-Rscript -e 'devtools::install_github("tkoscik/tkmisc")'
-Rscript -e 'devtools::install_github("tkoscik/timbow")'
 
 # install R -----------------------------------------------------------------
 ## https://cran.r-project.org/bin/linux/ubuntu/fullREADME.html
@@ -192,16 +157,6 @@ sudo tar -xzvf $(basename ${SRC_ITKSNAP})
 echo -e "\n# ITKSNAP & C3D ------" >> ~/.bashrc
 echo 'export PATH=$PATH:/usr/local/itksnap/itksnap-4.4.0-20250909-Linux-x86_64/bin' >> ~/.bashrc
 
-## install MRTRIX3 -------------------------------------------------------------------
-#requires FSL, use appropriate version
-mkdir -p /usr/local/fsl
-cd /usr/local/fsl
-curl -Ls https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/getfsl.sh | sh -s
-./getfsl.sh
-## set variables in interactive script, set version number shown on screen as subfolder
-echo -e "\n # FSL ------"
-
-mkdir -p /usr/local/mrtrix3
 ## build MRTRIX3 ---------------------------------------------------------------
 sudo apt install libeigen3-dev libqt5opengl5-dev libqt5svg5-dev
 sudo mkdir -p /usr/local/mrtrix3
@@ -214,6 +169,7 @@ echo -e "\n# MRTRIX3 ------" >> ~/.bashrc
 echo 'export MRTRIXPATH=/usr/local/mrtrix3/bin' >> ~/.bashrc
 echo 'export PATH=$PATH:/usr/local/mrtrix3/bin' >> ~/.bashrc
 
+<<<<<<< HEAD
 ## install freesurfer ----------------------------------------------------------
 sudo mkdir -p /usr/local/freesurfer
 sudo mv ${SRC_FREESURFER} /usr/local/freesurfer/
@@ -226,6 +182,7 @@ echo 'source $FREESURFER_HOME/SetUpFreeSurfer.sh' >> ~/.bashrc
 
 ## nnUNet ----------------------------------------------------------------------
 ## python3 should already be installed
+=======
 ## install freesurfer ----------------------------------------------------------------
 ## - probably a better idea to set this up without sudo, but with chmod since that mnight be making pip commands fail
 ## https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads
@@ -265,9 +222,12 @@ ${PYDIR} setup.py build_ext && ${PYDIR} setup.py install
 cd ..
 
 
+
+
 ## nnUNet ---------------------------------------------------------------------------
 ##instal PYTORCH - https://pytorch.org/get-started/locally/
 sudo apt install python
+>>>>>>> 79585520f7d63e7e08dca4af725392691c02e568
 sudo apt install python3-pip
 ## install PYTORCH - https://pytorch.org/get-started/locally/
 #pip install torch==2.8.0
