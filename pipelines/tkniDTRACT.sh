@@ -389,7 +389,6 @@ if [[ "${NO_TRACT}" == "false" ]]; then
 
   if [[ ${NO_PNG} == "false" ]]; then
     mrview ${TMP_DWI}/dwi_preproc_coreg.mif \
-      -platform offscreen \
       -imagevisible false \
       -tractography.load ${TMP_TCK}/smallerSIFT_200k.tck \
       -tractography.opacity 0.05 \
