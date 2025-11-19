@@ -56,7 +56,7 @@ sudo apt update
 sduo apt upgrade
 sudo apt install git g++ python libeigen3-dev zlib1g-dev \
                  libqt5opengl5-dev libqt5svg5-dev libgl1-mesa-dev \
-                 libfftw3-dev libtiff5-dev libpng-dev
+                 libfftw3-dev libtiff5-dev libpng-dev jq
 
 # install R -----------------------------------------------------------------
 ## https://cran.r-project.org/bin/linux/ubuntu/fullREADME.html
@@ -64,10 +64,25 @@ deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/
 sudo apt-get update
 sudo apt-get install r-base r-base-dev
 
-Rscript ${TKNIPATH}/R/r_setup.R
+PKGLS=(car devtools doParallel downloadthis effects ez.combat fastcluster ggplot2 grid gridExtra Hmisc jsonlite kableExtra lme4 lmerTest MASS mixtools moments nifti.io optimParallel R.utils RcppColors reshape2 spant tools viridis withr)
 
-# Install NVIDIA Drivers and CUDA --------------------------------------------
+APTLS=
+RLS="install.packages(c("
+for (( i=0; i<${#PKGLS[@]}; i++ )); do
+  PKG=$(echo ${PKGLS[${i}],,} | tr -dc '[:alnum:]')
+  if apt-cache show r-cran-${PKG} &>/dev/null; then
+    APTLS+=("r-cran-${PKG}")
+  else
+    RLS="${RLS}\"${PKGLS[${i}]}\","
+  fi
+done
+RLS="${RLS%?}))"
 
+sudo apt install ${APTLS[@]}
+Rscript -e ${RLS}
+Rscript -e 'devtools::install_github("tkoscik/fsurfR")'
+Rscript -e 'devtools::install_github("tkoscik/tkmisc")'
+Rscript -e 'devtools::install_github("tkoscik/timbow")'
 
 # install AFNI ---------------------------------------------------------------
 cd
@@ -112,6 +127,15 @@ echo -e "\n # ITKSNAP & C3D ------" >> ~/.bashrc
 echo "export PATH=$PATH:/usr/local/itksnap/itksnap/itksnap-4.4.0-20250909-Linux-x86_64/bin" >> ~/.bashrc
 
 ## install MRTRIX3 -------------------------------------------------------------------
+#requires FSL, use appropriate version
+mkdir -p /usr/local/fsl
+cd /usr/local/fsl
+curl -Ls https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/getfsl.sh | sh -s
+./getfsl.sh
+## set variables in interactive script, set version number shown on screen as subfolder
+echo -e "\n # FSL ------"
+
+
 mkdir -p /usr/local/mrtrix3
 cd /usr/local
 git clone https://github.com/MRtrix3/mrtrix3.git

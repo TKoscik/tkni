@@ -48,13 +48,10 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
 id:,dir-id:,id-field:,\
-image:,uhr-thresh:,threads:,hi-fg-clfrac:,lo-fg-clfrac:,\
-hi-debias-resample:,hi-debias-bspline:,hi-debias-shrink:,hi-debias-convergence:,hi-debias-histmatch:\
-hi-denoise-model:,hi-denoise-shrink:,hi-denoise-patch:,hi-denoise-radius:,\
-lo-debias-resample:,lo-debias-bspline:,lo-debias-shrink:,lo-debias-convergence:,lo-debias-histmatch:\
-lo-denoise-model:,lo-denoise-shrink:,lo-denoise-patch:,lo-denoise-radius:,\
-segment-rescale:,segment-init:,segment-n:,segment-form:,\
-segment-convergence:,segment-likelihood:,segment-mrf:,segment-random:,\
+image:,mod:,redo-mask,uhr-thresh:,\
+debias-resample:,debias-bspline:,debias-shrink:,debias-convergence:,debias-histmatch:\
+denoise-model:,denoise-shrink:,denoise-patch:,denoise-radius:,\
+softmask-kernel:,\
 dir-save:,dir-scratch:,requires:,\
 keep,help,verbose,no-png,no-rmd,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -73,40 +70,18 @@ IDFIELD="pid,ses"
 
 IMAGE=
 MOD="swi"
+REDO_MASK="false"
 UHR_THRESH=0.1
-THREADS=4
-
-BIMG_RESCALE=0.5x0.5x0.5
-
-HI_FG_CLFRAC=0.15
-HI_N4_RESAMPLE=1
-HI_N4_BSPLINE="[200,3]"
-HI_N4_SHRINK=32
-HI_N4_CONVERGENCE="[50x50x50x50,0.0]"
-HI_N4_HISTMATCH="[0.15,0.01,200]"
-HI_DN_MODEL="Rician"
-HI_DN_SHRINK=1
-HI_DN_PATCH=1
-HI_DN_RADIUS=2
-
-LO_FG_CLFRAC=0.15
-LO_N4_RESAMPLE=1
-LO_N4_BSPLINE="[200,3]"
-LO_N4_SHRINK=8
-LO_N4_CONVERGENCE="[50x50x50x50,0.0]"
-LO_N4_HISTMATCH="[0.15,0.01,200]"
-LO_DN_MODEL="Rician"
-LO_DN_SHRINK=1
-LO_DN_PATCH=1
-LO_DN_RADIUS=2
-
-SG_INIT=KMeans
-SG_N=12
-SG_FORM=Socrates[0]
-SG_CONVERGENCE=[5,0.001]
-SG_LIKELIHOOD=Gaussian
-SG_MRF=[0.1,1x1x1]
-SG_RANDOM=1
+N4_RESAMPLE=1
+N4_BSPLINE="[85,3]"
+N4_SHRINK=4
+N4_CONVERGENCE="[100x100x100x100,0.001]"
+N4_HISTMATCH="[0.15,0.01,200]"
+DN_MODEL="Rician"
+DN_SHRINK=1
+DN_PATCH=1
+DN_RADIUS=2
+SOFTMASK_KERNEL=1
 
 DIR_SAVE=
 DIR_SCRATCH=
@@ -137,36 +112,20 @@ while true; do
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --id-field) IDFIELD="$2" ; shift 2 ;;
     --image) IMAGE="$2" ; shift 2 ;;
+    --mod) MOD="$2" ; shift 2 ;;
+    --redo-mask) REDO_MASK="true" ; shift ;;
     --uhr-thresh) UHR_THRESH="$2" ; shift 2 ;;
     --threads) threads="$2" ; shift 2 ;;
-    --hi-fg-clfrac) HI_FG_CLFRAC="$2" ; shift 2 ;;
-    --hi-debias-resample) HI_N4_RESAMPLE="$2" ; shift 2 ;;
-    --hi-debias-bspline) HI_N4_BSPLINE="$2" ; shift 2 ;;
-    --hi-debias-shrink) HI_N4_SHRINK="$2" ; shift 2 ;;
-    --hi-debias-convergence) HI_N4_CONVERGENCE="$2" ; shift 2 ;;
-    --hi-debias-histmatch) HI_N4_HISTMATCH="$2" ; shift 2 ;;
-    --hi-denoise-model) HI_DN_MODEL="$2" ; shift 2 ;;
-    --hi-denoise-shrink) HI_DN_SHRINK="$2" ; shift 2 ;;
-    --hi-denoise-patch) HI_DN_PATCH="$2" ; shift 2 ;;
-    --hi-denoise-radius) HI_DN_RADIUS="$2" ; shift 2 ;;
-    --lo-fg-clfrac) FG_CLFRAC="$2" ; shift 2 ;;
-    --lo-debias-resample) LO_N4_RESAMPLE="$2" ; shift 2 ;;
-    --lo-debias-bspline) LO_N4_BSPLINE="$2" ; shift 2 ;;
-    --lo-debias-shrink) LO_N4_SHRINK="$2" ; shift 2 ;;
-    --lo-debias-convergence) LO_N4_CONVERGENCE="$2" ; shift 2 ;;
-    --lo-debias-histmatch) LO_N4_HISTMATCH="$2" ; shift 2 ;;
-    --lo-denoise-model) LO_DN_MODEL="$2" ; shift 2 ;;
-    --lo-denoise-shrink) LO_DN_SHRINK="$2" ; shift 2 ;;
-    --lo-denoise-patch) LO_DN_PATCH="$2" ; shift 2 ;;
-    --lo-denoise-radius) LO_DN_RADIUS="$2" ; shift 2 ;;
-    --segment-rescale) SG_RESCALE="$2" ; shift 2 ;;
-    --segment-init) SG_INIT="$2" ; shift 2 ;;
-    --segment-n) SG_N="$2" ; shift 2 ;;
-    --segment-form) SG_FORM="$2" ; shift 2 ;;
-    --segment-convergence) SG_CONVERGENCE="$2" ; shift 2 ;;
-    --segment-likelihood) SG_LIKELIHOOD="$2" ; shift 2 ;;
-    --segment-mrf) SG_MRF="$2" ; shift 2 ;;
-    --segment-random) SG_RANDOM="$2" ; shift 2 ;;
+    --debias-resample) N4_RESAMPLE="$2" ; shift 2 ;;
+    --debias-bspline) N4_BSPLINE="$2" ; shift 2 ;;
+    --debias-shrink) N4_SHRINK="$2" ; shift 2 ;;
+    --debias-convergence) N4_CONVERGENCE="$2" ; shift 2 ;;
+    --debias-histmatch) N4_HISTMATCH="$2" ; shift 2 ;;
+    --denoise-model) DN_MODEL="$2" ; shift 2 ;;
+    --denoise-shrink) DN_SHRINK="$2" ; shift 2 ;;
+    --denoise-patch) DN_PATCH="$2" ; shift 2 ;;
+    --denoise-radius) DN_RADIUS="$2" ; shift 2 ;;
+    --softmask-kernel) SOFTMASK_KERNEL="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -191,23 +150,12 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  --dir-id'
   echo '  --id-field'
   echo '  --image'
-  echo '  --reorient-code'
-  echo '  --reorient-deoblique'
-  echo '  --segment-rescale'
-  echo '  --segment-maskclfrac'
-  echo '  --segment-init'
-  echo '  --segment-n'
-  echo '  --segment-form'
-  echo '  --segment-convergence'
-  echo '  --segment-likelihood'
-  echo '  --segment-mrf'
-  echo '  --segment-random'
   echo ''
   echo 'Procedure: '
-  echo '(1) Reorient'
+  echo '(1) nnUNet Brain Mask'
   echo '(2) Debias'
   echo '(3) Denoise'
-  echo '(4) Intensity Segmentation'
+  echo '(4) Rescale Intensity'
   echo ''
   NO_LOG=true
   exit 0
@@ -295,9 +243,9 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Default save directory -------------------------------------------------------
-if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}; fi
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
 
-# Identify UHR Inputs ----------------------------------------------------------
+# Identify Ex Vivo Images ------------------------------------------------------
 if [[ -z ${IMAGE} ]]; then
   IMAGE=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/anat/${IDPFX}*${MOD}.nii.gz))
 else
@@ -323,197 +271,111 @@ fi
 if [[ ${MISSING} == "true" ]]; then
   exit 1
 fi
+
+# Include only images at UHR ---------------------------------------------------
+IS_UHR=
+NOT_UHR=
+for (( i=0; i<${#IMAGE[@]}; i++ )); do
+  IMG=${IMAGE[${i}]}
+  SZ=$(niiInfo -i ${IMG} -f mm3)
+  if [[ $(echo "${SZ} < ${UHR_THRESH}" | bc) -eq 1 ]]; then
+    IS_UHR+=(${IMAGE[${i}]})
+  else
+    NOT_UHR+=(${IMAGE[${i}]})
+  fi
+done
+IMAGE=(${IS_UHR[@]})
 NIMG=${#IMAGE[@]}
 
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e "##### ${PIPE}: ${FLOW} #####"
   echo -e "PI:\t\t${PI}"
   echo -e "PROJECT:\t${PROJECT}"
-  echo ">>>>>processing ${NIMG} image"
+  echo ">>>>>processing ${NIMG} image(s)"
   for (( i=0; i<${NIMG}; i++ )); do
     echo -e "IMAGE:\t${IMAGE[${i}]}"
+  done
+  echo ">>>>>NOT processing ${#NOT_UHR[@]} image(s)"
+  for (( i=0; i<${#NOT_UHR[@]}; i++ )); do
+    echo -e "IMAGE:\t${NOT_UHR[${i}]}"
   done
 fi
 
 DIRTMP=${DIR_SCRATCH}/tmp
 DIROUT=${DIR_SCRATCH}/out
 mkdir -p ${DIRTMP}
-mkdir -p ${DIROUT}/add
-mkdir -p ${DIROUT}/base
-mkdir -p ${DIROUT}/xfm
+mkdir -p ${DIROUT}/native
+mkdir -p ${DIROUT}/mask
 
-# Identify highest resolution image --------------------------------------------
-WHICH_PARAMS=
-LO_VAL=10
-BWHICH=0
+# Process High Resolution Images ===============================================
 for (( i=0; i<${NIMG}; i++ )); do
-  IMG=${IMAGE[${i}]}
-  SZ=$(niiInfo -i ${IMG} -f mm3)
+  cp ${IMAGE[${i}]} ${DIRTMP}/
+  IMG=${DIRTMP}/$(basename ${IMAGE[${i}]})
+  PFX=$(getBidsBase -i ${IMG} -s)
 
-  WHICH_PARAMS[${i}]="LO"
-  if [[ $(echo "${SZ} < ${UHR_THRESH}" | bc) -eq 1 ]]; then
-    WHICH_PARAMS[${i}]="HI"
+  ## Ex Vivo Brain Extraction --------------------------------------------------
+  ## Save brain mask to output directory right away and reload if it exists
+  mkdir -p ${DIR_SAVE}/mask
+  MASK=${DIR_SAVE}/mask/${PFX}_mask-brain.nii.gz
+  if [[ ! -f ${MASK} ]] || [[ ${REDO_MASK} == "true" ]]; then
+    exvivoBEX --image ${IMG} --no-png
+    mv ${DIRTMP}/${PFX}_mask-brain.nii.gz ${MASK}
+  fi
+  echo ">>>>>>Brain Extraction Complete"
+
+  ## Debias --------------------------------------------------------------------
+  N4BiasFieldCorrection -d 3 -i ${IMG} -x ${MASK} -o ${IMG} \
+    -r ${N4_RESAMPLE} \
+    -s ${N4_SHRINK} \
+    -c ${N4_CONVERGENCE} \
+    -b ${N4_BSPLINE} \
+    -t ${N4_HISTMATCH}
+  echo ">>>>>>Debiased"
+
+  ## Denoise -------------------------------------------------------------------
+  DenoiseImage -d 3 -i ${IMG} -x ${MASK} -o ${IMG} \
+    -n ${DN_MODEL} \
+    -s ${DN_SHRINK} \
+    -p ${DN_PATCH} \
+    -r ${DN_RADIUS}
+  echo ">>>>>>Denoised"
+
+  # generate brain mask before it is applied to the image ----------------------
+  if [[ ${NO_PNG} == "false" ]]; then
+    make3Dpng --bg ${IMG} --bg-threshold "0.1,99.9" \
+    --fg ${MASK} --fg-mask ${MASK} --fg-alpha 50 --fg-cbar "false" \
+    --fg-color "timbow:hue=#FF0000:sat=100:lum=65,65" \
+    --layout "9:x;9:x;9:y;9:y;9:z;9:z" \
+    --filename ${PFX}_mask-brain \
+    --dir-save ${DIRTMP}
   fi
 
-  if [[ $(echo "${SZ} < ${LO_VAL}" | bc) -eq 1 ]]; then
-    LO_VAL=${SZ}
-    BWHICH=${i}
+  ## Apply Soft Mask -----------------------------------------------------------
+  softMask --image ${IMG} --mask ${MASK} \
+    --kernel ${SOFTMASK_KERNEL} --no-png \
+    --filename $(basename ${IMG})
+  echo ">>>>>>Soft Mask"
+
+  ## Rescale Intensity ---------------------------------------------------------
+  rescaleIntensity --image ${IMG} --mask ${MASK} \
+    --dir-save ${DIRTMP} --filename $(getBidsBase -i ${IMG}) --no-png
+  echo ">>>>>>Intensity Rescaled"
+
+  ## Generate PNG --------------------------------------------------------------
+  if [[ ${NO_PNG} == "false" ]]; then
+    make3Dpng --bg ${IMG} --bg-threshold "0.1,99.9"
+    make3Dpng --bg ${IMG} --bg-threshold "0.1,99.9" \
+      --layout "9:x;9:x;9:x" --filename ${PFX}_axial
+    make3Dpng --bg ${IMG} --bg-threshold "0.1,99.9" \
+      --layout "9:y;9:y;9:y" --filename ${PFX}_coronal
+    make3Dpng --bg ${IMG} --bg-threshold "0.1,99.9" \
+      --layout "9:z;9:z;9:z" --filename ${PFX}_sagittal
   fi
-done
 
-# Process lowest resolution image as base image ================================
-cp ${IMAGE[${BWHICH}]} ${DIRTMP}/image_base.nii.gz
-PFX=$(getBidsBase -i ${IMAGE[${BWHICH}]} -s)
-MOD=$(getField -i ${IMAGE[${BWHICH}]} -f modality)
-
-# Extract FG -------------------------------------------------------------------
-FG_CLFRAC="${LO_FG_CLFRAC}"
-if [[ ${WHICH_PARAMS[${BWHICH}]} == "HI" ]]; then
-  FG_CLFRAC="${HI_FG_CLFRAC}"
-fi
-3dAutomask -clfrac ${FG_CLFRAC} -overwrite -q \
-  -prefix ${DIRTMP}/mask-fg_base.nii.gz \
-  ${DIRTMP}/image_base.nii.gz
-
-# Debias -----------------------------------------------------------------------
-n4_fcn="N4BiasFieldCorrection -d 3"
-if [[ ${WHICH_PARAMS[${BWHICH}]} == "HI" ]]; then
-  n4_fcn="${n4_fcn} -r ${HI_N4_RESAMPLE}"
-  n4_fcn="${n4_fcn} -s ${HI_N4_SHRINK}"
-  n4_fcn="${n4_fcn} -c ${HI_N4_CONVERGENCE}"
-  n4_fcn="${n4_fcn} -b ${HI_N4_BSPLINE}"
-else
-  n4_fcn="${n4_fcn} -r ${LO_N4_RESAMPLE}"
-  n4_fcn="${n4_fcn} -s ${LO_N4_SHRINK}"
-  n4_fcn="${n4_fcn} -c ${LO_N4_CONVERGENCE}"
-  n4_fcn="${n4_fcn} -b ${LO_N4_BSPLINE}"
-fi
-n4_fcn="${n4_fcn} -i ${DIRTMP}/image_base.nii.gz"
-n4_fcn="${n4_fcn} -x ${DIRTMP}/mask-fg_base.nii.gz"
-n4_fcn="${n4_fcn} -o ${DIRTMP}/image_base.nii.gz"
-echo -e "\nDebiasing Base Image\n${n4_fcn}\n\n"
-eval ${n4_fcn}
-
-# Denoise ----------------------------------------------------------------------
-dn_fcn="DenoiseImage -d 3"
-if [[ ${WHICH_PARAMS[${BWHICH}]} == "HI" ]]; then
-  dn_fcn="${dn_fcn} -n ${HI_DN_MODEL}"
-  dn_fcn="${dn_fcn} -s ${HI_DN_SHRINK}"
-  dn_fcn="${dn_fcn} -p ${HI_DN_PATCH}"
-  dn_fcn="${dn_fcn} -r ${HI_DN_RADIUS}"
-else
-  dn_fcn="${dn_fcn} -n ${LO_DN_MODEL}"
-  dn_fcn="${dn_fcn} -s ${LO_DN_SHRINK}"
-  dn_fcn="${dn_fcn} -p ${LO_DN_PATCH}"
-  dn_fcn="${dn_fcn} -r ${LO_DN_RADIUS}"
-fi
-dn_fcn="${dn_fcn} -i ${DIRTMP}/image_base.nii.gz"
-dn_fcn="${dn_fcn} -x ${DIRTMP}/mask-fg_base.nii.gz"
-dn_fcn="${dn_fcn} -o ${DIRTMP}/image_base.nii.gz"
-echo -e "\nDenoising Base Image\n${dn_fcn}\n\n"
-eval ${dn_fcn}
-
-# Intensity Segmentation -------------------------------------------------------
-if [[ ${BIMG_RESCALE} != "false" ]]; then
-  ResampleImage 3 ${DIRTMP}/image_base.nii.gz \
-    ${DIRTMP}/image_resample.nii.gz ${BIMG_RESCALE} 0 4
-  antsApplyTransforms -d 3 -n GenericLabel \
-    -i ${DIRTMP}/mask-fg_base.nii.gz \
-    -o ${DIRTMP}/mask-fg_base_resample.nii.gz \
-    -r ${DIRTMP}/image_resample.nii.gz
-fi
-Atropos --image-dimensionality 3 \
-  --intensity-image ${DIRTMP}/image_resample.nii.gz \
-  --mask-image ${DIRTMP}/mask-fg_base_resample.nii.gz \
-  --initialization ${SG_INIT}[${SG_N}] \
-  --posterior-formulation ${SG_FORM} \
-  --convergence ${SG_CONVERGENCE} \
-  --likelihood-model ${SG_LIKELIHOOD} \
-  --mrf ${SG_MRF} \
-  --use-random-seed ${SG_RANDOM} \
-  --output ${DIRTMP}/label_base.nii.gz
-
-# move base image to output folder ---------------------------------------------
-mv ${DIRTMP}/image_base.nii.gz ${DIROUT}/base/${PFX}_${MOD}.nii.gz
-mv ${DIRTMP}/mask-fg_base.nii.gz ${DIROUT}/base/${PFX}_mask-fg+INIT.nii.gz
-mv ${DIRTMP}/image_resample.nii.gz ${DIROUT}/base/${PFX}_proc-resample_${MOD}.nii.gz
-mv ${DIRTMP}/label_base.nii.gz ${DIROUT}/base/${PFX}_proc-resample_label-atropos+${SG_N}.nii.gz
-rm ${DIRTMP}/mask-fg_base_resample.nii.gz
-
-BIMG=${DIROUT}/base/${PFX}_${MOD}.nii.gz
-BMASK=${DIROUT}/base/${PFX}_mask-fg+INIT.nii.gz
-
-# Loop over ADDITIONAL images --------------------------------------------------
-for (( i=0; i<${NIMG}; i++ )); do
-  if [[ ${i} -ne ${BWHICH} ]]; then
-    cp ${IMAGE[${i}]} ${DIRTMP}/image_add.nii.gz
-    PFX=$(getBidsBase -i ${IMAGE[${i}]} -s)
-    MOD=$(getField -i ${IMAGE[${i}]} -f modality)
-
-    # Extract FG ---------------------------------------------------------------
-    FG_CLFRAC="${LO_FG_CLFRAC}"
-    if [[ ${WHICH_PARAMS[${i}]} == "HI" ]]; then FG_CLFRAC="${HI_FG_CLFRAC}"; fi
-    3dAutomask -clfrac ${FG_CLFRAC} -overwrite -q \
-      -prefix ${DIRTMP}/mask-fg_add.nii.gz \
-      ${DIRTMP}/image_add.nii.gz
-
-    # Debias -------------------------------------------------------------------
-    n4_fcn="N4BiasFieldCorrection -d 3"
-    if [[ ${WHICH_PARAMS[${i}]} == "HI" ]]; then
-      n4_fcn="${n4_fcn} -r ${HI_N4_RESAMPLE}"
-      n4_fcn="${n4_fcn} -s ${HI_N4_SHRINK}"
-      n4_fcn="${n4_fcn} -c ${HI_N4_CONVERGENCE}"
-      n4_fcn="${n4_fcn} -b ${HI_N4_BSPLINE}"
-    else
-      n4_fcn="${n4_fcn} -r ${LO_N4_RESAMPLE}"
-      n4_fcn="${n4_fcn} -s ${LO_N4_SHRINK}"
-      n4_fcn="${n4_fcn} -c ${LO_N4_CONVERGENCE}"
-      n4_fcn="${n4_fcn} -b ${LO_N4_BSPLINE}"
-    fi
-    n4_fcn="${n4_fcn} -i ${DIRTMP}/image_add.nii.gz"
-    n4_fcn="${n4_fcn} -x ${DIRTMP}/mask-fg_add.nii.gz"
-    n4_fcn="${n4_fcn} -o ${DIRTMP}/image_add.nii.gz"
-    echo -e "\nDebiasing Base Image\n${n4_fcn}\n\n"
-    eval ${n4_fcn}
-
-    # Denoise ------------------------------------------------------------------
-    dn_fcn="DenoiseImage -d 3"
-    if [[ ${WHICH_PARAMS[${i}]} == "HI" ]]; then
-      dn_fcn="${dn_fcn} -n ${HI_DN_MODEL}"
-      dn_fcn="${dn_fcn} -s ${HI_DN_SHRINK}"
-      dn_fcn="${dn_fcn} -p ${HI_DN_PATCH}"
-      dn_fcn="${dn_fcn} -r ${HI_DN_RADIUS}"
-    else
-      dn_fcn="${dn_fcn} -n ${LO_DN_MODEL}"
-      dn_fcn="${dn_fcn} -s ${LO_DN_SHRINK}"
-      dn_fcn="${dn_fcn} -p ${LO_DN_PATCH}"
-      dn_fcn="${dn_fcn} -r ${LO_DN_RADIUS}"
-    fi
-    dn_fcn="${dn_fcn} -i ${DIRTMP}/image_add.nii.gz"
-    dn_fcn="${dn_fcn} -x ${DIRTMP}/mask-fg_add.nii.gz"
-    dn_fcn="${dn_fcn} -o ${DIRTMP}/image_add.nii.gz"
-    echo -e "\nDenoising Base Image\n${dn_fcn}\n\n"
-    eval ${dn_fcn}
-
-    # Coregister to base image -------------------------------------------------
-    coregistrationChef --recipe-name "rigid" --no-png \
-      --fixed ${BIMG} --fixed-mask ${BMASK} \
-      --moving ${DIRTMP}/image_add.nii.gz \
-      --moving-mask ${DIRTMP}/mask-fg_add.nii.gz \
-      --space-target "MOVING" \
-      --prefix "${PFX}" \
-      --label-from "raw" --label-to "base" \
-      --dir-save ${DIRTMP} \
-      --dir-xfm ${DIRTMP} --verbose --ants-verbose
-
-    # copy to output folder
-    mv ${DIRTMP}/${PFX}_reg-rigid+base_add.nii.gz \
-      ${DIROUT}/add/${PFX}_reg-rigid+base_${MOD}.nii.gz
-    mv ${DIRTMP}/${PFX}_mod-add_from-raw_to-base_xfm-rigid.mat \
-      ${DIROUT}/xfm/${PFX}_from-raw_to-base_xfm-rigid.mat
-    rm ${DIRTMP}/image_add.nii.gz
-    rm ${DIRTMP}/mask-fg_add.nii.gz
-  fi
+  ## Save Result ---------------------------------------------------------------
+  #mv ${DIRTMP}/*mask-brain* ${DIROUT}/mask/
+  mv ${IMG} ${DIROUT}/native/
+  mv ${DIRTMP}/*.png ${DIROUT}/native/
 done
 
 # generate HTML QC report ------------------------------------------------------
@@ -530,6 +392,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo -e '```\n' >> ${RMD}
 
   echo '## Initial *Ex-vivo* Anatomical Processing' >> ${RMD}
+  echo '* Images <'${UHR_THRESH}'mm^3' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
 
   # output Project related information -------------------------------------------
@@ -546,53 +409,40 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo 'tree -P "*" -Rn --prune '${DIROUT} >> ${RMD}
   echo -e '```\n' >> ${RMD}
 
-  # base image
-  DIM=($(niiInfo -i ${BIMG} -f "voxels"))
-  if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
-  if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
-  if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
-  if [[ -z ${PLANE} ]]; then PLANE="z"; fi
-  LAYOUT="9:${PLANE};9:${PLANE};9:${PLANE}"
+  for (( i=0; i<${NIMG}; i++ )); do
+    PFX=$(getBidsBase -i ${IMAGE[${i}]} -s)
+    RAW_NII=${IMAGE[${i}]}
+    RAW_PNG="$(dirname ${RAW_NII})/${PFX}_${MOD}.png"
+    CLN_NII=${DIROUT}/native/${PFX}_${MOD}.nii.gz
+    CLN_PNG=${DIROUT}/native/${PFX}_${MOD}.png
+    CLN_AXI=${DIROUT}/native/${PFX}_axial.png
+    CLN_COR=${DIROUT}/native/${PFX}_coronal.png
+    CLN_SAG=${DIROUT}/native/${PFX}_sagittal.png
+    MASK_PNG=${DIROUT}/mask/${PFX}_mask-brain.png
 
-  echo '### Base Anatomical Image {.tabset}' >> ${RMD}
-  echo '#### Clean' >> ${RMD}
-  BNAME=$(basename ${BIMG})
-  FNAME=${BIMG//\.nii\.gz}
-  make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}"
-  echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
+    make3Dpng --bg ${RAW_NII} --bg-threshold "2.5,97.5"
 
-  echo '#### Raw' >> ${RMD}
-  BRAW=${IMAGE[${BWHICH}]}
-  BNAME=$(basename ${BRAW})
-  make3Dpng --bg ${BRAW} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
-    --filename "raw_base_image" --dir-save ${DIRTMP}
-  echo -e '!['${BNAME}']('${DIRTMP}'/raw_base_image.png)\n' >> ${RMD}
-
-  if [[ ${NIMG} -gt 1 ]]; then
-    echo '### Additional Anatomical Images' >> ${RMD}
-    for (( i=0; i<${NIMG}; i++ )); do
-      if [[ ${i} -ne ${BWHICH} ]]; then
-        PFX=$(getBidsBase -i ${IMAGE[${i}]} -s)
-        MOD=$(getField -i ${IMAGE[${i}]} -f modality)
-        DIM=($(niiInfo -i ${IMAGE[${i}]} -f "voxels"))
-        if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
-        if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
-        if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
-        if [[ -z ${PLANE} ]]; then PLANE="z"; fi
-        LAYOUT="9:${PLANE};9:${PLANE};9:${PLANE}"
-        make3Dpng --bg ${DIROUT}/add/${PFX}_reg-rigid+base_${MOD}.nii.gz \
-          --bg-threshold "2.5,97.5" --layout "${LAYOUT}"
-        make3Dpng --bg ${IMAGE[${i}]} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
-          --filename raw_image_${i} --dir-save ${DIRTMP}
-        echo "#### ${PFX}_${MOD}.nii.gz {.tabset}" >> ${RMD}
-        echo '##### Click to View -->' >> ${RMD}
-        echo '##### Clean' >> ${RMD}
-        echo -e '![Cleaned]('${DIROUT}'/add/'${PFX}'_reg-rigid+base_'${MOD}'.png)\n' >> ${RMD}
-        echo '##### Raw' >> ${RMD}
-        echo -e '![Raw]('${DIRTMP}'/raw_image_'${i}'.png)\n' >> ${RMD}
-      fi
-    done
-  fi
+    echo '### '${PFX}' {.tabset}' >> ${RMD}
+    echo '#### Clean vs. Raw Image' >> ${RMD}
+      echo "##### Clean" >> ${RMD}
+      echo '![Clean]('${CLN_PNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+      echo "##### Raw" >> ${RMD}
+      echo '![Raw]('${RAW_PNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+    echo "#### Brain Mask" >> ${RMD}
+      echo '![Brain Mask]('${MASK_PNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+    echo '#### Axial' >> ${RMD}
+      echo '![Axial Clean]('${CLN_AXI}')' >> ${RMD}
+      echo '' >> ${RMD}
+    echo '#### Coronal' >> ${RMD}
+      echo '![Coronal Clean]('${CLN_COR}')' >> ${RMD}
+      echo '' >> ${RMD}
+    echo '#### Sagittal' >> ${RMD}
+      echo '![Sagittal Clean]('${CLN_SAG}')' >> ${RMD}
+      echo '' >> ${RMD}
+  done
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
@@ -601,11 +451,10 @@ if [[ "${NO_RMD}" == "false" ]]; then
 fi
 
 # Save result ------------------------------------------------------------------
-mkdir -p ${DIR_SAVE}/xinit
-mv ${DIROUT}/base/* ${DIR_SAVE}/xinit/base/
-mv ${DIROUT}/add/* ${DIR_SAVE}/xinit/add/
-mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
-mv ${DIROUT}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
+mkdir -p ${DIR_SAVE}/native
+mkdir -p ${DIR_SAVE}/mask
+mv ${DIROUT}/native/* ${DIR_SAVE}/native/
+mv ${DIROUT}/mask/* ${DIR_SAVE}/mask/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}

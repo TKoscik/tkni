@@ -4,6 +4,7 @@ invisible(gc())
 CRAN.pkgs <- c("car",
                "devtools",
                "doParallel",
+               "downloadthis",
                "effects",
                "ez.combat",
                "fastcluster",
@@ -12,41 +13,33 @@ CRAN.pkgs <- c("car",
                "gridExtra",
                "Hmisc",
                "jsonlite",
-	       "kableExtra",
+               "kableExtra",
                "lme4",
                "lmerTest",
                "MASS",
                "mixtools",
                "moments",
                "nifti.io",
+               "optimParallel",
                "R.utils",
+               "RcppColors",
                "reshape2",
                "spant",
                "tools",
                "viridis",
                "withr")
 GITHUB.pkgs <- c("tkoscik/fsurfR",
-                 "tkoscik/tkmisc")
+                 "tkoscik/tkmisc",
+                 "tkoscik/timbow")
 
 # Setup a library including the appropriate R packages -------------------------
-inc.r.path=sprintf("~/R/INC/%s.%s", R.Version()$major, R.Version()$minor)
-if (!(inc.r.path %in% .libPaths())) {
-  dir.create(inc.r.path, showWarnings=FALSE, recursive=TRUE)
-  .libPaths(c(inc.r.path , .libPaths()))
-  rprofile.fid <- file("~/.Rprofile")
-  out.str <- sprintf('.libPaths(c("~/R/INC/%s.%s", .libPaths()))',
-                     R.Version()$major,
-                     R.Version()$minor)
-  writeLines(out.str, con = rprofile.fid)
-  close(rprofile.fid)
-}
-
 pkgs <- as.character(unique(as.data.frame(installed.packages())$Package))
 
 # check and install missing packages from CRAN ---------------------------------
 CRAN.chk <- which(!(CRAN.pkgs %in% pkgs))
 if (length(CRAN.chk)>0) {
-  install.packages(pkgs=CRAN.pkgs[CRAN.chk], lib=inc.r.path, repos="http://cran.r-project.org", verbose=FALSE)
+  #install.packages(pkgs=CRAN.pkgs[CRAN.chk], repos="http://cran.r-project.org", verbose=FALSE)
+  install.packages(pkgs=CRAN.pkgs[CRAN.chk])
   print(CRAN.pkgs[CRAN.chk])
 }
 
@@ -55,7 +48,8 @@ GITHUB.chk <- which(!(unlist(strsplit(GITHUB.pkgs, "[/]"))[seq(2, length(GITHUB.
 for (i in 1:length(GITHUB.chk)) {
   library(devtools)
   library(withr)
-  with_libpaths(new=inc.r.path, install_github(GITHUB.pkgs[i], quiet=TRUE))
+  #with_libpaths(new=inc.r.path, install_github(GITHUB.pkgs[i], quiet=TRUE))
+  install.packages(pkgs=CRAN.pkgs[CRAN.chk])
   print(GITHUB.pkgs[i])
 }
 

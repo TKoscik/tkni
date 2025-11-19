@@ -388,7 +388,9 @@ if [[ "${NO_TRACT}" == "false" ]]; then
   tckedit ${TMP_TCK}/sift_1mio.tck -number 200k ${TMP_TCK}/smallerSIFT_200k.tck
 
   if [[ ${NO_PNG} == "false" ]]; then
-    mrview ${TMP_DWI}/dwi_preproc_coreg.mif -imagevisible false \
+    mrview ${TMP_DWI}/dwi_preproc_coreg.mif \
+      -platform offscreen \
+      -imagevisible false \
       -tractography.load ${TMP_TCK}/smallerSIFT_200k.tck \
       -tractography.opacity 0.05 \
       -capture.folder ${TMP_TCK} \

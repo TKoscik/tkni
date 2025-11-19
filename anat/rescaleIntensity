@@ -274,6 +274,9 @@ if [[ -n ${MASK} ]]; then
 else
   MINMAX=($(3dBrickStat -slow -min -max ${IMAGE}))
 fi
+MINMAX[0]=$(echo "${MINMAX[0]}" | awk '{printf "%.4f\n", $1}')
+MINMAX[1]=$(echo "${MINMAX[1]}" | awk '{printf "%.4f\n", $1}')
+echo "${MINMAX[1]} - ${MINMAX[0]}"
 DENOM=$(echo "scale=4; ${MINMAX[1]} - ${MINMAX[0]}" | bc -l)
 
 if [[ "${VERBOSE}" == "true" ]]; then
@@ -284,6 +287,7 @@ fi
 if [[ "${VERBOSE}" == "true" ]]; then
   echo "[TKNI: ${FCN_NAME}] convert to FINAL RANGE and DATATYPE"
 fi
+echo "niimath -dt float ${IMGRS} -div ${DENOM} -mul ${MAX} ${IMGRS} -odt ${DATATYPE}"
 niimath -dt float ${IMGRS} -div ${DENOM} -mul ${MAX} ${IMGRS} -odt ${DATATYPE}
 
 # restore negatives if necessary -----------------------------------------------

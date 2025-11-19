@@ -21,7 +21,7 @@ FIELD=
 VALUE_NEW=
 ACTION=
 NO_SORT=false
-SORT_LS="sub,pid,uid,ses,sid,aid,xid,task,acq,ce,rec,dir,run,mod,echo,recording,proc,site,from,to,reg,prep,resid,slice,xfm,mask,label"
+SORT_LS="sub,pid,uid,ses,sid,aid,xid,task,acq,ce,rec,dir,run,mod,echo,recording,proc,site,from,to,reg,prep,resid,slice,xfm,roi,mask,label"
 HELP=false
 
 while true; do

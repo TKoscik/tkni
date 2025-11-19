@@ -737,15 +737,29 @@ fi
 
 # make panel background ========================================================
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>generate PNG background"; fi
-RESIZE_STR="${MAX_PIXELS}x${MAX_PIXELS}"
+DX=${DIMS[0]}; DY=${DIMS[1]}; DZ=${DIMS[2]}
+SX=$(echo "scale=0; ${PIXDIM[0]} * 1000 / 1" | bc -l)
+SY=$(echo "scale=0; ${PIXDIM[1]} * 1000 / 1" | bc -l)
+SZ=$(echo "scale=0; ${PIXDIM[2]} * 1000 / 1" | bc -l)
+DMAX=${DX}
+SREF=${SX}
+if [[ ${DY} -lt ${DMAX} ]]; then DMAX=${DY}; SREF=${SY}; fi
+if [[ ${DZ} -lt ${DMAX} ]]; then DMAX=${DZ}; SREF=${SZ}; fi
+XPXL=$(echo "scale=0; ${DX} * ${SX} / ${SREF} * ${MAX_PIXELS} / ${DMAX}" | bc -l)
+YPXL=$(echo "scale=0; ${DY} * ${SY} / ${SREF} * ${MAX_PIXELS} / ${DMAX}" | bc -l)
+ZPXL=$(echo "scale=0; ${DZ} * ${SZ} / ${SREF} * ${MAX_PIXELS} / ${DMAX}" | bc -l)
+RESIZE_X="${YPXL}x${ZPXL}"
+RESIZE_Y="${XPXL}x${ZPXL}"
+RESIZE_Z="${XPXL}x${YPXL}"
+
 for (( i=0; i<${NX}; i++ )); do
-  convert -size ${RESIZE_STR} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/X${i}.png
+  convert -size ${RESIZE_X} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/X${i}.png
 done
 for (( i=0; i<${NY}; i++ )); do
-  convert -size ${RESIZE_STR} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/Y${i}.png
+  convert -size ${RESIZE_Y} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/Y${i}.png
 done
 for (( i=0; i<${NZ}; i++ )); do
-  convert -size ${RESIZE_STR} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/Z${i}.png
+  convert -size ${RESIZE_Z} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/Z${i}.png
 done
 
 # Make Background ==============================================================
@@ -809,11 +823,27 @@ fi
 
 ## COLORIZE and RESIZE background slices ---------------------------------------
 if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize background slices"; fi
-TLS=($(ls ${DIR_SCRATCH}/*_BG_*.png))
-for (( i=0; i<${#TLS[@]}; i++ )); do
-  convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_BG.png -clut ${TLS[${i}]}
-  convert ${TLS[${i}]} -resize ${RESIZE_STR} ${TLS[${i}]}
-done
+if [[ ${NX} -gt 0 ]]; then
+  TLS=($(ls ${DIR_SCRATCH}/X_BG_*.png))
+  for (( i=0; i<${#TLS[@]}; i++ )); do
+    convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_BG.png -clut ${TLS[${i}]}
+    convert ${TLS[${i}]} -resize ${RESIZE_X}! ${TLS[${i}]}
+  done
+fi
+if [[ ${NY} -gt 0 ]]; then
+  TLS=($(ls ${DIR_SCRATCH}/Y_BG_*.png))
+  for (( i=0; i<${#TLS[@]}; i++ )); do
+    convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_BG.png -clut ${TLS[${i}]}
+    convert ${TLS[${i}]} -resize ${RESIZE_Y}! ${TLS[${i}]}
+  done
+fi
+if [[ ${NZ} -gt 0 ]]; then
+  TLS=($(ls ${DIR_SCRATCH}/Z_BG_*.png))
+  for (( i=0; i<${#TLS[@]}; i++ )); do
+    convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_BG.png -clut ${TLS[${i}]}
+    convert ${TLS[${i}]} -resize ${RESIZE_Z}! ${TLS[${i}]}
+  done
+fi
 
 ## Generate background masks ---------------------------------------------------
 if [[ -n ${BG_MASK} ]]; then
@@ -834,10 +864,24 @@ if [[ -n ${BG_MASK} ]]; then
       -oo ${DIR_SCRATCH}/Z_BGMASK_%0d.png
   fi
   ## RESIZE background masks -----------------------------------------------------
-  TLS=($(ls ${DIR_SCRATCH}/*_BGMASK_*.png))
-  for (( i=0; i<${#TLS[@]}; i++ )); do
-    convert ${TLS[${i}]} -resize ${RESIZE_STR} ${TLS[${i}]}
-  done
+  if [[ ${NX} -gt 0 ]]; then
+    TLS=($(ls ${DIR_SCRATCH}/X_BGMASK_*.png))
+    for (( i=0; i<${#TLS[@]}; i++ )); do
+      convert ${TLS[${i}]} -resize ${RESIZE_X}! ${TLS[${i}]}
+    done
+  fi
+  if [[ ${NY} -gt 0 ]]; then
+    TLS=($(ls ${DIR_SCRATCH}/Y_BGMASK_*.png))
+    for (( i=0; i<${#TLS[@]}; i++ )); do
+      convert ${TLS[${i}]} -resize ${RESIZE_Y}! ${TLS[${i}]}
+    done
+  fi
+  if [[ ${NZ} -gt 0 ]]; then
+    TLS=($(ls ${DIR_SCRATCH}/Z_BGMASK_*.png))
+    for (( i=0; i<${#TLS[@]}; i++ )); do
+      convert ${TLS[${i}]} -resize ${RESIZE_Z}! ${TLS[${i}]}
+    done
+  fi
 fi
 
 ## COMPOSITE BG on PANEL -------------------------------------------------------
@@ -914,11 +958,6 @@ if [[ -n ${FG} ]]; then
     MINMAX=($(3dBrickStat -mask ${FG_MASK[${i}]} -slow -min -max ${FG[${i}]}))
     LO=${MINMAX[-2]}
     HI=${MINMAX[-1]}
-    #3dROIstats -mask ${FG_MASK[${i}]} -minmax -nomeanout ${FG[${i}]} > ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv
-    #LO=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Min_1))
-    #HI=($(getColumn -i ${DIR_SCRATCH}/FG_${i}_MINMAX.tsv -f Max_1))
-    #LO=${LO[1]}
-    #HI=${HI[1]}
 
     if [[ ${NX} -gt 0 ]]; then
       c3d ${FG[${i}]} \
@@ -999,17 +1038,47 @@ if [[ -n ${FG} ]]; then
     eval ${clrfcn}
 
     ### COLORIZE and RESIZE foreground slices -------------------------------------
-    TLS=($(ls ${DIR_SCRATCH}/*_FG${i}_*.png))
-    for (( j=0; j<${#TLS[@]}; j++ )); do
-      convert ${TLS[${j}]} ${DIR_SCRATCH}/CBAR_FG_${i}.png -clut ${TLS[${j}]}
-      convert ${TLS[${j}]} -resize ${RESIZE_STR} ${TLS[${j}]}
-    done
+    if [[ ${NX} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/X_FG${i}_*.png))
+      for (( j=0; j<${#TLS[@]}; j++ )); do
+        convert ${TLS[${j}]} ${DIR_SCRATCH}/CBAR_FG_${i}.png -clut ${TLS[${j}]}
+        convert ${TLS[${j}]} -resize ${RESIZE_X}! ${TLS[${j}]}
+      done
+    fi
+    if [[ ${NY} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Y_FG${i}_*.png))
+      for (( j=0; j<${#TLS[@]}; j++ )); do
+        convert ${TLS[${j}]} ${DIR_SCRATCH}/CBAR_FG_${i}.png -clut ${TLS[${j}]}
+        convert ${TLS[${j}]} -resize ${RESIZE_Y}! ${TLS[${j}]}
+      done
+    fi
+    if [[ ${NZ} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Z_FG${i}_*.png))
+      for (( j=0; j<${#TLS[@]}; j++ )); do
+        convert ${TLS[${j}]} ${DIR_SCRATCH}/CBAR_FG_${i}.png -clut ${TLS[${j}]}
+        convert ${TLS[${j}]} -resize ${RESIZE_Z}! ${TLS[${j}]}
+      done
+    fi
 
-    ## RESIZE foreground masks -----------------------------------------------------
-    TLS=($(ls ${DIR_SCRATCH}/*_FGMASK${i}_*.png))
-    for (( j=0; j<${#TLS[@]}; j++ )); do
-      convert ${TLS[${j}]} -resize ${RESIZE_STR} ${TLS[${j}]}
-    done
+    ## RESIZE foreground masks -------------------------------------------------
+    if [[ ${NX} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/X_FGMASK${i}_*.png))
+      for (( j=0; j<${#TLS[@]}; j++ )); do
+        convert ${TLS[${j}]} -resize ${RESIZE_X}! ${TLS[${j}]}
+      done
+    fi
+    if [[ ${NY} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Y_FGMASK${i}_*.png))
+      for (( j=0; j<${#TLS[@]}; j++ )); do
+        convert ${TLS[${j}]} -resize ${RESIZE_Y}! ${TLS[${j}]}
+      done
+    fi
+    if [[ ${NZ} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Z_FGMASK${i}_*.png))
+      for (( j=0; j<${#TLS[@]}; j++ )); do
+        convert ${TLS[${j}]} -resize ${RESIZE_Z}! ${TLS[${j}]}
+      done
+    fi
 
     ## COMPOSITE FG on PANEL -------------------------------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>composite FG slices on panel"; fi
@@ -1165,17 +1234,47 @@ if [[ -n ${ROI} ]]; then
     fi
 
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize ROI slices"; fi
-    TLS=($(ls ${DIR_SCRATCH}/*_ROI_*.png))
-    for (( i=0; i<${#TLS[@]}; i++ )); do
-      convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_ROI.png -clut ${TLS[${i}]}
-      convert ${TLS[${i}]} -resize ${RESIZE_STR} ${TLS[${i}]}
-    done
+    if [[ ${NX} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/X_ROI_*.png))
+      for (( i=0; i<${#TLS[@]}; i++ )); do
+        convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_ROI.png -clut ${TLS[${i}]}
+        convert ${TLS[${i}]} -resize ${RESIZE_X}! ${TLS[${i}]}
+      done
+    fi
+    if [[ ${NY} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Y_ROI_*.png))
+      for (( i=0; i<${#TLS[@]}; i++ )); do
+        convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_ROI.png -clut ${TLS[${i}]}
+        convert ${TLS[${i}]} -resize ${RESIZE_Y}! ${TLS[${i}]}
+      done
+    fi
+    if [[ ${NZ} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Z_ROI_*.png))
+      for (( i=0; i<${#TLS[@]}; i++ )); do
+        convert ${TLS[${i}]} ${DIR_SCRATCH}/CBAR_ROI.png -clut ${TLS[${i}]}
+        convert ${TLS[${i}]} -resize ${RESIZE_Z}! ${TLS[${i}]}
+      done
+    fi
 
     ## RESIZE background masks -----------------------------------------------------
-    TLS=($(ls ${DIR_SCRATCH}/*_ROIMASK_*.png))
-    for (( i=0; i<${#TLS[@]}; i++ )); do
-      convert ${TLS[${i}]} -resize ${RESIZE_STR} ${TLS[${i}]}
-    done
+    if [[ ${NX} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/X_ROIMASK_*.png))
+      for (( i=0; i<${#TLS[@]}; i++ )); do
+        convert ${TLS[${i}]} -resize ${RESIZE_X}! ${TLS[${i}]}
+      done
+    fi
+    if [[ ${NY} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Y_ROIMASK_*.png))
+      for (( i=0; i<${#TLS[@]}; i++ )); do
+        convert ${TLS[${i}]} -resize ${RESIZE_Y}! ${TLS[${i}]}
+      done
+    fi
+    if [[ ${NZ} -gt 0 ]]; then
+      TLS=($(ls ${DIR_SCRATCH}/Z_ROIMASK_*.png))
+      for (( i=0; i<${#TLS[@]}; i++ )); do
+        convert ${TLS[${i}]} -resize ${RESIZE_Z}! ${TLS[${i}]}
+      done
+    fi
 
     ## COMPOSITE ROI on PANEL -------------------------------------------------------
     if [[ "${VERBOSE}" == "true" ]]; then echo ">>>composite background slices on panel"; fi
@@ -1199,23 +1298,9 @@ if [[ ${NX} -gt 0 ]]; then
   for (( i=0; i<${NX}; i++ )); do
     if [[ "${LABEL_NO_SLICE}" == "false" ]]; then
       if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add slice labels X${i}"; fi
-      #if [[ ${NX} == 1 ]]; then
-      #  LABEL_X=$(echo "(${XN} + ${X0}) / 2 * ${DIMS[0]} / 100" | bc -l)
-      #else
-      #  LABEL_X=$(echo "(${X0} + ${XS} * ${i}) * ${DIMS[0]} / 100" | bc -l)
-      #fi
       LABEL_X=$(echo "scale=0; ${DIMS[0]} - (${X0} + (${XS} * ${i}))" | bc -l)
       LABEL_X=$(echo "scale=2; (${LABEL_X} * ${SPACING[0]}) - ${ORIGIN[0]}" | bc -l)
       LABEL_X=$(printf "x=%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
-
-      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-      #  LABEL_X=$(echo "${LABEL_X} * ${PIXDIM[0]}" | bc -l)
-      #  LABEL_X=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
-      #fi
-      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-      #  LABEL_X=$(printf "%0.0f" ${LABEL_X})
-      #fi
-      #LABEL_X="x=${LABEL_X}"
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_X}" \
@@ -1227,22 +1312,9 @@ if [[ ${NY} -gt 0 ]]; then
   for (( i=0; i<${NY}; i++ )); do
     if [[ "${LABEL_NO_SLICE}" == "false" ]]; then
       if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add slice labels Y${i}"; fi
-      #if [[ ${NY} == 1 ]]; then
-      #  LABEL_Y=$(echo "(${YN} + ${Y0}) / 2 * ${DIMS[1]} / 100" | bc -l)
-      #else
-      #  LABEL_Y=$(echo "(${Y0} + ${YS} * ${i}) * ${DIMS[1]} / 100" | bc -l)
-      #fi
       LABEL_Y=$(echo "scale=0; ${DIMS[1]} - (${Y0} + (${YS} * ${i}))" | bc -l)
       LABEL_Y=$(echo "scale=2; (${LABEL_Y} * ${SPACING[1]}) - ${ORIGIN[1]}" | bc -l)
       LABEL_Y=$(printf "y=%0.${LABEL_DECIMAL}fmm" ${LABEL_Y})
-      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-      #  LABEL_Y=$(echo "${LABEL_Y} * ${PIXDIM[1]}" | bc -l)
-      #  LABEL_Y=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_Y})
-      #fi
-      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-      #  LABEL_Y=$(printf "%0.0f" ${LABEL_Y})
-      #fi
-      #LABEL_Y="y=${LABEL_Y}"
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_Y}" \
@@ -1254,23 +1326,9 @@ if [[ ${NZ} -gt 0 ]]; then
   for (( i=0; i<${NZ}; i++ )); do
     if [[ "${LABEL_NO_SLICE}" == "false" ]]; then
       if [[ "${VERBOSE}" == "true" ]]; then echo ">>>add slice labels Z${i}"; fi
-#      if [[ ${NZ} == 1 ]]; then
-#        LABEL_Z=$(echo "(${ZN} + ${Z0}) / 2 * ${DIMS[2]} / 100" | bc -l)
-#      else
-#        LABEL_Z=$(echo "(${Z0} + ${ZS} * ${i}) * ${DIMS[2]} / 100" | bc -l)
-#      fi
-      #LABEL_Z=$(echo "scale=0; ${DIMS[2]} - ${Z0} + (${ZS} * ${i})" | bc -l)
       LABEL_Z=$(echo "scale=0; ${DIMS[2]} - (${Z0} + (${ZS} * ${i}))" | bc -l)
       LABEL_Z=$(echo "scale=2; (${LABEL_Z} * ${SPACING[2]}) - ${ORIGIN[2]}" | bc -l)
       LABEL_Z=$(printf "z=%0.${LABEL_DECIMAL}fmm" ${LABEL_Z})
-      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-      #  LABEL_Z=$(echo "${LABEL_Z} * ${PIXDIM[2]}" | bc -l)
-      #  LABEL_Z=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_Z})
-      #fi
-      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-      #  LABEL_Z=$(printf "%0.0f" ${LABEL_Z})
-      #fi
-      #LABEL_Z="z=${LABEL_Z}"
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_Z}" \
