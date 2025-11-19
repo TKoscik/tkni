@@ -1301,17 +1301,6 @@ if [[ ${NX} -gt 0 ]]; then
       LABEL_X=$(echo "scale=0; ${DIMS[0]} - (${X0} + (${XS} * ${i}))" | bc -l)
       LABEL_X=$(echo "scale=2; (${LABEL_X} * ${SPACING[0]}) - ${ORIGIN[0]}" | bc -l)
       LABEL_X=$(printf "x=%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
-<<<<<<< HEAD
-=======
-      #if [[ "${LABEL_USE_VOX,,}" == "false" ]]; then
-      #  LABEL_X=$(echo "${LABEL_X} * ${PIXDIM[0]}" | bc -l)
-      #  LABEL_X=$(printf "%0.${LABEL_DECIMAL}fmm" ${LABEL_X})
-      #fi
-      #if [[ "${LABEL_USE_VOX,,}" == "true" ]]; then
-      #  LABEL_X=$(printf "%0.0f" ${LABEL_X})
-      #fi
-      #LABEL_X="x=${LABEL_X}"
->>>>>>> bb397b138b11f5b2f29973212f7a97923dfc6c6f
       mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
         -fill "${COLOR_TEXT}" -undercolor "transparent" \
         -gravity NorthWest -annotate +10+10 "${LABEL_X}" \
