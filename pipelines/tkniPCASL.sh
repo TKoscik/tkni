@@ -449,7 +449,6 @@ ASL_MEAN=${DIR_SCRATCH}/${IDPFX}_proc-mean_asl.nii.gz
 mv ${DIR_SCRATCH}/moco/${IDPFX}_asl.nii.gz ${ASL_TMP}
 mv ${DIR_SCRATCH}/moco/${IDPFX}_proc-mean_asl.nii.gz ${ASL_MEAN}
 mv ${DIR_SCRATCH}/moco/${IDPFX}_moco+6.1D ${ASL_MOCO}
-echo ">>>>>> moco"
 
 for (( i=1; i<=${NVOL}; i++ )); do
   make3Dpng --bg ${ASL_TMP} --bg-vol ${i} --bg-threshold "2.5,97.5" --filename t${i}
@@ -467,7 +466,6 @@ PLOTLS="${PLOTLS},${DIR_SCRATCH}/${IDPFX}_displacement+relative+mm.1D"
 PLOTLS="${PLOTLS},${DIR_SCRATCH}/${IDPFX}_displacement+framewise.1D"
 PLOTLS="${PLOTLS},${DIR_SCRATCH}/${IDPFX}_displacement+RMS.1D"
 regressorPlot --regressor ${PLOTLS}
-echo ">>>>>> regressor plot"
 
 # Split 4D file into 3D, organize into pairs -----------------------------------
 for (( i=0; i<${NVOL}; i++ )); do
