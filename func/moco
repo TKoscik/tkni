@@ -247,6 +247,7 @@ mv ${TS_MOCO} ${DIR_SAVE}/${PREFIX}_${MOD}.nii.gz
 mv ${TS_MEAN} ${DIR_SAVE}/${PREFIX}_proc-mean_${MOD}.nii.gz
 
 # generate PNGs ----------------------------------------------------------------
+echo ">>>>>>NO_PNG=${NO_PNG}"
 if [[ "${NO_PNG}" == "false" ]]; then
   ## mean bold
   if [[ "${VERBOSE}" == "true" ]]; then echo -e ">>>\tgenerate mean BOLD PNG"; fi

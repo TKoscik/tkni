@@ -347,7 +347,7 @@ for (( i=0; i<${NIMG}; i++ )); do
     --fg-color "timbow:hue=#FF0000:sat=100:lum=65,65" \
     --layout "9:x;9:x;9:y;9:y;9:z;9:z" \
     --filename ${PFX}_mask-brain \
-    --dir-save ${DIRTMP}
+    --dir-save ${DIR_SAVE}/mask
   fi
 
   ## Apply Soft Mask -----------------------------------------------------------
@@ -418,7 +418,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     CLN_AXI=${DIROUT}/native/${PFX}_axial.png
     CLN_COR=${DIROUT}/native/${PFX}_coronal.png
     CLN_SAG=${DIROUT}/native/${PFX}_sagittal.png
-    MASK_PNG=${DIROUT}/mask/${PFX}_mask-brain.png
+    MASK_PNG=${DIR_SAVE}/mask/${PFX}_mask-brain.png
 
     make3Dpng --bg ${RAW_NII} --bg-threshold "2.5,97.5"
 
@@ -452,9 +452,9 @@ fi
 
 # Save result ------------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/native
-mkdir -p ${DIR_SAVE}/mask
+#mkdir -p ${DIR_SAVE}/mask
 mv ${DIROUT}/native/* ${DIR_SAVE}/native/
-mv ${DIROUT}/mask/* ${DIR_SAVE}/mask/
+#mv ${DIROUT}/mask/* ${DIR_SAVE}/mask/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}

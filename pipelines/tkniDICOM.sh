@@ -19,7 +19,8 @@ umask 007
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvn --long pi:,project:,dir-project:,\
-id:,dir-id:,id-field:,reorient:,flip:,add-resolution,input-dcm:,dir-scratch:,\
+id:,dir-id:,id-field:,reorient:,flip:,add-resolution,show-mod:,\
+input-dcm:,dir-scratch:,\
 help,verbose,no-png,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -38,6 +39,7 @@ IDFIELD="sub,ses"
 REORIENT="false"
 FLIP="false"
 ADD_RES="false"
+SHOW_MOD="anat,dwi,func,fmap,perf"
 INPUT_DCM=
 HELP=false
 VERBOSE=false
@@ -64,6 +66,7 @@ while true; do
     --flip) FLIP="$2" ; shift 2 ;;
     --add-resolution) ADD_RES="true" ; shift ;;
     --input-dcm) INPUT_DCM="$2" ; shift 2 ;;
+    --show-mod) SHOW_MOD="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -339,11 +342,12 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '' >> ${RMD}
 
   echo '### Raw Data {.tabset}' >> ${RMD}
-  MOD_RAW=("anat" "dwi" "func" "fmap" "perf")
-  for (( j=0; j<${#MOD_RAW[@]}; j++ )); do
-    TDIR=${DIR_RAW}/${MOD_RAW[${j}]}
+
+  SHOW_MOD=(${SHOW_MOD//,/ })
+  for (( j=0; j<${#SHOW_MOD[@]}; j++ )); do
+    TDIR=${DIR_RAW}/${SHOW_MOD[${j}]}
+    echo '#### '${SHOW_MOD[${j}]}' {.tabset}' >> ${RMD}
     if [[ -d ${TDIR} ]]; then
-      echo '#### '${MOD_RAW[${j}]}' {.tabset}' >> ${RMD}
       TLS=($(ls ${TDIR}/${IDPFX}*.nii.gz))
       for (( i=0; i<${#TLS[@]}; i++ )); do
         BNAME=$(basename ${TLS[${i}]})
@@ -359,7 +363,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
         echo '' >> ${RMD}
       done
     else
-      echo '###### '${MOD_RAW[${j}]} >> ${RMD}
+      #echo '##### '${SHOW_MOD[${j}]} >> ${RMD}
       echo 'NIfTI Not Found\' >> ${RMD}
       echo '' >> ${RMD}
     fi
