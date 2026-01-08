@@ -3,7 +3,7 @@ args <- commandArgs(trailingOnly = TRUE)
 nii.intensity <- args[1]
 nii.segmentation <- args[2]
 overlap.threshold <- 0.25
-dir.save <- "default"
+#dir.save <- "default"
 nii.save <- "default"
 
 for (i in seq(1,length(args))) {
@@ -13,17 +13,27 @@ for (i in seq(1,length(args))) {
     nii.segmentation <- args[i+1]
   } else if (args[i] %in% c("o", "overlap", "-o")) {
     overlap.threshold <- as.numeric(args[i+1])
-  } else if (args[i] %in% c("dir-save", "dir-save", "-s")) {
-    dir.save <- args[i+1]
+#  } else if (args[i] %in% c("dir-save", "dir-save", "-s")) {
+#    dir.save <- args[i+1]
   } else if (args[i] %in% c("f", "filename", "-f")) {
     nii.save <- args[i+1]
   }
 }
 
+######### DEBUG/TEST ###########################################################
+rm(list=ls())
+gc()
+nii.intensity <- "/scratch/watershed_pdfMerge_test/swi.nii"
+nii.segmentation <- "/scratch/watershed_pdfMerge_test/label-watershed.nii"
+nii.save <- "/scratch/watershed_pdfMerge_test/label-watershed+pdfMerge.nii"
+overlap.threshold <- 0.5
+process.continue <- TRUE
+################################################################################
+
 # load libraries ---------------------------------------------------------------
-requires("nifti.io")
-requires("data.table")
-requires("tools")
+require("nifti.io")
+require("data.table")
+require("tools")
 
 # parse inputs -----------------------------------------------------------------
 ## check nii NOT nii.gz
@@ -33,7 +43,7 @@ if (has_extension(nii.intensity, "gz")) {
 if (has_extension(nii.segmentation, "gz")) {
   stop("ERROR [TKNI:clusterWatershed.R] Segmentation NII file must be decompressed.")
 }
-if (dir.save == "default") {dir.save <- dirname(nii.distance)}
+#if (dir.save == "default") {dir.save <- dirname(nii.distance)}
 if (nii.save == "default") {
   TBASE <- basename(nii.distance)
   TPFX <- unlist(strsplit(TBASE, split="_"))
@@ -45,51 +55,83 @@ if (has_extension(nii.save, "gz")) {
 
 # read in data -----------------------------------------------------------------
 intensity <- read.nii.volume(nii.intensity, 1)
-seg <- read.nii.volume(nii.seg, 1)
+if (process.continue) {
+  segmentation <- read.nii.volume(nii.save, 1)
+} else {
+  segmentation <- read.nii.volume(nii.segmentation, 1)
+}
+img.dims <- info.nii(nii.segmentation, "dims")
+pixdim <- info.nii(nii.segmentation, "pixdim")
+orient <- info.nii(nii.segmentation, "orient")
 
 # get original label list ------------------------------------------------------
-labels <- sort(unique(as.vector(seg)))[-1]
-n.labels <- length(labels)
+labels <- sort(unique(as.vector(segmentation)))[-1]
+n.labels <- max(labels)
+
+# get intensity quanitles ------------------------------------------------------
+maxIntensity <- max(as.vector(intensity), na.rm=T)
 
 # compare touching labels (face sharing) ---------------------------------------
 nn <- t(matrix(c(-1,0,0,0,-1,0,0,0,-1,1,0,0,0,1,0,0,0,1), nrow=3))
-joinls <- integer(n.labels)
-while (any(joinls == 0)) {
-  label.which <- which(joinls == 0)[1]
-  joinls[label.which] <- labels[label.which]
-  label.idx <- as.data.table(which(seg==labels[label.which], arr.ind=T))
-  label.vals <- intensity[which(seg==label.which, arr.ind=T)]
-  label.mean <- mean(label.vals, na.rm=T)
-  label.sd <- sd(label.vals, na.rm=T)
-  label.pdf <- function(x) dnorm(x, mean=label.mean, sd=label.sd)
-  # evaluate touching neighbors
-  for (i in 1:nrow(nn)) {
-    touch.idx <- as.data.table(sweep(label.idx, 2, nn[i,], FUN="+"))
-    touch.idx <- as.matrix(unique(touch.idx[!label.idx, on=c("dim1", "dim2", "dim3")]))
-    touch.which <- unique(seg[as.matrix(touch.idx)])
-    touch.which <- touch.which[-which(touch.which==0)]
-    overlap.coef <- numeric(length(touch.which))
-    for (j in 1:length(touch.which)) {
-      touch.vals <- intensity[which(seg==touch.which[j], arr.ind=T)]
-      touch.mean <- mean(touch.vals, na.rm=T)
-      touch.sd <- sd(touch.vals, na.rm=T)
-      touch.pdf <- function(x) dnorm(x, mean=touch.mean, sd=touch.sd)
-      min.pdf <- function(x) { pmin(label.pdf(x), touch.pdf(x))}
-      overlap.coef[j] <- integrate(min.pdf, lower=-Inf, upper=Inf)$value
-    }
-    touch.sig <- which(overlap.coef>overlap.threshold)
-    joinls[touch.sig] <- labels[label.which]
-  }
-}
+new.labels <- numeric(n.labels)
 
-# relabel values ---------------------------------------------------------------
-new.seg <- seg * 0
-joinls <- order(joinls) # renumber the labels so they are no gaps in the range
-for (i in 1:length(label.ls)) {
-  new.seg[which(seg==label.ls[i])] <- joinls[i]
+#init.nii(nii.save, dims=img.dims, pixdim=pixdim, orient=orient)
+for (i in 1:n.labels) {
+  DO.WRITE <- FALSE
+  if (new.labels[i] == 0) { new.labels[i] <- i }
+  wrklab <- new.labels[i]
+  idx1 <- matrix(which(segmentation==labels[i], arr.ind=TRUE), ncol=3)
+  if (nrow(idx1) == 0) { next }
+  vals1 <- intensity[idx1]
+  m1 <- mean(vals1, na.rm=T)
+  s1 <- sd(vals1, na.rm=T)
+  pdf1 <- function(x) dnorm(x, mean=m1, sd=s1)
+  # get touching labels ------
+  tlab <- numeric(0)
+  for (j in 1:nrow(nn)) {
+    tidx <- cbind(idx1[,1]+nn[j,1], idx1[,2]+nn[j,2], idx1[,3]+nn[j,3])
+    gidx <- (tidx[,1] <= img.dims[1]) * (tidx[,2] <= img.dims[2]) * (tidx[,3] <= img.dims[3])
+    tidx <- tidx[gidx, ]
+    tlab <- c(tlab, unique(as.vector(segmentation[tidx])))
+  }
+  tlab <- sort(unique(tlab))[-1]
+  tlab <- tlab[-which(tlab==wrklab)]
+  # identify PDF overlap ------
+  if (length(tlab) > 0) {
+    for (j in 1:length(tlab)) {
+      idx2 <- matrix(which(segmentation==tlab[j], arr.ind=TRUE), ncol=3)
+      vals2 <- intensity[idx2]
+      m2 <- mean(vals2, na.rm=T)
+      s2 <- sd(vals2, na.rm=T)
+      pdf2 <- function(x) dnorm(x, mean=m2, sd=s2)
+      # get overlap coefficient for PDF functions
+      min.pdf <- function(x) { pmin(pdf1(x), pdf2(x))}
+      toverlap <- integrate(min.pdf, lower=0, upper=maxIntensity)$value
+      if (toverlap > overlap.threshold) {
+        new.labels[j] <- wrklab
+        segmentation[idx2] <- wrklab
+        DO.WRITE <- TRUE
+      }
+    }
+  }
+  if (DO.WRITE) {
+    print("writing")
+    write.nii.volume(nii.save, 1, segmentation)
+  }
+  print(sprintf("Done with label %d", i))
 }
 
 # save output ------------------------------------------------------------------
-init.nii(nii.save, dims=img.dims, pixdim=pixdim, orient=orient)
-write.nii.volume(nii.save, 1, new.seg)
+#tbl <- table(segmentation)
+new.labels <- sort(unique(as.vector(segmentation)))[-1]
+new.segmentation <- segmentation * 0
+for (i in 1:length(new.labels)) {
+  tseg <- (segmentation==new.labels[i])*i
+  new.segmentation <- new.segmentation + tseg
+}
+
+init.nii("/scratch/watershed_pdfMerge_test/label-watershed+pdfMerge+reorder.nii",
+  dims=img.dims, pixdim=pixdim, orient=orient)
+write.nii.volume("/scratch/watershed_pdfMerge_test/label-watershed+pdfMerge+reorder.nii",
+  1, new.segmentation)
 
