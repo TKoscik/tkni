@@ -314,7 +314,6 @@ if [[ "${NO_PNG}" == "false" ]]; then
             fi
           fi
         fi
-        echo ">>>>>>DONE"
       done
     fi
   done
