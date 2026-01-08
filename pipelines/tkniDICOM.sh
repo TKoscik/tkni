@@ -258,21 +258,15 @@ if [[ "${NO_PNG}" == "false" ]]; then
       FLS=($(ls ${DIR_RAW}/${j}/*.nii.gz))
       for (( i=0; i<${#FLS[@]}; i++ )); do
         BG=${FLS[${i}]}
-        echo ">>>>>>${j} - making PNG"
-        echo ">>>>>>${BG}"
         TPNG="${BG%%.*}.png"
         DAT=$(niiInfo -i ${BG} -f datatype)
         if [[ ${DAT} -ne 128 ]]; then
           if [[ ! -f ${TPNG} ]]; then
             NVOL=$(niiInfo -i ${BG} -f "volumes")
-            echo ${BG}
-            echo -e "\t#Vols: ${NVOL}"
             if [[ ${j} == "dwi" ]] || [[ ${j} == "func" ]]; then
               if [[ ${NVOL} -eq 1 ]]; then
-                echo -e "\t3D"
-                make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
+                make3Dpng --bg ${BG} --bg-threshold "2.5,97.5"
               else
-                echo -e "\t4D"
                 N10=$((${NVOL} / 10))
                 N1=$(($((${NVOL} % 10)) - 1))
                 if [[ ${N10} -gt 0 ]]; then
@@ -284,7 +278,7 @@ if [[ "${NO_PNG}" == "false" ]]; then
                 fi
                 make4Dpng --fg ${BG} \
                   --fg-alpha 100 --fg-thresh "2.5,97.5" \
-                  --layout "${TLAYOUT}" --verbose
+                  --layout "${TLAYOUT}"
               fi
             else
               if [[ ${NVOL} -eq 1 ]]; then
