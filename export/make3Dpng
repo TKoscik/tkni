@@ -748,9 +748,27 @@ if [[ ${DZ} -lt ${DMAX} ]]; then DMAX=${DZ}; SREF=${SZ}; fi
 XPXL=$(echo "scale=0; ${DX} * ${SX} / ${SREF} * ${MAX_PIXELS} / ${DMAX}" | bc -l)
 YPXL=$(echo "scale=0; ${DY} * ${SY} / ${SREF} * ${MAX_PIXELS} / ${DMAX}" | bc -l)
 ZPXL=$(echo "scale=0; ${DZ} * ${SZ} / ${SREF} * ${MAX_PIXELS} / ${DMAX}" | bc -l)
+
+PMAX=${XPXL}
+if [[ ${PMAX} -lt ${YPXL} ]]; then PMAX=${YPXL}; fi
+if [[ ${PMAX} -lt ${ZPXL} ]]; then PMAX=${ZPXL}; fi
+if [[ ${PMAX} -gt ${MAX_PIXELS} ]]; then
+  PRATIO=$(echo "scale=6; ${PMAX} / ${MAX_PIXELS}" | bc -l)
+  XPXL=$(echo "scale=0; ${XPXL} / ${PRATIO}" | bc -l)
+  YPXL=$(echo "scale=0; ${YPXL} / ${PRATIO}" | bc -l)
+  ZPXL=$(echo "scale=0; ${ZPXL} / ${PRATIO}" | bc -l)
+fi
+
 RESIZE_X="${YPXL}x${ZPXL}"
 RESIZE_Y="${XPXL}x${ZPXL}"
 RESIZE_Z="${XPXL}x${YPXL}"
+
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo ">>>resize to..."
+  echo -e "X: ${RESIZE_X}"
+  echo -e "Y: ${RESIZE_Y}"
+  echo -e "Z: ${RESIZE_Z}"
+fi
 
 for (( i=0; i<${NX}; i++ )); do
   convert -size ${RESIZE_X} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/X${i}.png
@@ -1379,6 +1397,7 @@ for (( i=0; i<${#ROW_LAYOUT[@]}; i++ )); do
   montage_fcn="${montage_fcn} -gravity center"
   montage_fcn=${montage_fcn}' -background "'${COLOR_PANEL}'"'
   montage_fcn="${montage_fcn} ${DIR_SCRATCH}/image_row${i}.png"
+  echo $montage_fcn
   eval ${montage_fcn}
 done
 
@@ -1442,12 +1461,7 @@ fi
 
 # add laterality label if desired ----------------------------------------------
 if [[ "${LABEL_NO_LR}" == "false" ]]; then
-#  if [[ "${ViERBOSE}" == "true" ]]; then echo ">>>add laterality label"; fi
-#  if [[ "${ORIENT,,}" == *"r"* ]]; then
-    TTXT="R"
-#  else
-#    TTXT="L"
-#  fi
+  TTXT="R"
   mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
     -fill "${COLOR_TEXT}" -undercolor "transparent" \
     -gravity SouthWest -annotate +10+10 "${TTXT}" \

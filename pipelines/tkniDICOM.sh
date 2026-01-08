@@ -258,30 +258,63 @@ if [[ "${NO_PNG}" == "false" ]]; then
       FLS=($(ls ${DIR_RAW}/${j}/*.nii.gz))
       for (( i=0; i<${#FLS[@]}; i++ )); do
         BG=${FLS[${i}]}
+        echo ">>>>>>${j} - making PNG"
+        echo ">>>>>>${BG}"
         TPNG="${BG%%.*}.png"
         DAT=$(niiInfo -i ${BG} -f datatype)
         if [[ ${DAT} -ne 128 ]]; then
           if [[ ! -f ${TPNG} ]]; then
             NVOL=$(niiInfo -i ${BG} -f "volumes")
-            if [[ ${NVOL} -eq 1 ]]; then
-              make3Dpng --bg ${BG} --bg-threshold "2.5,97.5"
-            elif [[ ${NVOL} -le 5 ]]; then
-              montage_fcn="montage"
-              for (( j=1; j<=${NVOL}; j++ )); do
-                make3Dpng --bg ${BG} --bg-vol ${j} --bg-threshold "2.5,97.5" \
-                  --filename vol${j} --dir-save ${DIR_SCRATCH}
-                montage_fcn="${montage_fcn} ${DIR_SCRATCH}/vol${j}.png"
-              done
-              montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
-              montage_fcn=${montage_fcn}' -background "#FFFFFF"'
-              montage_fcn="${montage_fcn} ${TPNG}"
-              eval ${montage_fcn}
-              rm ${DIR_SCRATCH}/vol*.png
+            echo ${BG}
+            echo -e "\t#Vols: ${NVOL}"
+            if [[ ${j} == "dwi" ]] || [[ ${j} == "func" ]]; then
+              if [[ ${NVOL} -eq 1 ]]; then
+                echo -e "\t3D"
+                make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
+              else
+                echo -e "\t4D"
+                N10=$((${NVOL} / 10))
+                N1=$(($((${NVOL} % 10)) - 1))
+                if [[ ${N10} -gt 0 ]]; then
+                  TLAYOUT="10"
+                  for (( i=1; i<${N10}; i++ )) { TLAYOUT="${TLAYOUT};10"; }
+                  if [[ ${N1} -gt 0 ]]; then TLAYOUT="${TLAYOUT};${N1}"; fi
+                else
+                  TLAYOUT=${N1};
+                fi
+                make4Dpng --fg ${BG} \
+                  --fg-alpha 100 --fg-thresh "2.5,97.5" \
+                  --layout "${TLAYOUT}" --verbose
+              fi
             else
-              make3Dpng --bg ${BG} --bg-threshold "2.5,97.5"
+              if [[ ${NVOL} -eq 1 ]]; then
+                make3Dpng --bg ${BG} --bg-threshold "2.5,97.5"
+              elif [[ ${NVOL} -le 5 ]]; then
+                montage_fcn="montage"
+                for (( j=1; j<=${NVOL}; j++ )); do
+                  make3Dpng --bg ${BG} --bg-vol ${j} --bg-threshold "2.5,97.5" \
+                    --filename vol${j} --dir-save ${DIR_SCRATCH}
+                  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/vol${j}.png"
+                done
+                montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
+                montage_fcn=${montage_fcn}' -background "#FFFFFF"'
+                montage_fcn="${montage_fcn} ${TPNG}"
+                eval ${montage_fcn}
+                rm ${DIR_SCRATCH}/vol*.png
+              else
+                TLAYOUT="10"
+                N10=$((${NVOL} / 10))
+                N1=$(($((${NVOL} % 10)) - 1))
+                for (( i=1; i<${N10}; i++ )) { TLAYOUT="${TLAYOUT};10"; }
+                if [[ ${N1} -gt 0 ]]; then TLAYOUT="${TLAYOUT};${N1}"; fi
+                 make4Dpng --fg ${BG} \
+                   --fg-alpha 100 --fg-thresh "2.5,97.5" \
+                   --layout "${TLAYOUT}"
+              fi
             fi
           fi
         fi
+        echo ">>>>>>DONE"
       done
     fi
   done
