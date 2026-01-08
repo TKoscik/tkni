@@ -1397,7 +1397,6 @@ for (( i=0; i<${#ROW_LAYOUT[@]}; i++ )); do
   montage_fcn="${montage_fcn} -gravity center"
   montage_fcn=${montage_fcn}' -background "'${COLOR_PANEL}'"'
   montage_fcn="${montage_fcn} ${DIR_SCRATCH}/image_row${i}.png"
-  echo $montage_fcn
   eval ${montage_fcn}
 done
 

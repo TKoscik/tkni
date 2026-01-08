@@ -284,7 +284,7 @@ if [[ "${NO_PNG}" == "false" ]]; then
                 fi
                 make4Dpng --fg ${BG} \
                   --fg-alpha 100 --fg-thresh "2.5,97.5" \
-                  --layout "${TLAYOUT}" --verbose
+                  --layout "${TLAYOUT}" --max-pixels 200
               fi
             else
               if [[ ${NVOL} -eq 1 ]]; then
