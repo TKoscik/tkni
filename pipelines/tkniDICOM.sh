@@ -267,11 +267,15 @@ if [[ "${NO_PNG}" == "false" ]]; then
             if [[ ${NVOL} -eq 1 ]]; then
               make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
             elif [[ ${NVOL} -le 10 ]]; then
+              montage_fcn="montage"
               for (( j=1; j<=${NVOL}; j++ )); do
                 make3Dpng --bg ${BG} --bg-vol ${j} --bg-threshold "2.5,97.5" \
                   --filename vol${j} --dir-save ${DIR_SCRATCH}
-                  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/vol${j}.png"
+                montage_fcn="${montage_fcn} ${DIR_SCRATCH}/vol${j}.png"
               done
+              montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
+              montage_fcn=${montage_fcn}' -background "#FFFFFF"'
+              montage_fcn="${montage_fcn} ${TPNG}"
             elif [[ ${NVOL} -le 100 ]]; then
               make4Dpng_update --fg ${BG}
             elif [[ ${NVOL} -le 250 ]]; then
