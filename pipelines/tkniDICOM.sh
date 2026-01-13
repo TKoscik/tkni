@@ -264,36 +264,52 @@ if [[ "${NO_PNG}" == "false" ]]; then
         if [[ ${DAT} -ne 128 ]]; then
           if [[ ! -f ${TPNG} ]]; then
             NVOL=$(niiInfo -i ${BG} -f "volumes")
-            if [[ ${j} == "dwi" ]] || [[ ${j} == "func" ]]; then
-              if [[ ${NVOL} -eq 1 ]]; then
-                echo -e "\t3D"
-                make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
-              elif [[ ${NVOL} -le 100 ]]; then
-                make4Dpng_update --fg ${BG}
-              elif [[ ${NVOL} -le 250 ]]; then
-                make4Dpng_update --fg ${BG} --volumes "0:2:${NVOL}"
-              else
-                make4Dpng_update --fg ${BG} --volumes "0:5:${NVOL}"
-              fi
-            else
-              if [[ ${NVOL} -eq 1 ]]; then
-                make3Dpng --bg ${BG} --bg-threshold "2.5,97.5"
-              elif [[ ${NVOL} -le 5 ]]; then
-                montage_fcn="montage"
-                for (( j=1; j<=${NVOL}; j++ )); do
-                  make3Dpng --bg ${BG} --bg-vol ${j} --bg-threshold "2.5,97.5" \
-                    --filename vol${j} --dir-save ${DIR_SCRATCH}
+            if [[ ${NVOL} -eq 1 ]]; then
+              make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
+            elif [[ ${NVOL} -le 10 ]]; then
+              for (( j=1; j<=${NVOL}; j++ )); do
+                make3Dpng --bg ${BG} --bg-vol ${j} --bg-threshold "2.5,97.5" \
+                  --filename vol${j} --dir-save ${DIR_SCRATCH}
                   montage_fcn="${montage_fcn} ${DIR_SCRATCH}/vol${j}.png"
-                done
-                montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
-                montage_fcn=${montage_fcn}' -background "#FFFFFF"'
-                montage_fcn="${montage_fcn} ${TPNG}"
-                eval ${montage_fcn}
-                rm ${DIR_SCRATCH}/vol*.png
-              else
-                 make4Dpng_update --fg ${BG}
-              fi
+              done
+            elif [[ ${NVOL} -le 100 ]]; then
+              make4Dpng_update --fg ${BG}
+            elif [[ ${NVOL} -le 250 ]]; then
+              make4Dpng_update --fg ${BG} --volumes "0:2:${NVOL}"
+            else
+              make4Dpng_update --fg ${BG} --volumes "0:5:${NVOL}"
             fi
+
+            #if [[ ${j} == "dwi" ]] || [[ ${j} == "func" ]]; then
+            #  if [[ ${NVOL} -eq 1 ]]; then
+            #    echo -e "\t3D"
+            #    make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
+            #  elif [[ ${NVOL} -le 100 ]]; then
+            #    make4Dpng_update --fg ${BG}
+            #  elif [[ ${NVOL} -le 250 ]]; then
+            #    make4Dpng_update --fg ${BG} --volumes "0:2:${NVOL}"
+            #  else
+            #    make4Dpng_update --fg ${BG} --volumes "0:5:${NVOL}"
+            #  fi
+            #else
+            #  if [[ ${NVOL} -eq 1 ]]; then
+            #    make3Dpng --bg ${BG} --bg-threshold "2.5,97.5"
+            #  elif [[ ${NVOL} -le 5 ]]; then
+            #    montage_fcn="montage"
+            #    for (( j=1; j<=${NVOL}; j++ )); do
+            #      make3Dpng --bg ${BG} --bg-vol ${j} --bg-threshold "2.5,97.5" \
+            #        --filename vol${j} --dir-save ${DIR_SCRATCH}
+            #      montage_fcn="${montage_fcn} ${DIR_SCRATCH}/vol${j}.png"
+            #    done
+            #    montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
+            #    montage_fcn=${montage_fcn}' -background "#FFFFFF"'
+            #    montage_fcn="${montage_fcn} ${TPNG}"
+            #    eval ${montage_fcn}
+            #    rm ${DIR_SCRATCH}/vol*.png
+            #  else
+            #     make4Dpng_update --fg ${BG}
+            #  fi
+            #fi
           fi
         fi
       done
