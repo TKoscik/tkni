@@ -1,0 +1,872 @@
+#!/bin/bash -e
+#===============================================================================
+# Make PNG images of brains, suitable for publication.
+# - flexible overlay, color, and layout options
+# - can plot many timpoints of a single slice
+# Authors: Timothy R. Koscik, PhD
+# Date: 2021-02-04
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+KEEP=false
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long bg:,\
+bg-volume:,bg-mask:,bg-mask-volume:,\
+bg-threshold:,bg-color:,bg-cbar,\
+fg:,fg-mask:,fg-mask-volume:,fg-threshold:,fg-alpha:,fg-color:,fg-cbar,\
+volumes:,plane:,slice:,layout:,\
+no-slice-label,use-vox-label,no-lr-label,no-volume-label,use-volume-number,label-decimal:,\
+color-panel:,color-text:,color-decimal:,font:,font-size:,max-pixels:,\
+keep-slice,keep-cbar,\
+filename:,dir-save:,dir-scratch:,help,verbose,no-log -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+BG=
+BG_VOL=1
+BG_MASK=
+BG_MASK_VOL=1
+BG_THRESH="2.5%,97.5%"
+BG_COLOR="grayscale"
+BG_CBAR="false"
+
+FG=
+FG_MASK=
+FG_MASK_VOL=1
+FG_THRESH="2.5%,97.5%"
+FG_ALPHA=100
+FG_COLOR="timbow"
+FG_CBAR="true"
+
+VOLUMES="0:-1"
+PLANE=z
+SLICE="50%"
+NCOL=10
+SCALE="100%"
+
+LABEL_VOLUME="time"
+LABEL_NO_LR="false"
+LABEL_DECIMAL=1
+COLOR_PANEL="#000000"
+COLOR_TEXT="#FFFFFF"
+COLOR_DECIMAL=2
+FONT=NimbusSans-Regular
+FONT_SIZE=12
+MAX_PIXELS=500
+NO_REORIENT="false"
+
+KEEP_SLICE="false"
+KEEP_CBAR="false"
+FILENAME=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+VERBOSE="false"
+
+while true; do
+  case "$1" in
+    -h | --help) HELP="true" ; shift ;;
+    -v | --verbose) VERBOSE="true" ; shift ;;
+    -l | --no-log) NO_LOG="true" ; shift ;;
+    --bg) BG="$2" ; shift 2 ;;
+    --bg-volume) BG_VOL="$2" ; shift 2 ;;
+    --bg-mask) BG_MASK="$2" ; shift 2 ;;
+    --bg-mask-volume) BG_MASK_VOL="$2" ; shift 2 ;;
+    --bg-threshold) BG_THRESH="$2" ; shift 2 ;;
+    --bg-color) BG_COLOR="$2" ; shift 2 ;;
+    --bg-cbar) BG_CBAR="true" ; shift ;;
+    --fg) FG="$2" ; shift 2 ;;
+    --fg-mask) FG_MASK="$2" ; shift 2 ;;
+    --fg-mask-volume) FG_MASK_VOL="$2" ; shift 2 ;;
+    --fg-threshold) FG_THRESH="$2" ; shift 2 ;;
+    --fg-alpha) FG_ALPHA="$2" ; shift 2 ;;
+    --fg-color) FG_COLOR="$2" ; shift 2 ;;
+    --fg-cbar) FG_CBAR="false" ; shift ;;
+    --volumes) VOLUMES="$2" ; shift 2 ;;
+    --plane) PLANE="$2" ; shift 2 ;;
+    --slice) SLICE="$2" ; shift 2 ;;
+    --slice-method) SLICE_METHOD="2" ; shift 2 ;;
+    --layout) LAYOUT="$2" ; shift 2 ;;
+    --no-slice-label) LABEL_NO_SLICE="true" ; shift ;;
+    --use-vox-label) LABEL_USE_VOX="true" ; shift ;;
+    --no-lr-label) LABEL_NO_LR="true" ; shift ;;
+    --no-volume-label) LABEL_NO_VOLUME="true" ; shift ;;
+    --use-volume-number) LABEL_USE_VOL="true" ; shift ;;
+    --label-decimal) LABEL_DECIMAL="$2" ; shift 2 ;;
+    --color-panel) COLOR_PANEL="$2" ; shift 2 ;;
+    --color-text) COLOR_TEXT="$2" ; shift 2 ;;
+    --color-decimal) COLOR_DECIMAL="$2" ; shift 2 ;;
+    --font) FONT="$2" ; shift 2 ;;
+    --font-size) FONT_SIZE="$2" ; shift 2 ;;
+    --max-pixels) MAX_PIXELS="$2" ; shift 2 ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    --keep-slice) KEEP_SLICE="true" ; shift ;;
+    --keep-cbar) KEEP_CBAR="true" ; shift ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '-h | --help           display command help'
+  echo '-v | --verbose        add verbose output to log file'
+  echo '-l | --no-log         disable writing to output log'
+  echo '--bg                  path to NIfTI file for background, single volume'
+  echo '                        e.g., anatomical'
+  echo '--bg-volume           volume to use for multivolume image, default=1'
+  echo '--bg-mask             region to plot, will be binarized'
+  echo '--bg-mask-volume      volume for multivolume mask, default=1'
+  echo '--bg-threshold        background intensity range, default=0,100'
+  echo '--bg-color            color scale for background, details below'
+  echo '--bg-order            order of the color bar, details below'
+  echo '--bg-cbar             toggle to turn ON color bar for background'
+  echo '--fg (required)       path to NIfTI file for foreground, multi-volume'
+  echo '                      multiple FG images semicolon-delimited,'
+  echo '                      plotted in order specified, 1st on bottom'
+  echo '                        e.g., time-series, tensor, etc.'
+  echo '--fg-mask             region to plot, will be binarized'
+  echo '--fg-mask-volume      volume for multivolume mask, default=1'
+  echo '--fg-threshold        foreground intensity range, default=0,100'
+  echo '--fg-alpha            strength of forground overlay on preceeding'
+  echo '                      layers (0-100), default=75'
+  echo '--fg-color            color scale for foreground, details below'
+  echo '                      semicolon-delimited color schemes corresponding'
+  echo '                      to multiple foreground images'
+  echo '--fg-order            order of the color bar, details below'
+  echo '--fg-cbar             toggle to turn ON color bar for foreground'
+  echo '--plane               plane of section for images, x, y, default=z'
+  echo '--slice               slice number or % for slice, default=50%'
+  echo '                      e.g., 25 for slice 25'
+  echo '                            25% a slice 25% of the way across the plane'
+  echo '--layout              specification of the number and arrangement'
+  echo '                      of slices. x-delimited grid arrangement or'
+  echo '                      semicolon-delimited specification of rows'
+  echo '                      e.g., 5x5 - a 5-row by 5 column grid'
+  echo '                            5;6;5 - 3 rows, with 5, 6, and 5'
+  echo '                                    slices respectively'
+  echo '--no-slice-label      toggle, turn off location labels'
+  echo '--use-voxel-label     toggle, use voxels not mm for location label'
+  echo '--no-lr-label         toggle, turn off L and R indicator'
+  echo '--no-volume-label     toggle, turn off volume labels'
+  echo '--use-volume-number   toggle, use volume number not time (in s)'
+  echo '--label-decimal       number of decimal places for labels, default=1'
+  echo '--color-panel         color of background in image, default="#000000"'
+  echo '--color-text          color of text elements, default="#FFFFFF"'
+  echo '--color-decimal       number of decimal places of color bar labels, default=2'
+  echo '--font                name of font to be used, default=NimbusSans-Regular'
+  echo '--font-size           font size to use in final image, default=24'
+  echo '                      might need to be adjusted depending on image size'
+  echo '--max-pixels          maximum number of pixels for each slice, default=500'
+  echo '                      This will up- or down-sample slices accordingly,'
+  echo '                      but will retain aspect ratios'
+  echo '--filename            desired filename of output image,'
+  echo '                      default=sub-${PID}_ses-${SID}_YYMMDDThhmmssnnn'
+  echo '                              overlay4D_YYMMDDThhmmssnnn'
+  echo '--dir-save            location to save final image'
+  echo '--dir_scratch         directory to use to construct image'
+  echo '--keep-slice          toggle, keep individual slices, same save directory'
+  echo '--keep-cbar           toggle to keep color bar images, same save directory'
+  echo ''
+  echo ' Details: --------------------------------------------------------------'
+  echo 'thresholds:'
+  echo '  comma-delimited minimum and maximum range of image values to plot as a'
+  echo '  % of total range (0-100). default=0,100'
+  echo ''
+  echo 'colors:'
+  echo '  colors can be specified via any comma-delimited combination of HEX'
+  echo '  colors in order from low to high. Color gradients will be constructed'
+  echo '  evenly distributing colors across the image range.'
+  echo '  EXAMPLE: Red-White-Blue color gradient -> "#FF0000,#FFFFFF,#0000FF"'
+  echo '  Named color schemes are available:'
+  echo '  -(timbow)  a rainbow color scheme based on colors from viridis'
+  echo '  -viridis   viridis, magma, inferno, plasma, and cividis variants'
+  echo '  -cubehelix  a common astronomical color gradient, where colors are'
+  echo '              selected such that intensity varies continuously from low'
+  echo '              to high along with color.'
+  echo '              Optional parameters can be specified as comma-delimited,'
+  echo '              named values after cubehelix,'
+  echo '              default="cubehelix,start,0.5,r,-1.5,hue,2,gamma,1"'
+  echo '  -hot        "hot" colors, Dark red to bright yellow'
+  echo '              "#7F0000,#FF0000,#FF7F00,#FFFF00,#FFFF7F"'
+  echo '  -cold       "cold" colors, dark blue to bright cyan'
+  echo '              "#00007F,#0000FF,#007FFF,#00FFFF,#7FFFFF"'
+  echo '  -grayscale  [grayscale, gray, grey] "#000000,#FFFFFF"'
+  echo '  -rainbow    rainbow colors, commonly referred to as "jet"'
+  echo '              "#FF0000,#FFFF00,#00FF00,#00FFFF,#0000FF,#FF00FF"'
+  echo ''
+  echo 'color order:'
+  echo '  A modifier to add to change to the order that colors are used in the'
+  echo '  color scheme. Options include:'
+  echo '    r, rand, random: randomize the order of colors'
+  echo '    rev, reverse, i, inv, inverse: invert the order of colors'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ "${VERBOSE}" == "true" ]]; then echo "Running TKNI 4D PNG Maker:"; fi
+
+# set default filename ---------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>setting output filename"; fi
+if [[ -z "${FILENAME}" ]]; then
+  FBASE=$(basename ${FG})
+  FILENAME="${FBASE%%.*}"
+fi
+
+# set default save directory ---------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>setting directories for scratch and saving"; fi
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${FG}); fi
+mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SCRATCH}
+if [[ "${VERBOSE}" == "true" ]]; then
+  echo -e "SAVE LOCATION:\t${DIR_SAVE}"
+  echo -e "PNG FILENAME:\t${FILENAME}.png"
+fi
+
+# parse parameters -------------------------------------------------------------
+BG_THRESH=(${BG_THRESH//,/ })
+
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> parse FG parameters"; fi
+FG=(${FG//;/ })
+FG_N=${#FG[@]}
+FG_MASK=(${FG_MASK//;/ })
+FG_MASK_VOL=(${FG_MASK_VOL//;/ })
+FG_THRESH=(${FG_THRESH//;/ })
+FG_COLOR=(${FG_COLOR//;/ })
+FG_ORDER=(${FG_COLOR_ORDER//;/ })
+FG_CBAR=(${FG_CBAR//;/ })
+if [[ ${FG_N} -gt 1 ]]; then
+  for (( i=0; i<${FG_N}; i++ )); do
+    if [[ -n ${FG_MASK} ]]; then
+      if [[ ${#FG_MASK_VOL[@]} -eq 1 ]]; then
+        FG_MASK_VOL[${i}]=(${FG_MASK_VOL[0]})
+      fi
+    fi
+    if [[ ${#FG_THRESH[@]} -eq 1 ]]; then
+      FG_THRESH[${i}]=${FG_THRESH[0]}
+    fi
+    if [[ ${#FG_COLOR[@]} -eq 1 ]]; then
+      FG_COLOR[${i}]=${FG_COLOR[0]}
+    fi
+    if [[ ${#FG_COLOR_ORDER[@]} -eq 1 ]]; then
+      FG_COLOR_ORDER[${i}]=${FG_COLOR_ORDER[0]}
+    fi
+    if [[ ${#FG_CBAR[@]} -eq 1 ]]; then
+      FG_CBAR[${i}]=${FG_CBAR[0]}
+    fi
+  done
+fi
+
+# copy images to scratch to prevent altering originals -------------------------
+if [[ -z ${BG} ]]; then
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> use volume 1 of FG as background"; fi
+  3dcalc -a ${FG[0]}[0] -expr a -prefix ${DIR_SCRATCH}/BG.nii.gz
+else
+  3dcalc -a ${BG}[${BG_VOL}] -expr a prefix ${DIR_SCRATCH}/BG.nii.gz
+fi
+BG=${DIR_SCRATCH}/BG.nii.gz
+BG_VOL=1
+
+if [[ -n ${BG_MASK} ]]; then
+  3dcalc -a ${BG_MASK}[${BG_MASK_VOL}] -expr a prefix ${DIR_SCRATCH}/BG_MASK.nii.gz
+  BG_MASK=${DIR_SCRATCH}/BG_MASK.nii.gz
+  BG_MASK_VOL=1
+fi
+
+for (( i=0; i<${FG_N}; i++ )); do
+  cp ${FG[${i}]} ${DIR_SCRATCH}/FG${i}.nii.gz
+  FG[${i}]=${DIR_SCRATCH}/FG${i}.nii.gz
+  if [[ -n ${FG_MASK[${i}]} ]] && [[ ${FG_MASK[${i}],,} != "null" ]]; then
+    3dcalc -a ${FG_MASK[${i}]}[${FG_MASK_VOL[${i}]}] -expr a prefix ${DIR_SCRATCH}/FG_MASK${i}.nii.gz
+    FG_MASK[${i}]=${DIR_SCRATCH}/FG${i}.nii.gz
+    FG_MASK_VOL[${i}]=1
+  fi
+done
+
+# Get image information -------------------------------------------------------
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> read image properties from NIfTI headers"; fi
+unset BG_DIMS BG_PIXDIM BG_ORIGIN BG_ORIENT
+BG_DIMS=($(niiInfo -i ${BG} -f voxels))
+BG_PIXDIM=($(niiInfo -i ${BG} -f spacing))
+BG_ORIGIN=($(niiInfo -i ${BG} -f origin))
+BG_ORIENT=($(niiInfo -i ${BG} -f orient))
+unset FG_DIMS FG_PIXDIM FG_ORIGIN FG_ORIENT FG_VOLS FG_TR
+FG_DIMS=($(niiInfo -i ${FG[0]} -f voxels))
+FG_PIXDIM=($(niiInfo -i ${FG[0]} -f spacing))
+FG_ORIGIN=($(niiInfo -i ${FG[0]} -f origin))
+FG_ORIENT=($(niiInfo -i ${FG[0]} -f orient))
+FG_VOLS=($(niiInfo -i ${FG[0]} -f volumes))
+FG_TR=($(niiInfo -i ${FG[0]} -f tr))
+
+## use mm only if image is in known standard space -----------------------------
+if [[ "${LABEL_NO_SLICE}" == "false" ]] &&
+   [[ "${LABEL_USE_VOX}" == "false" ]]; then
+  LABEL_USE_VOX="true"
+  MSG="MESSAGE [TKNI:${FCN_NAME}] using voxel coordinate labels"
+  STD_LS=($(ls ${DIR_TEMPLATE}))
+  for (( i=0; i<${#STD_LS[@]}; i++ )); do
+    if [[ "${BG}" == *"${STD_LS[${i}]}"* ]]; then
+      LABEL_USE_VOX="false"
+      MSG="MESSAGE [TKNI:${FCN_NAME}] using mm coordinate labels"
+      break
+    fi
+  done
+fi
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ${MSG}; fi
+
+# Figure out number slices based on number of volumes in FG --------------------
+## Assuming all images are in sync in 4D, e.g., timepoints, tensors, or statmaps
+## are the same for each FG image
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> calculate image layout"; fi
+if [[ ${VOLUMES} == "0:-1" ]]; then
+  NV=${FG_VOLS}
+  VLS=($(eval echo {0..${NV}..1}))
+elif [[ ${VOLUMES} =~ ^[0-9]+:[0-9]+:[0-9]+$ ]]; then
+  TV=(${VOLUMES//:/ })
+  if [[ ${TV[2]} -eq -1 ]]; then TV[2]=${FG_VOLS}; fi
+  VLS=($(eval echo {${TV[0]}..${TV[2]}..${TV[1]}}))
+  NV=${#VLS[@]}
+else
+  NV=0
+  VLS=
+  TV=(${VOLUMES//,/ })
+  for (( i=0; i<${#TV[@]}; i++ )); do
+    if [[ ${TV[${i}]} =~ ^[0-9]+:[0-9]+:[0-9]+$ ]]; then
+      TTV=${TV[${i}]}
+      TTV=(${TTV//:/ })
+      if [[ ${TTV[2]} -eq -1 ]]; then TTV[2]=${FG_VOLS}; fi
+      TTV=($(eval echo {${TTV[0]}..${TTV[2]}..${TTV[1]}}))
+      NV=$((${NV} + ${#TTV[@]}))
+      VLS=(${VLS[@]} ${TTV[@]})
+    elif [[ ${TV[${i}]} == *":"* ]]; then
+      TTV=${TV[${i}]}
+      TTV=(${TTV//:/ })
+      if [[ ${TTV[2]} -eq -1 ]]; then TTV[2]=${FG_VOLS}; fi
+      TTV=($(eval echo {${TTV[0]}..${TTV[1]}..1}))
+      NV=$((${NV} + ${#TTV[@]}))
+      VLS=(${VLS[@]} ${TTV[@]})
+    else
+      NV=$((${NV} + 1))
+      VLS=(${VLS[@]} ${TV[${i}]})
+    fi
+  done
+fi
+
+NFULL=$((${NV} / ${NCOL}))
+NREM=$((${NV} % ${NCOL}))
+if [[ ${NFULL} -gt 0 ]]; then
+  LAYOUT="${NCOL}"
+  for (( i=1; i<${NFULL}; i++ )) { LAYOUT="${LAYOUT};${NCOL}"; }
+  if [[ ${NREM} -gt 0 ]]; then LAYOUT="${LAYOUT};${NREM}"; fi
+else
+  LAYOUT=${NREM}
+fi
+TVAL=(${LAYOUT//;/ })
+NROW=${#TVAL[@]}
+
+# select desired volume from multivolume images --------------------------------
+#if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> select BG volume"; fi
+#TV=$(niiInfo -i ${BG} -f vols)
+#if [[ ${TV} -gt 1 ]]; then
+#  if [[ ${BG_VOL} > ${TV} ]]; then
+#    echo "ERROR [INC:${FCN_NAME}] BG_VOL out of range, <${TV}"
+#    exit 1
+#  else
+#    WHICH_VOL=$((${BG_VOL}-1))
+#    3dcalc -a ${BG}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/BG.nii.gz
+#    BG=${DIR_SCRATCH}/BG.nii.gz
+#  fi
+#fi
+
+#if [[ -n ${BG_MASK} ]]; then
+#  if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> select BG_MASK volume"; fi
+#  TV=$(niiInfo -i ${BG_MASK} -f vols)
+#  if [[ ${TV} -gt 1 ]]; then
+#    if [[ ${BG_MASK_VOL} > ${TV} ]]; then
+#      echo "ERROR [INC:${FCN_NAME}] BG_MASK_VOL out of range, <${TV}"
+#      exit 1
+#    else
+#      WHICH_VOL=$((${BG_MASK_VOL}-1))
+#      3dcalc -a ${BG_MASK}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/BG_MASK.nii.gz
+#      BG_MASK=${DIR_SCRATCH}/BG_MASK.nii.gz
+#    fi
+#  fi
+#fi
+
+#if [[ -n ${FG_MASK} ]]; then
+#  if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> select FG_MASK volume(s)"; fi
+#  for (( i=0; i<${FG_N}; i++ )); do
+#    TV=$(niiInfo -i ${FG_MASK[${i}]} -f vols)
+#    if [[ ${TV} -gt 1 ]]; then
+#      if [[ ${FG_MASK_VOL[${i}]} > ${TV} ]]; then
+#        echo "ERROR [INC:${FCN_NAME}] FG_MASK_VOL[${i}] out of range, <${TV}"
+#        exit 1
+#      else
+#        WHICH_VOL=$((${FG_MASK_VOL[${i}]}-1))
+#        3dcalc -a ${FG_MASK}[${WHICH_VOL}] -expr a -prefix ${DIR_SCRATCH}/FG_MASK.nii.gz
+#        FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}.nii.gz
+#      fi
+#    fi
+#  done
+#fi
+
+#===============================================================================
+# check if all images in same space --------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>check if images in same space, if not try forcing"; fi
+FIELD_CHK="dim,pixdim,quatern_b,quatern_c,quatern_d,qoffset_x,qoffset_y,qoffset_z,srow_x,srow_y,srow_z"
+if [[ -n ${BG_MASK} ]]; then
+  unset SPACE_CHK
+  SPACE_CHK=$(niiCompare -i ${BG} -j ${BG_MASK} -f ${FIELD_CHK})
+  if [[ "${SPACE_CHK}" == "true" ]]; then
+    antsApplyTransforms -d 3 -n GenericLabel -i ${BG_MASK} -o ${BG_MASK} -r ${BG}
+  fi
+fi
+if [[ -n ${FG} ]]; then
+  for (( i=0; i<${#FG[@]}; i++ )); do
+    unset SPACE_CHK
+    SPACE_CHK=$(niiCompare -i ${BG} -j ${FG[${i}]} -f ${FIELD_CHK})
+    if [[ "${SPACE_CHK}" == "true" ]]; then
+      antsApplyTransforms -d 4 -e 3 -n Linear -i ${FG[${i}]} -o ${FG[${i}]} -r ${BG}
+    fi
+  done
+fi
+if [[ -n ${FG_MASK} ]]; then
+  for (( i=0; i<${#FG_MASK[@]}; i++ )); do
+    unset SPACE_CHK
+    SPACE_CHK=$(niiCompare -i ${FG[${i}]} -j ${FG_MASK[${i}]} -f ${FIELD_CHK})
+    if [[ "${SPACE_CHK}" == "true" ]]; then
+      antsApplyTransforms -d 3 -n GenericLabel -i ${FG_MASK[${i}]} -o ${FG_MASK[${i}]} -r ${BG}
+    fi
+  done
+fi
+if [[ -n ${ROI} ]]; then
+  unset SPACE_CHK
+  SPACE_CHK=$(niiCompare -i ${ROI} -j ${BG} -f ${FIELD_CHK})
+  if [[ "${SPACE_CHK}" == "true" ]]; then
+    antsApplyTransforms -d 3 -n MultiLabel -i ${ROI} -o ${ROI}.nii.gz -r ${BG}
+  fi
+fi
+
+## Push all to RAS orientation -------------------------------------------------
+if [[ ${NO_REORIENT} == "false" ]]; then
+  3dresample -orient RAS -overwrite -prefix ${BG} -input ${BG}
+  if [[ -n ${BG_MASK} ]]; then
+    3dresample -orient RAS -overwrite -prefix ${BG_MASK} -input ${BG_MASK}
+  fi
+  if [[ -n ${FG} ]]; then
+    for (( i=0; i<${#FG[@]}; i++ )); do
+      3dresample -orient RAS -overwrite -prefix ${FG[${i}]} -input ${FG[${i}]}
+    done
+  fi
+  if [[ -n ${FG_MASK} ]]; then
+    for (( i=0; i<${#FG_MASK[@]}; i++ )); do
+      3dresample -orient RAS -overwrite -prefix ${FG_MASK[${i}]} -input ${FG_MASK[${i}]}
+    done
+  fi
+  if [[ -n ${ROI} ]]; then
+    3dresample -orient RAS -overwrite -prefix ${ROI} -input ${ROI}
+  fi
+fi
+
+# make panel background ========================================================
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> generate panel background"; fi
+DX=${FG_DIMS[0]}; DY=${FG_DIMS[1]}; DZ=${FG_DIMS[2]}
+HT=${DY}; WD=${DX}
+if [[ ${PLANE} == "x" ]]; then HT=${DY}; WD=${DZ}; fi
+if [[ ${PLANE} == "y" ]]; then HT=${DX}; WD=${DZ}; fi
+SZ="${WD}x${HT}"
+for (( i=0; i<${NV}; i++ )); do
+  convert -size ${SZ} -resize ${SCALE} canvas:${COLOR_PANEL} ${DIR_SCRATCH}/PANEL.png
+done
+
+# Make Background ==============================================================
+## generate color bar
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> generate BG color bar"; fi
+## parse color input -----------------------------------------------------------
+unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
+TCLR=(${BG_COLOR//:/ })
+CLR_METHOD=${TCLR[0]}
+if [[ ${#TCLR[@]} -gt 1 ]]; then
+  for (( i=1; i<${#TCLR[@]}; i++ )); do
+   TMP=(${TCLR[${i}]//=/ })
+    case ${TMP[0]} in
+      hue | color) CLR_HUE=${TMP[1]} ;;
+      sat | saturation) CLR_SAT=${TMP[1]} ;;
+      lum | luminosity) CLR_LUM=${TMP[1]} ;;
+      cyc | cycles) CLR_CYC=${TMP[1]} ;;
+      dir | direction) CLR_DIR=${TMP[1]} ;;
+      flr | floor) CLR_FLR=${TMP[1]} ;;
+      rev | reverse) CLR_ORD="reverse" ;;
+      rnd | random) CLR_ORD="random" ;;
+      *) echo "Unknown color specification" ;;
+    esac
+  done
+fi
+clrfcn="makeColorBar --method ${CLR_METHOD}"
+if [[ -n ${CLR_HUE} ]]; then clrfcn="${clrfcn} --hue \"${CLR_HUE}\""; fi
+if [[ -n ${CLR_SAT} ]]; then clrfcn="${clrfcn} --saturation ${CLR_SAT}"; fi
+if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
+if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
+if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
+if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
+if [[ -n ${CLR_ORD} ]]; then clrfcn="${clrfcn} --order ${CLR_ORD}"; fi
+clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_BG.png"
+eval ${clrfcn}
+
+## generate slice PNGs ---------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>generate background slices"; fi
+if [[ -n ${BG_MASK} ]]; then
+  TMM=($(3dBrickStat -mask ${BG_MASK} -slow -perclist 2 ${BG_THRESH[0]//\%} ${BG_THRESH[1]//\%} ${BG}))
+else
+  TMM=($(3dBrickStat -slow -perclist 2 ${BG_THRESH[0]//\%} ${BG_THRESH[1]//\%} ${BG}))
+fi
+LO=${TMM[-2]}
+HI=${TMM[-1]}
+c3d ${BG} \
+  -clip ${LO} ${HI} \
+  -stretch ${LO} ${HI} 0 255 -type uchar \
+  -slice ${PLANE} ${SLICE} \
+  -o ${DIR_SCRATCH}/BG.png
+
+## COLORIZE and RESIZE background slices ---------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize background slices"; fi
+convert ${DIR_SCRATCH}/BG.png ${DIR_SCRATCH}/CBAR_BG.png -clut ${DIR_SCRATCH}/BG.png
+convert ${DIR_SCRATCH}/BG.png -resize ${SCALE} ${DIR_SCRATCH}/BG.png
+
+## Generate background masks ---------------------------------------------------
+if [[ -n ${BG_MASK} ]]; then
+  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>generate background mask slices"; fi
+  c3d ${BG_MASK} -stretch 0 1 0 255 \
+    -type uchar -slice ${PLANE} ${SLICE} \
+    -o ${DIR_SCRATCH}/BGMASK.png
+  convert ${DIR_SCRATCH}/BGMASK.png -resize ${SCALE} ${DIR_SCRATCH}/BGMASK.png
+fi
+
+## COMPOSITE BG on PANEL -------------------------------------------------------
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>composite background slices on panel"; fi
+unset comp_fcn
+comp_fcn="composite ${DIR_SCRATCH}/PANEL.png ${DIR_SCRATCH}/BG.png"
+if [[ -n ${BG_MASK} ]]; then comp_fcn="${comp_fcn} ${DIR_SCRATCH}/BGMASK.png"; fi
+comp_fcn="${comp_fcn} ${DIR_SCRATCH}/BG.png"
+eval ${comp_fcn}
+
+## add labels to color bar -----------------------------------------------------
+if [[ "${BG_CBAR}" == "true" ]]; then
+  ## get intensity range labels
+  c3d ${BG} -clip ${BG_THRESH[0]} ${BG_THRESH[1]} -o ${DIR_SCRATCH}/tmp.nii.gz
+  TRANGE=($(3dBrickStat -slow -min -max ${DIR_SCRATCH}/tmp.nii.gz))
+  LO=${TRANGE[1]}
+  HI=${TRANGE[3]}
+  # Flip Color Bar
+  convert ${DIR_SCRATCH}/CBAR_BG.png -flip ${DIR_SCRATCH}/CBAR_BG.png
+  # lower intensity label
+  text_fcn='TTXT=$(printf "%0.'${COLOR_DECIMAL}'f\n" ${LO})'
+  eval ${text_fcn}
+  convert -background "transparent" -fill ${COLOR_TEXT} \
+    -font ${FONT} -pointsize ${FONT_SIZE} \
+    caption:"${TTXT}" -rotate 90 ${DIR_SCRATCH}/LABEL_LO_BG.png
+  # upper intensity label
+  text_fcn='TTXT=$(printf "%0.'${COLOR_DECIMAL}'f\n" ${HI})'
+  eval ${text_fcn}
+  convert -background "transparent" -fill ${COLOR_TEXT} \
+    -font ${FONT} -pointsize ${FONT_SIZE} \
+    caption:"${TTXT}" -rotate 90 ${DIR_SCRATCH}/LABEL_HI_BG.png
+  # resize
+  TWD=$(echo "scale=0; ${WD} / 4" | bc -l)
+  THT=${HT}
+  if [[ ${NROW} -gt 1 ]]; then THT=$(echo "scale=0; ${HT} * 2" | bc -l); fi
+  convert ${DIR_SCRATCH}/CBAR_BG.png \
+    -resize "${TWD}x${THT}" -scale ${SCALE} ${DIR_SCRATCH}/CBAR_BG.png
+  # add labels above and below
+  montage ${DIR_SCRATCH}/LABEL_HI_BG.png \
+    ${DIR_SCRATCH}/CBAR_BG.png \
+    ${DIR_SCRATCH}/LABEL_LO_BG.png \
+    -tile 1x -geometry +0+0 -gravity center -background ${COLOR_PANEL} \
+    ${DIR_SCRATCH}/CBAR_BG.png
+fi
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>BG slice PNGS generated"; fi
+
+# Add Foreground Overlays ======================================================
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> generate FG layers"; fi
+for (( i=0; i<${#FG[@]}; i++ )); do
+  # get FG Limits --------------------------------------------------------------
+  TTHRESH=${FG_THRESH[${i}]//,/ }
+  if [[ ${TTHRESH[0]} == "0%" ]]; then
+    LO=($(3dBrickStat -slow -min ${FG[${i}]}))
+  else
+    c3d ${FG[${i}]} -clip ${TTHRESH[0]} inf -o ${DIR_SCRATCH}/tmp.nii.gz
+    LO=($(3dBrickStat -slow -min ${DIR_SCRATCH}/tmp.nii.gz ))
+  fi
+  if [[ ${TTHRESH[1]} == "100%" ]]; then
+    HI=($(3dBrickStat -slow -max ${FG[${i}]}))
+  else
+    c3d ${FG[${i}]} -clip -inf ${TTHRESH[1]} -o ${DIR_SCRATCH}/tmp.nii.gz
+    HI=($(3dBrickStat -slow -max ${DIR_SCRATCH}/tmp.nii.gz ))
+  fi
+  #### NEED TO ACCOUNT FOR MASKS SOMEHOW
+  echo "*****$LO $HI"
+  ## generate color bar
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> generate BG color bar"; fi
+  ## parse color input ---------------------------------------------------------
+  unset CLR_METHOD CLR_HUE CLR_SAT CLR_LUM CLR_CYC CLR_DIR CLR_FLR CLR_ORD
+  TCLR=(${FG_COLOR//:/ })
+  CLR_METHOD=${TCLR[0]}
+  if [[ ${#TCLR[@]} -gt 1 ]]; then
+    for (( i=1; i<${#TCLR[@]}; i++ )); do
+      TMP=(${TCLR[${i}]//=/ })
+      case ${TMP[0]} in
+        hue | color) CLR_HUE=${TMP[1]} ;;
+        sat | saturation) CLR_SAT=${TMP[1]} ;;
+        lum | luminosity) CLR_LUM=${TMP[1]} ;;
+        cyc | cycles) CLR_CYC=${TMP[1]} ;;
+        dir | direction) CLR_DIR=${TMP[1]} ;;
+        flr | floor) CLR_FLR=${TMP[1]} ;;
+        rev | reverse) CLR_ORD="reverse" ;;
+        rnd | random) CLR_ORD="random" ;;
+        *) echo "Unknown color specification" ;;
+      esac
+    done
+  fi
+  clrfcn="makeColorBar --method ${CLR_METHOD}"
+  if [[ -n ${CLR_HUE} ]]; then clrfcn="${clrfcn} --hue \"${CLR_HUE}\""; fi
+  if [[ -n ${CLR_SAT} ]]; then clrfcn="${clrfcn} --saturation ${CLR_SAT}"; fi
+  if [[ -n ${CLR_LUM} ]]; then clrfcn="${clrfcn} --luminosity ${CLR_LUM}"; fi
+  if [[ -n ${CLR_CYC} ]]; then clrfcn="${clrfcn} --cycles ${CLR_CYC}"; fi
+  if [[ -n ${CLR_DIR} ]]; then clrfcn="${clrfcn} --direction ${CLR_DIR}"; fi
+  if [[ -n ${CLR_FLR} ]]; then clrfcn="${clrfcn} --floor-color \"${CLR_FLR}\""; fi
+  if [[ -n ${CLR_ORD} ]]; then clrfcn="${clrfcn} --order ${CLR_ORD}"; fi
+  clrfcn="${clrfcn} --dir-save ${DIR_SCRATCH} --filename CBAR_FG${i}.png"
+  eval ${clrfcn}
+
+  ## generate slice PNGs ---------------------------------------------------------
+  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>generate foreground slices"; fi
+  #TLO=${TTHRESH[0]}
+  #THI=${TTHRESH[1]}
+  #if [[ ${TLO} == "0%" ]]; then TLO="-inf"; fi
+  #if [[ ${TLO} == "100%" ]]; then TLO="inf"; fi
+  c4d ${FG[${i}]} \
+    -clip ${LO} ${HI} \
+    -stretch ${LO} ${HI} 0 255 -type uchar \
+    -slice w "${VOLUMES}" \
+    -foreach -slice ${PLANE} ${SLICE} -endfor \
+    -oo ${DIR_SCRATCH}/FG${i}_%0d.png
+
+  ## COLORIZE and RESIZE foreground slices ---------------------------------------
+  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>colorize and resize foreground slices"; fi
+  TLS=($(ls ${DIR_SCRATCH}/FG${i}_*.png))
+  for (( j=0; j<${#TLS[@]}; j++ )); do
+    convert ${TLS[${j}]} ${DIR_SCRATCH}/CBAR_FG${i}.png -clut ${TLS[${j}]}
+    convert ${TLS[${j}]} -resize ${SCALE} ${TLS[${j}]}
+  done
+
+  ## Generate foreground masks ---------------------------------------------------
+  if [[ -z ${FG_MASK[${i}]} ]] || [[ "${FG_MASK[${i}]}" == "null" ]]; then
+    FG_MASK[${i}]=${DIR_SCRATCH}/FG_MASK_${i}.nii.gz
+    niimath ${FG[${i}]} -thr ${LO} -uthr ${HI} -bin ${FG_MASK[${i}]} -odt char
+  fi
+  if [[ -n ${FG_MASK[${i}]} ]]; then
+    if [[ "${VERBOSE}" == "true" ]]; then echo ">>>generate foreground mask slices"; fi
+    c3d ${FG_MASK[${i}]} -stretch 0 1 0 255 \
+      -type uchar -slice ${PLANE} ${SLICE} \
+      -o ${DIR_SCRATCH}/FGMASK${i}.png
+    convert ${DIR_SCRATCH}/FGMASK${i}.png -resize ${SCALE} ${DIR_SCRATCH}/FGMASK${i}.png
+  fi
+
+  ## COMPOSITE FG on BG --------------------------------------------------------
+  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>composite foreground slices on background"; fi
+  TLS=($(ls ${DIR_SCRATCH}/FG${i}_*.png))
+  for (( j=0; j<${#TLS[@]}; j++ )); do
+     composite -dissolve ${FG_ALPHA}% \
+        ${DIR_SCRATCH}/FG${i}_${j}.png \
+        ${DIR_SCRATCH}/BG.png \
+        ${DIR_SCRATCH}/FGMASK${i}.png \
+        ${DIR_SCRATCH}/V${j}.png
+  done
+
+  ## add labels to color bar -----------------------------------------------------
+  if [[ "${FG_CBAR}" == "true" ]]; then
+    # Flip Color Bar
+    convert ${DIR_SCRATCH}/CBAR_FG${i}.png -flip ${DIR_SCRATCH}/CBAR_FG${i}.png
+    # lower intensity label
+    text_fcn='TTXT=$(printf "%0.'${COLOR_DECIMAL}'f\n" ${LO})'
+    eval ${text_fcn}
+    convert -background "transparent" -fill ${COLOR_TEXT} \
+      -font ${FONT} -pointsize ${FONT_SIZE} \
+      caption:"${TTXT}" -rotate 90 ${DIR_SCRATCH}/LABEL_LO_FG${i}.png
+    # upper intensity label
+    text_fcn='TTXT=$(printf "%0.'${COLOR_DECIMAL}'f\n" ${HI})'
+    eval ${text_fcn}
+    convert -background "transparent" -fill ${COLOR_TEXT} \
+      -font ${FONT} -pointsize ${FONT_SIZE} \
+      caption:"${TTXT}" -rotate 90 ${DIR_SCRATCH}/LABEL_HI_FG${i}.png
+    # resize
+    TWD=$(echo "scale=0; ${WD} / 4" | bc -l)
+    THT=${HT}
+    if [[ ${NROW} -gt 1 ]]; then THT=$(echo "scale=0; ${HT} * 2" | bc -l); fi
+    convert ${DIR_SCRATCH}/CBAR_FG${i}.png \
+      -resize "${TWD}x${THT}" -scale ${SCALE} ${DIR_SCRATCH}/CBAR_FG${i}.png
+    # add labels above and below
+    montage ${DIR_SCRATCH}/LABEL_HI_FG${i}.png \
+      ${DIR_SCRATCH}/CBAR_FG${i}.png \
+      ${DIR_SCRATCH}/LABEL_LO_FG${i}.png \
+      -tile 1x -geometry +0+0 -gravity center -background ${COLOR_PANEL} \
+      ${DIR_SCRATCH}/CBAR_FG${i}.png
+  fi
+  if [[ "${VERBOSE}" == "true" ]]; then echo ">>>FG ${i} slice PNGS generated"; fi
+done
+if [[ "${VERBOSE}" == "true" ]]; then echo ">>>FG slice PNGS generated"; fi
+
+## LABELS ======================================================================
+# Add labels after FG and BGs are composited -----------------------------------
+if [[ "${LABEL_VOLUME,,}" == "time" ]]; then
+  TSTEP=$(niiInfo -i ${FG[0]} -f tr)
+  for (( j=0; j<${NV}; j++ )); do
+    TTIME=$(echo "scale=${LABEL_DECIMAL}; ${TSTEP} * ${VLS[${j}]}" | bc -l)
+    TTIME="${TTIME}s"
+    mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
+      -fill "${COLOR_TEXT}" -undercolor "transparent" \
+      -gravity South -annotate +0+0 "${TTIME}" \
+      ${DIR_SCRATCH}/V${j}.png
+  done
+elif [[ "${LABEL_VOLUME}" == "volume" ]]; then
+  for (( j=0; j<${NV}; j++ )); do
+    mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
+      -fill "${COLOR_TEXT}" -undercolor "transparent" \
+      -gravity South -annotate +0+0 "${VLS[${j}]}" \
+      ${DIR_SCRATCH}/V${i}.png
+  done
+fi
+
+# merge PNGs according to prescribed layout ====================================
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> combine slice images into montage"; fi
+LAYOUT=(${LAYOUT//;/ })
+COUNT=0
+for (( i=0; i<${NROW}; i++ )); do
+  montage_fcn="montage"
+  for (( j=0; j<${LAYOUT[${i}]}; j++ )); do
+    montage_fcn="${montage_fcn} ${DIR_SCRATCH}/V${COUNT}.png"
+    COUNT=$((${COUNT}+1))
+  done
+  montage_fcn="${montage_fcn} -tile x1"
+  montage_fcn="${montage_fcn} -geometry +0+0"
+  montage_fcn="${montage_fcn} -gravity center"
+  montage_fcn=${montage_fcn}' -background "'${COLOR_PANEL}'"'
+  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/image_row${i}.png"
+  eval ${montage_fcn}
+done
+
+FLS=($(ls ${DIR_SCRATCH}/image_row*.png))
+if [[ ${#FLS[@]} -gt 1 ]]; then
+  montage_fcn="montage ${DIR_SCRATCH}/image_row0.png"
+  for (( i=1; i<${#FLS[@]}; i++ )); do
+    montage_fcn="${montage_fcn} ${DIR_SCRATCH}/image_row${i}.png"
+  done
+  montage_fcn="${montage_fcn} -tile 1x"
+  montage_fcn="${montage_fcn} -geometry +0+0"
+  montage_fcn="${montage_fcn} -gravity center"
+  montage_fcn=${montage_fcn}' -background "'${COLOR_PANEL}'"'
+  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/image_col.png"
+  eval ${montage_fcn}
+else
+  mv ${DIR_SCRATCH}/image_row0.png ${DIR_SCRATCH}/image_col.png
+fi
+
+# add color bars ---------------------------------------------------------------
+unset CBAR_LS
+if [[ "${BG_CBAR}" == "true" ]]; then
+  CBAR_LS+=("${DIR_SCRATCH}/CBAR_BG.png")
+fi
+TLS=($(ls ${DIR_SCRATCH}/CBAR_FG*.png))
+TBOOL=(${FG_CBAR//;/ })
+for (( i=0; i<${#TLS[@]}; i++ )); do
+  if [[ "${FG_CBAR[${i}]}" == "true" ]]; then
+    CBAR_LS+=("${TLS[${i}]}")
+  fi
+done
+if [[ ${#CBAR_LS[@]} -gt 0 ]]; then
+  if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> add color bars"; fi
+  montage_fcn="montage ${DIR_SCRATCH}/image_col.png"
+  for (( i=0; i<${#CBAR_LS[@]}; i++ )); do
+    montage_fcn="${montage_fcn} ${CBAR_LS[${i}]}"
+  done
+  montage_fcn="${montage_fcn} -tile x1"
+  montage_fcn="${montage_fcn} -geometry +0+0"
+  montage_fcn="${montage_fcn} -gravity center"
+  montage_fcn=${montage_fcn}' -background "'${COLOR_PANEL}'"'
+  montage_fcn="${montage_fcn} ${DIR_SCRATCH}/${FILENAME}.png"
+  eval ${montage_fcn}
+else
+  mv ${DIR_SCRATCH}/image_col.png ${DIR_SCRATCH}/${FILENAME}.png
+fi
+
+# add laterality label if desired ----------------------------------------------
+if [[ "${LABEL_NO_LR}" == "false" ]]; then
+  TTXT="R"
+  mogrify -font ${FONT} -pointsize ${FONT_SIZE} \
+    -fill "${COLOR_TEXT}" -undercolor "transparent" \
+    -gravity SouthWest -annotate +10+10 "${TTXT}" \
+    ${DIR_SCRATCH}/${FILENAME}.png
+fi
+
+# move final png file ----------------------------------------------------------
+if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> save output image"; fi
+mv ${DIR_SCRATCH}/${FILENAME}.png ${DIR_SAVE}/
+
+# move optional outputs, slices and color bars ---------------------------------
+if [[ "${KEEP_SLICE}" == "true" ]]; then
+  for (( i=0; i<${NV}; i++ )); do
+    mv ${DIR_SCRATCH}/V${i}.png ${DIR_SAVE}/${FILENAME}_V${i}.png
+  done
+fi
+if [[ "${KEEP_CBAR}" == "true" ]]; then
+  rename CBAR ${FILENAME}_CBAR ${DIR_SCRATCH}/*.png
+  mv {DIR_SCRATCH}/${FILENAME}_CBAR*.png ${DIR_SAVE}/
+fi
+
+#-------------------------------------------------------------------------------
+# End of Function
+#-------------------------------------------------------------------------------
+exit 0
+
