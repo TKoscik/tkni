@@ -258,15 +258,12 @@ if [[ "${NO_PNG}" == "false" ]]; then
       FLS=($(ls ${DIR_RAW}/${j}/*.nii.gz))
       for (( i=0; i<${#FLS[@]}; i++ )); do
         BG=${FLS[${i}]}
-        echo ">>>>>>${j} - making PNG"
-        echo ">>>>>>${BG}"
         TPNG="${BG%%.*}.png"
         DAT=$(niiInfo -i ${BG} -f datatype)
+        echo -e ">>>>>>making png\n\t$BG"
         if [[ ${DAT} -ne 128 ]]; then
           if [[ ! -f ${TPNG} ]]; then
             NVOL=$(niiInfo -i ${BG} -f "volumes")
-            echo ${BG}
-            echo -e "\t#Vols: ${NVOL}"
             if [[ ${j} == "dwi" ]] || [[ ${j} == "func" ]]; then
               if [[ ${NVOL} -eq 1 ]]; then
                 echo -e "\t3D"
