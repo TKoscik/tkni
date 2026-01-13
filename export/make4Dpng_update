@@ -632,7 +632,7 @@ if [[ "${VERBOSE}" == "true" ]]; then echo ">>>BG slice PNGS generated"; fi
 if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> generate FG layers"; fi
 for (( i=0; i<${#FG[@]}; i++ )); do
   # get FG Limits --------------------------------------------------------------
-  TTHRESH=${FG_THRESH[${i}]//,/ }
+  TTHRESH=(${FG_THRESH[${i}]//,/ })
   if [[ ${TTHRESH[0]} == "0%" ]]; then
     LO=($(3dBrickStat -slow -min ${FG[${i}]}))
   else
