@@ -276,6 +276,7 @@ if [[ "${NO_PNG}" == "false" ]]; then
               montage_fcn="${montage_fcn} -tile 1x -geometry +0+0 -gravity center"
               montage_fcn=${montage_fcn}' -background "#FFFFFF"'
               montage_fcn="${montage_fcn} ${TPNG}"
+              eval ${montage_fcn}
             elif [[ ${NVOL} -le 100 ]]; then
               make4Dpng_update --fg ${BG}
             elif [[ ${NVOL} -le 250 ]]; then
