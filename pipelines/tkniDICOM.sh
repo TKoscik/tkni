@@ -271,20 +271,12 @@ if [[ "${NO_PNG}" == "false" ]]; then
               if [[ ${NVOL} -eq 1 ]]; then
                 echo -e "\t3D"
                 make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
+              elif [[ ${NVOL} -le 100 ]];
+                make4Dpng_update --fg ${BG}
+              elif [[ ${NVOL} -le 250 ]];
+                make4Dpng_update --fg ${BG} --volumes "0:2:${NVOL}"
               else
-                echo -e "\t4D"
-                N10=$((${NVOL} / 10))
-                N1=$(($((${NVOL} % 10)) - 1))
-                if [[ ${N10} -gt 0 ]]; then
-                  TLAYOUT="10"
-                  for (( i=1; i<${N10}; i++ )) { TLAYOUT="${TLAYOUT};10"; }
-                  if [[ ${N1} -gt 0 ]]; then TLAYOUT="${TLAYOUT};${N1}"; fi
-                else
-                  TLAYOUT=${N1};
-                fi
-                make4Dpng --fg ${BG} \
-                  --fg-alpha 100 --fg-thresh "2.5,97.5" \
-                  --layout "${TLAYOUT}" --max-pixels 200
+                make4Dpng_update --fg ${BG} --volumes "0:5:${NVOL}"
               fi
             else
               if [[ ${NVOL} -eq 1 ]]; then
@@ -302,14 +294,7 @@ if [[ "${NO_PNG}" == "false" ]]; then
                 eval ${montage_fcn}
                 rm ${DIR_SCRATCH}/vol*.png
               else
-                TLAYOUT="10"
-                N10=$((${NVOL} / 10))
-                N1=$(($((${NVOL} % 10)) - 1))
-                for (( i=1; i<${N10}; i++ )) { TLAYOUT="${TLAYOUT};10"; }
-                if [[ ${N1} -gt 0 ]]; then TLAYOUT="${TLAYOUT};${N1}"; fi
-                 make4Dpng --fg ${BG} \
-                   --fg-alpha 100 --fg-thresh "2.5,97.5" \
-                   --layout "${TLAYOUT}"
+                 make4Dpng_update --fg ${BG}
               fi
             fi
           fi

@@ -73,13 +73,11 @@ maxIntensity <- max(as.vector(intensity), na.rm=T)
 
 # compare touching labels (face sharing) ---------------------------------------
 nn <- t(matrix(c(-1,0,0,0,-1,0,0,0,-1,1,0,0,0,1,0,0,0,1), nrow=3))
-new.labels <- numeric(n.labels)
 
-#init.nii(nii.save, dims=img.dims, pixdim=pixdim, orient=orient)
+# initialize save file ---------------------------------------------------------
+init.nii(nii.save, dims=img.dims, pixdim=pixdim, orient=orient)
 for (i in 1:n.labels) {
   DO.WRITE <- FALSE
-  if (new.labels[i] == 0) { new.labels[i] <- i }
-  wrklab <- new.labels[i]
   idx1 <- matrix(which(segmentation==labels[i], arr.ind=TRUE), ncol=3)
   if (nrow(idx1) == 0) { next }
   vals1 <- intensity[idx1]
@@ -91,11 +89,11 @@ for (i in 1:n.labels) {
   for (j in 1:nrow(nn)) {
     tidx <- cbind(idx1[,1]+nn[j,1], idx1[,2]+nn[j,2], idx1[,3]+nn[j,3])
     gidx <- (tidx[,1] <= img.dims[1]) * (tidx[,2] <= img.dims[2]) * (tidx[,3] <= img.dims[3])
-    tidx <- tidx[gidx, ]
+    tidx <- tidx[gidx==1, ]
     tlab <- c(tlab, unique(as.vector(segmentation[tidx])))
   }
-  tlab <- sort(unique(tlab))[-1]
-  tlab <- tlab[-which(tlab==wrklab)]
+  tlab <- sort(unique(tlab))
+  tlab <- tlab[!(tlab %in% c(0, labels[i]))]
   # identify PDF overlap ------
   if (length(tlab) > 0) {
     for (j in 1:length(tlab)) {
@@ -108,9 +106,9 @@ for (i in 1:n.labels) {
       min.pdf <- function(x) { pmin(pdf1(x), pdf2(x))}
       toverlap <- integrate(min.pdf, lower=0, upper=maxIntensity)$value
       if (toverlap > overlap.threshold) {
-        new.labels[j] <- wrklab
-        segmentation[idx2] <- wrklab
+        segmentation[idx2] <- labels[i]
         DO.WRITE <- TRUE
+        print(sprintf("replace %d with %d, overlap=%f", tlab[j], labels[i], toverlap))
       }
     }
   }
@@ -118,7 +116,6 @@ for (i in 1:n.labels) {
     print("writing")
     write.nii.volume(nii.save, 1, segmentation)
   }
-  print(sprintf("Done with label %d", i))
 }
 
 # save output ------------------------------------------------------------------
