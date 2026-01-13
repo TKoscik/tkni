@@ -268,9 +268,9 @@ if [[ "${NO_PNG}" == "false" ]]; then
               if [[ ${NVOL} -eq 1 ]]; then
                 echo -e "\t3D"
                 make3Dpng --bg ${BG} --bg-threshold "2.5,97.5" --verbose
-              elif [[ ${NVOL} -le 100 ]];
+              elif [[ ${NVOL} -le 100 ]]; then
                 make4Dpng_update --fg ${BG}
-              elif [[ ${NVOL} -le 250 ]];
+              elif [[ ${NVOL} -le 250 ]]; then
                 make4Dpng_update --fg ${BG} --volumes "0:2:${NVOL}"
               else
                 make4Dpng_update --fg ${BG} --volumes "0:5:${NVOL}"
