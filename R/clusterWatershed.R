@@ -27,16 +27,19 @@ for (i in seq(1,length(args))) {
 }
 
 # load libraries ---------------------------------------------------------------
-requires("nifti.io")
-requires("data.table")
-requires("tools")
+require("nifti.io")
+require("data.table")
+require("tools")
+require("future.apply")
 
 # parse inputs -----------------------------------------------------------------
 ## check nii NOT nii.gz
-if (has_extension(nii.distance, "gz")) {
+if (file_ext(nii.distance) == "gz") {
+#if (has_extension(nii.distance, "gz")) {
   stop("ERROR [TKNI:clusterWatershed.R] Distance NII file must be decompressed.")
 }
-if (has_extension(nii.mask, "gz")) {
+if (file_ext(nii.mask) == "gz") {
+#if (has_extension(nii.mask, "gz")) {
   stop("ERROR [TKNI:clusterWatershed.R] ROI mask NII file must be decompressed.")
 }
 if (dir.save == "default") {dir.save <- dirname(nii.distance)}
@@ -45,7 +48,8 @@ if (nii.save == "default") {
   TPFX <- unlist(strsplit(TBASE, split="_"))
   nii.save <- paste0(TPFX[-length(TPFX)], "segmentation.nii", collapse="_")
 }
-if (has_extension(nii.save, "gz")) {
+if (file_ext(nii.save) == "gz") {
+#if (has_extension(nii.save, "gz")) {
   stop("ERROR [TKNI:clusterWatershed.R] Desired NII save file must not be compressed.")
 }
 
@@ -53,7 +57,7 @@ if (has_extension(nii.save, "gz")) {
 voxel.size <- info.nii(nii.distance, "spacing")
 if (grepl("vox", altitude)) {
   altitude <- as.numeric(unlist(strsplit(altitude, "vox"))[1]) * min(voxel.size)
-} else
+} else {
   altitude <- as.numeric(altitude)
 }
 if (grepl("vox", datum)) {
@@ -123,7 +127,7 @@ write.nii.volume(nii.save, 1, connected)
 rm("volume");   gc()
 
 # Fill in labels from core edges ---------------------------------------------
-## move 1 voxel of a boundary, add if they are touching a label
+# move 1 voxel of a boundary, add if they are touching a label
 label.xyz <- as.data.table(which(connected>0, arr.ind=T))
 blank.xyz <- as.data.table(which(dist<altitude & dist>=datum, arr.ind=TRUE))
 nn <- t(matrix(c(-1,0,0,0,-1,0,0,0,-1,1,0,0,0,1,0,0,0,1), nrow=3))
@@ -159,7 +163,8 @@ write.nii.volume(nii.save, 1, connected)
 # Add small clusters with sub-datum peaks ------------------------------------
 if (nrow(blank.xyz) > 0) {
   small.labels <- array(0, dim=img.dims[1:3])
-  small.blobs <- (dist<distance.thresh & dist>=datum & connected==0) * 1
+  #small.blobs <- (dist<distance.thresh & dist>=datum & connected==0) * 1
+  small.blobs <- (dist>=datum & connected==0) * 1
   idx <- numeric()
   for (x in 1:img.dims[1]) {
     for (y in 1:img.dims[2]) {

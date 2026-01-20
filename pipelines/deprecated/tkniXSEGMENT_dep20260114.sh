@@ -6,16 +6,19 @@
 # DESCRIPTION:   Re-cleaning UHR images using manual brain mask, additional
 #                processing and intermediates for segmentation, Laplacian of the
 #                Gaussian-based Watershed segmentation and refinement.
-# PROCESS:       1) Anisotropic Smooth
-#                2) Calculate Difference of Gaussians
+# PROCESS:       1) Additional N4 Debiasing
+#                2) Additional Rician Denoising
+#                3) Threshold, Stretch, Mask, convert to SHORT
+#                4) Anisotropic Smooth
+#                5) Calculate Difference of Gaussians
 #                   -default using K=1.6 to approximate the Laplacian of the
 #                    Gaussian
 #                   -k=5 might be a reasonable value as well which may
 #                    approximate retinal ganglion cells
 #                   -output zero-crossings
-#                3) Calculate the Signed Distance Transform to the the zero-
+#                6) Calculate the Signed Distance Transform to the the zero-
 #                   crossings
-#                4) Watershed Clustering
+#                7) Watershed Clustering
 #                   -threshold at desired "altitude" to produce non-connected
 #                    clusters, default is >= 2 voxels from DoG zero-crossing
 #                   -generate clusters with 6-neighbor connectivity
@@ -23,16 +26,13 @@
 #                    crossing
 #                   -add smaller peaks that do not reach initial separating
 #                    altitude
-#                5) Merge clusters, touching neighbors with significantly
+#                8) Merge clusters, touching neighbors with significantly
 #                   overlapping intensity probability distribution functions
 # AUTHOR:        Timothy R. Koscik, PhD
 # DATE CREATED:  2025-08-08
 # README:
-# DATE MODIFIED: 2026-01-14
-# CHANGELOG:     [20260114]
-#                  -harmonized with updates from XINIT, i.e., additional
-#                   preprocessing is no longer needed.
-#                  -updated with newer PDF merge function.
+# DATE MODIFIED:
+# CHANGELOG:
 #===============================================================================
 PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
 FCN_NAME=($(basename "$0"))
@@ -70,7 +70,10 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
 id:,dir-id:,id-field:,\
-image:,mask:,\
+image:,mask:,dir-xinit:,\
+debias-resample:,debias-bspline:,debias-shrink:,debias-convergence:,debias-histmatch:\
+denoise-model:,denoise-shrink:,denoise-patch:,denoise-radius:,\
+rescale-lo-pct:,rescale-hi-pct:,rescale-lo-val:,rescale-hi-val:,stretch-lo:,stretch-hi:,\
 aniso-conductance:,aniso-iter:,\
 dog_g1:,dog_k:,\
 altitude:,datum:,no-merge,pdf-overlap:,\
@@ -92,6 +95,24 @@ IDFIELD="pid,ses"
 
 IMAGE=
 MASK=
+DIR_XINIT=
+
+N4_RESAMPLE=1
+N4_BSPLINE="[200,3]"
+N4_SHRINK=32
+N4_CONVERGENCE="[50x50x50x50,0.0]"
+N4_HISTMATCH="[0.15,0.01,200]"
+DN_MODEL="Rician"
+DN_SHRINK=1
+DN_PATCH=1
+DN_RADIUS=2
+
+RESCALE_LO_PCT=0.1
+RESCALE_HI_PCT=99.9
+RESCALE_LO_VAL=
+RESCALE_HI_VAL=
+STRETCH_LO=1000
+STRETCH_HI=21000
 
 SMOOTH_CONDUCTANCE=0.5
 SMOOTH_ITER=20
@@ -104,7 +125,7 @@ DATUM="1vox"
 CONNECTIVITY=6
 
 NO_MERGE="false"
-PDF_OVERLAP=0.85
+PDF_OVERLAP=0.25
 
 DIR_SAVE=
 DIR_SCRATCH=
@@ -136,6 +157,21 @@ while true; do
     --id-field) IDFIELD="$2" ; shift 2 ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --mask) MASK="$2" ; shift 2 ;;
+    --debias-resample) N4_RESAMPLE="$2" ; shift 2 ;;
+    --debias-bspline) N4_BSPLINE="$2" ; shift 2 ;;
+    --debias-shrink) N4_SHRINK="$2" ; shift 2 ;;
+    --debias-convergence) N4_CONVERGENCE="$2" ; shift 2 ;;
+    --debias-histmatch) N4_HISTMATCH="$2" ; shift 2 ;;
+    --denoise-model) DN_MODEL="$2" ; shift 2 ;;
+    --denoise-shrink) DN_SHRINK="$2" ; shift 2 ;;
+    --denoise-patch) DN_PATCH="$2" ; shift 2 ;;
+    --denoise-radius) DN_RADIUS="$2" ; shift 2 ;;
+    --rescale-lo-pct) RESCALE_LO_PCT="$2" ; shift 2 ;;
+    --rescale-hi-pct) RESCALE_HI_PCT="$2" ; shift 2 ;;
+    --rescale-lo-val) RESCALE_LO_VAL="$2" ; shift 2 ;;
+    --rescale-hi-val) RESCALE_HI_VAL="$2" ; shift 2 ;;
+    --stretch-lo) STRETCH_LO="$2" ; shift 2 ;;
+    --stretch-hi) STRETCH_HI="$2" ; shift 2 ;;
     --aniso-conductance) SMOOTH_CONDUCTANCE="$2" ; shift 2 ;;
     --aniso-iter) SMOOTH_ITER="$2" ; shift 2 ;;
     --dog_g1) DOG_G1="$2" ; shift 2 ;;
@@ -169,6 +205,21 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  --id-field'
   echo '  --image'
   echo '  --mask-brain'
+  echo '  --debias-resample'
+  echo '  --debias-bspline'
+  echo '  --debias-shrink'
+  echo '  --debias-convergence'
+  echo '  --debias-histmatch'
+  echo '  --denoise-model'
+  echo '  --denoise-shrink'
+  echo '  --denoise-patch'
+  echo '  --denoise-radius'
+  echo '  --rescale-lo-pct'
+  echo '  --rescale-hi-pct'
+  echo '  --rescale-lo-val'
+  echo '  --rescale-hi-val'
+  echo '  --stretch-lo'
+  echo '  --stretch-hi'
   echo '  --aniso-conductance'
   echo '  --aniso-iter'
   echo '  --dog_g1'
@@ -178,16 +229,19 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  --no-merge'
   echo ''
   echo 'Procedure: '
-  echo '(1) Anisotropic Smooth'
-  echo '(2) Calculate Difference of Gaussians'
+  echo '(1) Additional N4 Debiasing'
+  echo '(2) Additional Rician Denoising'
+  echo '(3) Threshold, Stretch, Mask, convert to SHORT'
+  echo '(4) Anisotropic Smooth'
+  echo '(5) Calculate Difference of Gaussians'
   echo '    -default using K=1.6 to approximate the Laplacian of the'
   echo '     Gaussian'
   echo '    -k=5 might be a reasonable value as well which may'
   echo '     approximate retinal ganglion cells'
   echo '    -output zero-crossings'
-  echo '(3) Calculate the Signed Distance Transform to the the zero-'
+  echo '(6) Calculate the Signed Distance Transform to the the zero-'
   echo '    crossings'
-  echo '(4) Watershed Clustering'
+  echo '(7) Watershed Clustering'
   echo '    -threshold at desired "altitude" to produce non-connected'
   echo '     clusters, default is >= 2 voxels from DoG zero-crossing'
   echo '    -generate clusters with 6-neighbor connectivity'
@@ -195,7 +249,7 @@ if [[ "${HELP}" == "true" ]]; then
   echo '     crossing'
   echo '    -add smaller peaks that do not reach initial separating'
   echo '     altitude'
-  echo '(5) Merge clusters, touching neighbors with significantly'
+  echo '(8) Merge clusters, touching neighbors with significantly'
   echo '    overlapping intensity probability distribution functions'
   echo ''
   NO_LOG=true
@@ -284,28 +338,32 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Default save directory -------------------------------------------------------
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/label/xsegment
-fi
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
 
 # Locate Inputs ----------------------------------------------------------------
 if [[ -z ${IMAGE} ]]; then
-  IMAGE=($(ls ${DIR_PROJECT}/derivatives/${PIPE}/anat/native/${IDPFX}*swi.nii.gz))
+  if [[ -z ${DIR_XINIT} ]]; then
+    DIR_XINIT="${DIR_PROJECT}/derivatives/tkni/xinit/base"
+  fi
+  IMAGE=($(ls ${DIR_XINIT}/${IDPFX}*swi.nii.gz))
 else
   IMAGE=(${IMAGE//,/ })
 fi
 NIMG=${#IMAGE[@]}
 
 if [[ -z ${MASK} ]]; then
+  if [[ -z ${DIR_XINIT} ]]; then
+    DIR_XINIT="${DIR_PROJECT}/derivatives/tkni/xinit/base"
+  fi
   for (( i=0; i<${NIMG}; i++ )); do
     TPFX=$(getBidsBase -i ${IMAGE[${i}]} -s)
-    MASK="${MASK},${DIR_PROJECT}/derivatives/tkni/anat/mask/${TPFX}_mask-brain.nii.gz"
+    MASK+=("${DIR_PROJECT}/derivatives/tkni/xinit/base/${TPFX}_mask-brain.nii.gz")
   done
+else
+  MASK=(${MASK//,/ })
 fi
-MASK=(${MASK//,/ })
-
 for (( i=0; i<${NIMG}; i++ )); do
-  if [[ ! -f ${MASK[${i}]} ]]; then
+  if [[! -f ${MASK[${i}]} ]]; then
     echo "ERROR [${PIPE}:${FLOW}] Brain Mask Specified Input file not found"
     echo -e "\t${MASK[${i}]}"
     exit 2
@@ -340,24 +398,48 @@ fi
 
 ## Start loop over images ======================================================
 for (( i=0; i<${NIMG}; i++ )); do
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>processing image $((${i} + 1)) of ${NIMG}"; fi
   PFX=$(getBidsBase -i ${IMAGE[${i}]} -s)
   IMG=${DIR_SCRATCH}/${PFX}_swi.nii.gz
   MSK=${DIR_SCRATCH}/${PFX}_mask-brain.nii.gz
 
   # Copy files to scratch ------------------------------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>copying files to scratch"; fi
   cp ${IMAGE[${i}]} ${IMG}
   cp ${MASK[${i}]} ${MSK}
 
-  # (1) Anisotropic Smooth -----------------------------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>anisotropic smoothing"; fi
-  c3d ${IMG} \
-    -ad ${SMOOTH_CONDUCTANCE} ${SMOOTH_ITER} \
-    -o ${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz
+  # (1) Debias -----------------------------------------------------------------
+  N4BiasFieldCorrection -d 3 \
+    -r ${N4_RESAMPLE} -s ${N4_SHRINK} -c ${N4_CONVERGENCE} -b ${N4_BSPLINE} \
+    -i ${IMG} -x ${MSK} -o ${DIRTMP}/temp_image.nii.gz
 
-  # (2) Calculate Difference of Gaussians --------------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>calculating difference of gaussians"; fi
+  # (2) Denoise ----------------------------------------------------------------
+  DenoiseImage -d 3 \
+    -n ${HI_DN_MODEL} -s ${HI_DN_SHRINK} -p ${HI_DN_PATCH} -r ${HI_DN_RADIUS} \
+    -i ${DIRTMP}/temp_image.nii.gz -x ${MSK} -o ${IMG}
+
+  # (3) Threshold, Stretch, Mask, convert to SHORT -----------------------------
+  IMLO=${RESCALE_LO_VAL}
+  if [[ -n ${IMLO} ]]; then
+    IMLO=($(3dBrickStat -mask ${MSK} -slow -perclist 1 ${RESCALE_LO_PCT} ${OUT}))
+    IMLO=${IMLO[1]}
+  fi
+  IMHI=${RESCALE_HI_VAL}
+  if [[ -n ${IMHI} ]]; then
+    IMHI=($(3dBrickStat -mask ${MSK} -slow -perclist 1 ${RESCALE_HI_PCT} ${OUT}))
+    IMHI=${IMHI[1]}
+  fi
+  c3d ${IMG} -stretch ${IMLO} ${IMHI} 1000 21000 -type ushort -o ${IMG}
+  niimath ${IMG} -mas ${MSK} -uthr 50000 ${IMG}
+
+  # Copy preprocessed image and brain mask as native anat output ---------------
+  mkdir -p ${DIR_SAVE}/native
+  mkdir -p ${DIR_SAVE}/mask
+  cp ${IMG} ${DIR_SAVE}/native/
+  cp ${MSK} ${DIR_SAVE}/mask/
+
+  # (4) Anisotropic Smooth -----------------------------------------------------
+  c3d ${IMG} -ad ${SMOOTH_CONDUCTANCE} ${SMOOTH_ITER} -o ${DIR_SCRATCH}/tmp_smooth.nii.gz
+
+  # (5) Calculate Difference of Gaussians --------------------------------------
   if [[ ${DOG_G1} -eq 0 ]]; then
     TSZ=($(niiInfo -i ${IMG} -f space))
     SZ=${TSZ[1]}
@@ -365,63 +447,47 @@ for (( i=0; i<${NIMG}; i++ )); do
     if [[ $(echo "${SZ} > ${TSZ[3]}" | bc) -eq 1 ]]; then SZ=${TSZ[3]}; fi
     DOG_G2=$(echo "scale=6; ${SZ} * ${DOG_K}" | bc -l)
   fi
-  niimath ${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz \
+  niimath ${DIR_SCRATCH}/tmp_smooth.nii.gz \
     -dog ${DOG_G1} ${DOG_G2} -mas ${MSK} \
-    ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz
+    ${DIR_SCRATCH}/tmp_dog.nii.gz
 
   # (6) Calculate the Signed Distance Transform --------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>calculating signed distance transform"; fi
-  c3d ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz -sdt \
-    -o ${DIR_SCRATCH}/${PFX}_distance.nii.gz
-
-  # Identify extrema in distance -----------------------------------------------
-  # Find local maxima, and convert to numbered labels
-  3dExtrema -prefix ${DIR_SCRATCH}/${PFX}_maxima.nii.gz \
-    -mask_file ${MSK} \
-    -sep_dist 0 \
-    -maxima -partial -closure -volume -average \
-    pid-ARO24001_ses-20250325_acq-161x161x400um_distance.nii
-  c3d ${DIR_SCRATCH}/${PFX}_maxima.nii.gz -binarize -comp -o ${DIR_SCRATCH}/${PFX}_maxima.nii.gz
+  c3d ${DIR_SCRATCH}/tmp_dog.nii.gz -sdt -o ${DIR_SCRATCH}/tmp_distance.nii.gz
 
   # Unzip files for processing with nifti.io in R ------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>unzipping files for R processing"; fi
-  gunzip ${DIR_SCRATCH}/${PFX}_maxima.nii.gz
-  gunzip ${DIR_SCRATCH}/${PFX}_distance.nii.gz
-  gunzip ${IMG}; gunzip ${MSK}
+  gunzip ${DIR_SCRATCH}/tmp_distance.nii.gz
+  gunzip ${MSK}
 
-  # Flood Watersheds -----------------------------------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>flooding watersheds"; fi
-  Rscript ${TKNIPATH}/R/floodWatershed.R \
-    "extrema" "${DIR_SCRATCH}/${PFX}_maxima.nii" \
-    "value" "${DIR_SCRATCH}/${PFX}_distance.nii" \
+  # (7) Watershed Clustering ---------------------------------------------------
+  Rscript ${TKNIPATH}/R/clusterWatershed.R \
+    "distance" "${DIR_SCRATCH}/tmp_distance.nii" \
     "mask" "${DIR_SCRATCH}/${PFX}_mask-brain.nii" \
-    "datum" 0 "connectivity" "18" \
+    "connectivity" "${CONNECTIVITY}" \
+    "altitude" "${ALTITUDE}" \
+    "datum" "${DATUM}" \
     "dir-save" "${DIR_SCRATCH}" \
-    "filename" "${PFX}_label-xsegment.nii"
-  ## (7) Watershed Clustering ---------------------------------------------------
-  #Rscript ${TKNIPATH}/R/clusterWatershed.R \
-  #  "distance" "${DIR_SCRATCH}/${PFX}_distance.nii" \
-  #  "mask" "${DIR_SCRATCH}/${PFX}_mask-brain.nii" \
-  #  "connectivity" "${CONNECTIVITY}" \
-  #  "altitude" "${ALTITUDE}" \
-  #  "datum" "${DATUM}" \
-  #  "dir-save" "${DIR_SCRATCH}" \
-  #  "filename" "${PFX}_label-xsegment.nii"
+    "filename" "${PFX}_segmentation.nii"
+  mkdir -p ${DIR_SAVE}/label
+  cp ${DIR_SCRATCH}/${PFX}_segmentation.nii ${DIR_SAVE}/label/
+  gzip ${DIR_SAVE}/label/${PFX}_segmentation.nii
 
   # (8) Merge clusters, touching neighbors with significantly ------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>merging based on PDF overlap"; fi
   if [[ ${NO_MERGE} == "false" ]]; then
-    Rscript ${TKNIPATH}/R/clusterPDFmerge_gemini.R \
-      "intensity" "${DIR_SCRATCH}/${PFX}_swi.nii" \
-      "segmentation" "${DIR_SCRATCH}/${PFX}_label-xsegment.nii" \
+    Rscript ${TKNIPATH}/R/clusterPDFmerge.R \
+      "intensity" ${IMG} \
+      "segmentation" "${DIR_SCRATCH}/${PFX}_segmentation.nii" \
       "overlap" "${PDF_OVERLAP}" \
       "dir-save" "${DIR_SCRATCH}" \
-      "filename" "${PFX}_label-xsegment+merge.nii"
+      "filename" "${PFX}_segmentation+pdfmerge.nii"
+    mkdir -p ${DIR_SAVE}/label
+    cp ${DIR_SCRATCH}/${PFX}_segmentation+pdfmerge.nii ${DIR_SAVE}/label/
+    gzip ${DIR_SAVE}/label/${PFX}_segmentation+pdfmerge.nii
   fi
 
   # generate HTML QC report ------------------------------------------------------
   if [[ "${NO_RMD}" == "false" ]]; then
-    DIM=($(niiInfo -i ${IMG} -f "voxels"))
+    BIMG=${DIR_SAVE}/native/${PFX}_swi.nii.gz
+    DIM=($(niiInfo -i ${BIMG} -f "voxels"))
     if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
     if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
     if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
@@ -430,53 +496,30 @@ for (( i=0; i<${NIMG}; i++ )); do
 
     echo '### *${PFX}_swi.nii.gz*' >> ${RMD}
     echo '#### Cleaned Native Anatomical Image' >> ${RMD}
-    BNAME=$(basename ${IMG})
-    FNAME=${IMG//\.nii\.gz}
-    make3Dpng --bg ${IMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}"
+    BNAME=$(basename ${BIMG})
+    FNAME=${BIMG//\.nii\.gz}
+    make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}"
     echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
 
     echo '#### Watershed Segmentation' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz
+    TIMG=${DIR_SAVE}/label/${PFX}_segmentation.nii.gz
     BNAME=$(basename ${TIMG})
     FNAME=${TIMG//\.nii\.gz}
     make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
       --fg ${TIMG} --fg-color "timbow:random" --fg-cbar "false" --fg-alpha 50 \
-      --dir.save ${DIR_SCRATCH} --filename ${FNAME}
+      --dir.save ${DIR_SAVE}/label --filename ${FNAME}
     echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
 
     if [[ ${NO_MERGE} == "false" ]]; then
-      echo '#### PDF Merged Segmentation' >> ${RMD}
-      TIMG=${DIR_SCRATCH}/${PFX}_label-watershed+merge.nii.gz
+      echo '#### PDF Merged Segementation' >> ${RMD}
+      TIMG=${DIR_SAVE}/label/${PFX}_segmentation+pdfmerge.nii.gz
       BNAME=$(basename ${TIMG})
       FNAME=${TIMG//\.nii\.gz}
       make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
         --fg ${TIMG} --fg-color "timbow:random" --fg-cbar "false" --fg-alpha 50 \
-        --dir.save ${DIR_SCRATCH} --filename ${FNAME}
+        --dir.save ${DIR_SAVE}/label --filename ${FNAME}
       echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
     fi
-
-    echo '#### Processing Steps {.tabset}' >> ${RMD}
-    echo '##### Click to View ->' >> ${RMD}
-    echo '##### Anisotropic Smoothing' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz
-    BNAME=$(basename ${TIMG})
-    FNAME=${TIMG//\.nii\.gz}
-    make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
-
-    echo '##### Difference of Gaussians' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz
-    BNAME=$(basename ${TIMG})
-    FNAME=${TIMG//\.nii\.gz}
-    make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
-
-    echo '##### Signed Distance Transform' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_distance.nii.gz
-    BNAME=$(basename ${TIMG})
-    FNAME=${TIMG//\.nii\.gz}
-    make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
   fi
 done
 

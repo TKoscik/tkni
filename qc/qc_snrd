@@ -38,7 +38,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,mask:,fg:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,frame:,bg:,fg:,dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -48,7 +48,8 @@ eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
 IMAGE=
-MASK=
+FRAME=
+BG=
 FG=
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
@@ -60,7 +61,8 @@ while true; do
     -v | --verbose) VERBOSE=1 ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
-    --mask) MASK="$2" ; shift 2 ;;
+    --frame) FRAME="$2" ; shift 2 ;;
+    --bg) BG="$2" ; shift 2 ;;
     --fg) FG="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -102,20 +104,32 @@ fi
 #===============================================================================
 # Start of Function
 #===============================================================================
+# setup temporary files and paths ----------------------------------------------
 mkdir -p ${DIR_SCRATCH}
+MASK_FG=${DIR_SCRATCH}/MASK_FG.nii.gz
+MASK_BG=${DIR_SCRATCH}/MASK_BG.nii.gz
+MASK_FRAME=${DIR_SCRATCH}/MASK_FRAME.nii.gz
 
-if [[ -z ${MASK} ]]; then
-  MASK=${DIR_SCRATCH}/MASK_FG.nii.gz
-  niimath ${FG} -bin ${MASK}
+# copy / make masks ------------------------------------------------------------
+cp ${FG} ${MASK_FG}
+if [[ -z ${BG} ]]; then
+  niimath ${MASK_FG} -binv ${MASK_BG} -odt char
 else
-  MASK=${FG}
+  cp ${BG} ${MASK_BG}
+fi
+if [[ -n ${FRAME} ]]; then
+  cp ${FRAME} ${MASK_FRAME}
+else
+  niimath ${MASK_FG} -mul 0 -add 1 -bin ${MASK_FRAME} -odt char
 fi
 
-BG=${DIR_SCRATCH}/MASK_BG.nii.gz
-niimath ${FG} -binv ${BG}
+# apply FRAME mask -------------------------------------------------------------
+niimath ${MASK_FG} -mas ${MASK_FRAME} ${MASK_FG}
+niimath ${MASK_BG} -mas ${MASK_FRAME} ${MASK_BG}
 
-FG_VALS=($(3dROIstats -mask ${MASK} ${IMAGE}))
-BG_VALS=($(3dROIstats -mask ${BG} -sigma ${IMAGE}))
+# calculate SNR ----------------------------------------------------------------
+FG_VALS=($(3dROIstats -mask ${MASK_FG} ${IMAGE}))
+BG_VALS=($(3dROIstats -mask ${MASK_BG} -sigma ${IMAGE}))
 CONST=$(echo "scale=4; sqrt(2 / (4 - 3.14159))" | bc -l)
 
 if [[ "${BG_VALS[-1]}" == "0.000000" ]]; then

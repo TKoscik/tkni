@@ -38,7 +38,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,frame:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,mask:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -48,8 +48,7 @@ eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
 IMAGE=
-FRAME=
-DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+MASK=
 HELP=false
 VERBOSE=false
 
@@ -59,8 +58,7 @@ while true; do
     -v | --verbose) VERBOSE=1 ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
-    --frame) FRAME="$2" ; shift 2 ;;
-    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
   esac
@@ -72,23 +70,12 @@ if [[ "${HELP}" == "true" ]]; then
   echo '------------------------------------------------------------------------'
   echo "TKNI: ${FCN_NAME}"
   echo '------------------------------------------------------------------------'
-  echo 'Effective Focus Criterion (EFC):'
-  echo 'The EFC uses the Shannon entropy of voxel intensities as an indication'
-  echo 'of ghosting and blurring induced by head motion. Lower values are'
-  echo 'better. The original equation is normalized by the maximum entropy, so'
-  echo 'that the EFC can be compared across images with different dimensions.'
-  echo '    Atkinson D, Hill DL, Stoyle PN, Summers PE, Keevil SF. Automatic'
-  echo '      correction of motion artifacts in magnetic resonance images using'
-  echo '      an entropy focus criterion. IEEE Trans Med Imaging. 1997'
-  echo '      Dec;16(6):903–10. http://dx.doi.org/10.1109/42.650886'
+  echo 'FWHM'
   echo ''
   echo '  -h | --help              display command help'
   echo '  -l | --no-log            disable writing to output log'
   echo '  --image    <required>    NIfTI image to calculate stats for'
-  echo '  --frame                  binary mask indicating region for'
-  echo '                           calculation. This is a mask that includes'
-  echo '                           only voxels with collected data so needs to'
-  echo '                           account for rotation of data'
+  echo '  --mask     <required>    binary mask indicating foreground region'
   echo '  --dir-scratch            location for temporary files'
   echo ''
   NO_LOG=true
@@ -98,39 +85,20 @@ fi
 #===============================================================================
 # Start of Function
 #===============================================================================
-mkdir -p ${DIR_SCRATCH}
-
-if [[ -z ${FRAME} ]]; then
-  FRAME=${DIR_SCRATCH}/FRAME.nii.gz
-  3dcalc -a ${IMAGE}[0] -expr a -prefix ${FRAME}
-  niimath ${FRAME} -add 1 -bin ${FRAME}
-fi
 
 NV=$(niiInfo -i ${IMAGE} -f volumes)
-N=($(3dROIstats -mask ${FRAME} -nzsum ${FRAME}))
-N=${N[-1]}
-unset EFC_SCALED
-for (( i=0; i<${NV}; i++ )); do
-  TIMG=${DIR_SCRATCH}/TIMG.nii.gz
-  3dcalc -a ${IMAGE}[${i}] -overwrite -expr a -prefix ${TIMG}
+PFX=$(getBidsBase -i ${IMAGE} -s)
 
-  niimath ${TIMG} -mas ${FRAME} -mul ${TIMG} ${DIR_SCRATCH}/BMAX$.nii.gz
-  BMAX=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/BMAX.nii.gz))
-  BMAX=$(echo "scale=4; sqrt(${BMAX[-1]})" | bc -l)
-
-  niimath ${TIMG} -div ${BMAX} ${DIR_SCRATCH}/BRATIO.nii.gz
-  niimath ${DIR_SCRATCH}/BRATIO.nii.gz -log ${DIR_SCRATCH}/LN_BRATIO.nii.gz
-  niimath ${DIR_SCRATCH}/BRATIO.nii.gz -mul ${DIR_SCRATCH}/LN_BRATIO.nii.gz ${DIR_SCRATCH}/EFC.nii.gz
-  EFC=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/EFC.nii.gz))
-  EFC=${EFC[-1]}
-
-  SCALE=$(echo "scale=4; ((${N} / sqrt(${N})) * (l(1 / sqrt(${N}))))" | bc -l)
-  EFC_SCALED+=($(echo "scale=4; ${EFC} / ${SCALE}" | bc -l))
-done
-echo ${EFC_SCALED[@]}
+fwhm_fcn="3dFWHMx"
+if [[ -n ${MASK} ]]; then fwhm_fcn="${fwhm_fcn} -mask ${MASK}"; fi
+fwhm_fcn="${fwhm_fcn} -out -"
+if [[ "${IS4D}" == "false" ]]; then fwhm_fcn="${fwhm_fcn} -2difMAD"; fi
+fwhm_fcn="${fwhm_fcn} -ShowMeClassicFWHM"
+fwhm_fcn="${fwhm_fcn} -dset ${IMAGE}"
+FWHM=($(eval ${fwhm_fcn}))
+echo ${FWHM[@]:0:3}
 
 #===============================================================================
 # End of Function
 #===============================================================================
 exit 0
-
