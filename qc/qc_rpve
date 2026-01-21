@@ -38,7 +38,8 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long posterior:,volume:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long posterior:,volume:,precision:,\
+dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -49,6 +50,7 @@ eval set -- "$OPTS"
 # Set default values for function ---------------------------------------------
 POSTERIOR=
 VOLUME=
+PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -60,6 +62,7 @@ while true; do
     -l | --no-log) NO_LOG=true ; shift ;;
     --posterior) POSTERIOR="$2" ; shift 2 ;;
     --volume) VOLUME="$2" ; shift 2 ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -90,15 +93,22 @@ fi
 # Start of Function
 #===============================================================================
 mkdir -p ${DIR_SCRATCH}
-NV=$(niiInfo -i ${POSTERIOR} -f volumes)
 P=${DIR_SCRATCH}/P.nii.gz
 P_MSK=${DIR_SCRATCH}/Pmsk.nii.gz
 P_NE5=${DIR_SCRATCH}/Pne5.nii.gz
 P_GT5=${DIR_SCRATCH}/Pgt5.nii.gz
 P_LE5=${DIR_SCRATCH}/Ple5.nii.gz
-unset RPVE
-for (( i=0; i<${NV}; i++ )); do
-  3dcalc -a ${POSTERIOR}[${i}] -expr a -prefix ${P} > /dev/null
+
+NV=$(niiInfo -i ${POSTERIOR} -f volumes)
+if [[ ${VOLUME}== "all" ]]; then
+  VOLUME=($(seq 0 $((${NV}-1))))
+else
+  VOLUME=(${VOLUME//,/ })
+fi
+
+VAL_M=0
+for i in "${VOLUME[@]}"; do
+  3dcalc -a ${POSTERIOR}[${i}] -expr a -overwrite -prefix ${P} > /dev/null
   niimath ${P} -thr 0.02 -uthr 0.98 ${P}
   niimath ${P} -bin ${P_MSK}
   TOTAL=($(3dROIstats -mask ${P_MSK} -nzsum ${P}))
@@ -109,10 +119,19 @@ for (( i=0; i<${NV}; i++ )); do
 
   niimath ${P} -uthr 0.5 -mul -1 -add 1 ${P_LE5}
   PVLE5=($(3dROIstats -mask ${P_MSK} -nzsum ${P_LE5}))
-  RPVE+=($(echo "scale=4; (${PVGT5[-1]} + ${PVLE5[-1]}) / ${TOTAL[-1]}" | bc -l))
+
+  TVAL=($(echo "scale=6; (${PVGT5[-1]} + ${PVLE5[-1]}) / ${TOTAL[-1]}" | bc -l))
+  if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+  fi
+  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
   rm ${DIR_SCRATCH}/P*
 done
-echo ${RPVE[@]}
+if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
+  VAL=$(echo "${VAL[@]} ${VAL_M}")
+fi
+echo ${VAL}
 
 #===============================================================================
 # End of Function

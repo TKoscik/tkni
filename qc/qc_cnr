@@ -38,8 +38,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,fg:,tissue:,label:,dir-scratch:,\
-help,verbose,no-log -n 'parse-options' -- "$@")
+OPTS=$(getopt -o hvl --long image:,fg:,tissue:,\
+label:,volume:,add-mean,precision:,\
+dir-scratch:,help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -51,6 +52,9 @@ IMAGE=
 FG=
 SEG=
 LABEL="2,4"
+VOLUME="all"
+ADD_MEAN="false"
+PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -64,6 +68,9 @@ while true; do
     --fg) FG="$2" ; shift 2 ;;
     --tissue) SEG="$2" ; shift 2 ;;
     --label) LABEL="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --add-mean) ADD_MEAN="true" ; shift 2 ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -110,38 +117,54 @@ fi
 #===============================================================================
 # parse inputs -----------------------------------------------------------------
 SEG=(${SEG//,/ })
-LABEL=(${LABEL//,/ })
 
 # sort out segmentations into masks --------------------------------------------
 if [[ ${#SEG[@]} -eq 1 ]]; then
   mkdir -p ${DIR_SCRATCH}
+  LABEL=(${LABEL//,/ })
   MASK_GM=${DIR_SCRATCH}/mask-gm.nii.gz
   MASK_WM=${DIR_SCRATCH}/mask-wm.nii.gz
   niimath ${SEG} -thr ${LABEL[0]} -uthr ${LABEL[0]} -bin ${MASK_GM}
   niimath ${SEG} -thr ${LABEL[1]} -uthr ${LABEL[1]} -bin ${MASK_WM}
 else
-  MASK_GM=${TISSUE_SEG[0]}
-  MASK_WM=${TISSUE_SEG[1]}
+  MASK_GM=${SEG[0]}
+  MASK_WM=${SEG[1]}
 fi
 
 # Air mask ---------------------------------------------------------------------
 mkdir -p ${DIR_SCRATCH}
 niimath ${FG} -binv ${DIR_SCRATCH}/air.nii.gz
 
-# get MEAN and SD of intensity values for GM and WM ----------------------------
-GMVAL=($(3dROIstats -mask ${MASK_GM} -sigma ${IMAGE}))
-WMVAL=($(3dROIstats -mask ${MASK_WM} -sigma ${IMAGE}))
-AIRVAL=($(3dROIstats -mask ${DIR_SCRATCH}/air.nii.gz -sigma ${IMAGE}))
+NV=$(niiInfo -i ${IMAGE} -f volumes)
+if [[ ${VOLUME}== "all" ]]; then
+  VOLUME=($(seq 0 $((${NV}-1))))
+else
+  VOLUME=(${VOLUME//,/ })
+fi
 
-# Calculate CJV ----------------------------------------------------------------
-NUMER=$(echo "scale=4; ${GMVAL[-2]} - ${WMVAL[-2]}" | bc -l)
-NUMER=${NUMER#-}
-
-DENOM=$(echo "scale=4; ${AIRVAL[-1]}^2 + ${GMVAL[-1]}^2  + ${WMVAL[-1]}^2" | bc -l)
-DENOM=$(echo "scale=4; sqrt(${DENOM})" | bc -l)
-
-CNR=$(echo "scale=4; ${NUMER}/${DENOM}" | bc -l)
-echo ${CNR}
+VAL_M=0
+for i in "${VOLUME[@]}"; do
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
+  # get MEAN and SD of intensity values for GM and WM ----------------------------
+  GMVAL=($(3dROIstats -mask ${MASK_GM} -sigma ${DIR_SCRATCH}/IMG.nii.gz))
+  WMVAL=($(3dROIstats -mask ${MASK_WM} -sigma ${DIR_SCRATCH}/IMG.nii.gz))
+  AIRVAL=($(3dROIstats -mask ${DIR_SCRATCH}/air.nii.gz -sigma ${DIR_SCRATCH}/IMG.nii.gz))
+  # Calculate CJV ----------------------------------------------------------------
+  NUMER=$(echo "scale=6; ${GMVAL[-2]} - ${WMVAL[-2]}" | bc -l)
+  NUMER=${NUMER#-}
+  DENOM=$(echo "scale=6; ${AIRVAL[-1]}^2 + ${GMVAL[-1]}^2  + ${WMVAL[-1]}^2" | bc -l)
+  DENOM=$(echo "scale=6; sqrt(${DENOM})" | bc -l)
+  TVAL=($(echo "scale=6; ${NUMER}/${DENOM}" | bc -l))
+  if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+  fi
+  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
+done
+if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
+  VAL=$(echo "${VAL[@]} ${VAL_M}")
+fi
+echo ${VAL}
 
 #===============================================================================
 # End of Function

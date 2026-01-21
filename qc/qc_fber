@@ -38,7 +38,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,mask:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,mask:,\
+volume:,add-mean,precision:,\
+dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -49,6 +51,9 @@ eval set -- "$OPTS"
 # Set default values for function ---------------------------------------------
 IMAGE=
 MASK=
+VOLUME="all"
+ADD_MEAN="false"
+PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -60,6 +65,9 @@ while true; do
     -l | --no-log) NO_LOG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --mask) MASK="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --add-mean) ADD_MEAN="true" ; shift 2 ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -96,19 +104,39 @@ fi
 #===============================================================================
 mkdir -p ${DIR_SCRATCH}
 
-niimath ${MASK} -binv ${DIR_SCRATCH}/mask-inv.nii.gz
-niimath ${IMAGE} -mul ${IMAGE} ${DIR_SCRATCH}/image_sq.nii.gz
-FGMED=($(3dROIstats -mask ${MASK} -median ${DIR_SCRATCH}/image_sq.nii.gz))
-FGMED=${FGMED[-1]}
-BGMED=($(3dROIstats -mask ${DIR_SCRATCH}/mask-inv.nii.gz -median ${DIR_SCRATCH}/image_sq.nii.gz))
-BGMED=${BGMED[-1]}
-
-if [[ "${BGMED}" == "0.000000" ]]; then
-  FBER=-1
+NV=$(niiInfo -i ${IMAGE} -f volumes)
+if [[ ${VOLUME}== "all" ]]; then
+  VOLUME=($(seq 0 $((${NV}-1))))
 else
-  FBER=$(echo "scale=4; ${FGMED} / ${BGMED}" | bc -l)
+  VOLUME=(${VOLUME//,/ })
 fi
-echo ${FBER}
+
+niimath ${MASK} -binv ${DIR_SCRATCH}/mask-inv.nii.gz
+
+VAL_M=0
+for i in "${VOLUME[@]}"; do
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
+  niimath ${DIR_SCRATCH}/IMG.nii.gz -mul ${DIR_SCRATCH}/IMG.nii.gz ${DIR_SCRATCH}/image_sq.nii.gz
+  FGMED=($(3dROIstats -mask ${MASK} -median ${DIR_SCRATCH}/image_sq.nii.gz))
+  FGMED=${FGMED[-1]}
+  BGMED=($(3dROIstats -mask ${DIR_SCRATCH}/mask-inv.nii.gz -median ${DIR_SCRATCH}/image_sq.nii.gz))
+  BGMED=${BGMED[-1]}
+
+  if [[ "${BGMED}" == "0.000000" ]]; then
+    TVAL=-1
+  else
+    TVAL=$(echo "scale=6; ${FGMED} / ${BGMED}" | bc -l)
+  fi
+  if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+  fi
+  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
+done
+if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
+  VAL=$(echo "${VAL[@]} ${VAL_M}")
+fi
+echo ${VAL}
 
 #===============================================================================
 # End of Function

@@ -38,7 +38,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,mask:,plane:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,mask:,plane:,\
+volume:,add-mean,precision:,\
+dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -47,9 +49,12 @@ fi
 eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
-TS=
+IMAGE=
 MASK=
-XY="x,y,z"
+PLANE="y"
+VOLUME="all"
+ADD_MEAN="false"
+PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -59,9 +64,12 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=1 ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
-    --ts) TS="$2" ; shift 2 ;;
+    --image) IMAGE="$2" ; shift 2 ;;
     --mask) MASK="$2" ; shift 2 ;;
-    --plane) XY="$2" ; shift 2 ;;
+    --plane) PLANE="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --add-mean) ADD_MEAN="true" ; shift 2 ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -98,34 +106,45 @@ fi
 #===============================================================================
 mkdir -p ${DIR_SCRATCH}
 
-XY=(${XY//,/ })
-IMGDIMS=($(niiInfo -i ${TS} -f size))
+# create ghosting masks --------------------------------------------------------
+IMGDIMS=($(niiInfo -i ${IMAGE} -f size))
 GHOST=${DIR_SCRATCH}/ghost.nii.gz
 NONGHOST=${DIR_SCRATCH}/nonghost.nii.gz
-for (( i=0; i<${#XY[@]}; i++ )); do
-  if [[ "${XY[${i}],,}" == "x" ]]; then
-    WRAP="$((${IMGDIMS[0]}/2))x0x0"
-  elif [[ "${XY[${i}],,}" == "y" ]]; then
-    WRAP="0x$((${IMGDIMS[1]}/2))x0"
-  elif [[ "${XY[${i}],,}" == "z" ]]; then
-    WRAP="0x0x$((${IMGDIMS[0]}/2))"
+case ${PLANE,,} in
+  x) WRAP="$((${IMGDIMS[0]} / 2))x0x0" ;;
+  y) WRAP="0x$((${IMGDIMS[1]} / 2))x0" ;;
+  z) WRAP="0x0x$((${IMGDIMS[2]} / 2))" ;;
+  *) echo "Plane ${PLANE} not recognized" ;;
+esac
+c3d ${MASK} -wrap ${WRAP} ${GHOST}
+CopyImageHeaderInformation ${MASK} ${GHOST} 1 1 1
+niimath ${GHOST} -sub ${MASK} -thr 1 -bin ${GHOST}
+niimath ${MASK} -add ${GHOST} -binv ${NONGHOST}
+
+NV=$(niiInfo -i ${IMAGE} -f volumes)
+if [[ ${VOLUME}== "all" ]]; then
+  VOLUME=($(seq 0 $((${NV}-1))))
+else
+  VOLUME=(${VOLUME//,/ })
+fi
+
+VAL_M=0
+for i in "${VOLUME[@]}"; do
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
+  S=($(3dROIstats -mask ${MASK} -quiet ${DIR_SCRATCH}/IMG.nii.gz))
+  G=($(3dROIstats -mask ${GHOST} -quiet ${DIR_SCRATCH}/IMG.nii.gz))
+  NG=($(3dROIstats -mask ${NONGHOST} -quiet ${DIR_SCRATCH}/IMG.nii.gz))
+  TVAL=$(echo "scale=6; (${G[-1]} -${NG[-1]}) / ${S[-1]}" | bc -l)
+  if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
   fi
-  c3d ${MASK} -wrap ${WRAP} ${GHOST}
-  CopyImageHeaderInformation ${MASK} ${GHOST} 1 1 1
-  niimath ${GHOST} -sub ${MASK} -thr 1 -bin ${GHOST}
-  niimath ${MASK} -add ${GHOST} -binv ${NONGHOST}
-  S=($(3dROIstats -mask ${MASK} -quiet ${TS}))
-  G=($(3dROIstats -mask ${GHOST} -quiet ${TS}))
-  NG=($(3dROIstats -mask ${NONGHOST} -quiet ${TS}))
-  TGSR=0
-  NTR=${#S[@]}
-  for (( j=0; j<${NTR}; j++ )); do
-    TMP=$(echo "scale=4; (${G[0]} -${NG[0]}) / ${S[0]}" | bc -l)
-    TGSR=$(echo "scale=4; ${TGSR} + (${TMP} / ${NTR})" | bc -l)
-  done
-  GSR+=(${TGSR})
+  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
 done
-echo ${GSR[@]}
+if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
+  VAL=$(echo "${VAL[@]} ${VAL_M}")
+fi
+echo ${VAL}
 
 #===============================================================================
 # End of Function

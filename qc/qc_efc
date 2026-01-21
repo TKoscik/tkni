@@ -38,7 +38,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,frame:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,frame:,\
+volume:,add-mean,precision:,\
+dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -49,6 +51,9 @@ eval set -- "$OPTS"
 # Set default values for function ---------------------------------------------
 IMAGE=
 FRAME=
+VOLUME="all"
+ADD_MEAN="false"
+PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -60,6 +65,9 @@ while true; do
     -l | --no-log) NO_LOG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --frame) FRAME="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --add-mean) ADD_MEAN="true" ; shift 2 ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -107,27 +115,36 @@ if [[ -z ${FRAME} ]]; then
 fi
 
 NV=$(niiInfo -i ${IMAGE} -f volumes)
+
+#Calculate scalar multiplier for normalizing data
 N=($(3dROIstats -mask ${FRAME} -nzsum ${FRAME}))
 N=${N[-1]}
-unset EFC_SCALED
+SCALE=$(echo "scale=6; ((${N} / sqrt(${N})) * (l(1 / sqrt(${N}))))" | bc -l)
+
+VAL_M=0
 for (( i=0; i<${NV}; i++ )); do
   TIMG=${DIR_SCRATCH}/TIMG.nii.gz
   3dcalc -a ${IMAGE}[${i}] -overwrite -expr a -prefix ${TIMG}
-
-  niimath ${TIMG} -mas ${FRAME} -mul ${TIMG} ${DIR_SCRATCH}/BMAX$.nii.gz
+  niimath ${TIMG} -mas ${FRAME} -mul ${TIMG} ${DIR_SCRATCH}/BMAX.nii.gz
   BMAX=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/BMAX.nii.gz))
-  BMAX=$(echo "scale=4; sqrt(${BMAX[-1]})" | bc -l)
-
+  BMAX=$(echo "scale=6; sqrt(${BMAX[-1]})" | bc -l)
   niimath ${TIMG} -div ${BMAX} ${DIR_SCRATCH}/BRATIO.nii.gz
   niimath ${DIR_SCRATCH}/BRATIO.nii.gz -log ${DIR_SCRATCH}/LN_BRATIO.nii.gz
   niimath ${DIR_SCRATCH}/BRATIO.nii.gz -mul ${DIR_SCRATCH}/LN_BRATIO.nii.gz ${DIR_SCRATCH}/EFC.nii.gz
   EFC=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/EFC.nii.gz))
   EFC=${EFC[-1]}
 
-  SCALE=$(echo "scale=4; ((${N} / sqrt(${N})) * (l(1 / sqrt(${N}))))" | bc -l)
-  EFC_SCALED+=($(echo "scale=4; ${EFC} / ${SCALE}" | bc -l))
+  TVAL=(($(echo "scale=6; ${EFC} / ${SCALE}" | bc -l)))
+  if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+  fi
+  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
 done
-echo ${EFC_SCALED[@]}
+if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
+  VAL=$(echo "${VAL[@]} ${VAL_M}")
+fi
+echo ${VAL}
 
 #===============================================================================
 # End of Function

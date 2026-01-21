@@ -38,7 +38,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,frame:,bg:,fg:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,frame:,bg:,fg:,\
+volume:,add-mean,precision:,\
+dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -51,6 +53,9 @@ IMAGE=
 FRAME=
 BG=
 FG=
+VOLUME="all"
+ADD_MEAN="false"
+PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -64,6 +69,9 @@ while true; do
     --frame) FRAME="$2" ; shift 2 ;;
     --bg) BG="$2" ; shift 2 ;;
     --fg) FG="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --add-mean) ADD_MEAN="true" ; shift 2 ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -127,17 +135,36 @@ fi
 niimath ${MASK_FG} -mas ${MASK_FRAME} ${MASK_FG}
 niimath ${MASK_BG} -mas ${MASK_FRAME} ${MASK_BG}
 
-# calculate SNR ----------------------------------------------------------------
-FG_VALS=($(3dROIstats -mask ${MASK_FG} ${IMAGE}))
-BG_VALS=($(3dROIstats -mask ${MASK_BG} -sigma ${IMAGE}))
-CONST=$(echo "scale=4; sqrt(2 / (4 - 3.14159))" | bc -l)
-
-if [[ "${BG_VALS[-1]}" == "0.000000" ]]; then
-  SNRD=-1
+NV=$(niiInfo -i ${IMAGE} -f volumes)
+if [[ ${VOLUME}== "all" ]]; then
+  VOLUME=($(seq 0 $((${NV}-1))))
 else
-  SNRD=$(echo "scale=4; ${FG_VALS[-1]} / (${CONST} * ${BG_VALS[-1]})" | bc -l)
+  VOLUME=(${VOLUME//,/ })
 fi
-echo ${SNRD}
+
+VAL_M=0
+CONST=$(echo "scale=6; sqrt(2 / (4 - 3.14159))" | bc -l)
+for i in "${VOLUME[@]}"; do
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
+  # calculate SNR --------------------------------------------------------------
+  FG_VALS=($(3dROIstats -mask ${MASK_FG} ${DIR_SCRATCH}/IMG.nii.gz))
+  BG_VALS=($(3dROIstats -mask ${MASK_BG} -sigma ${DIR_SCRATCH}/IMG.nii.gz))
+
+  if [[ "${BG_VALS[-1]}" == "0.000000" ]]; then
+    TVAL=-1
+  else
+    TVAL=$(echo "scale=6; ${FG_VALS[-1]} / (${CONST} * ${BG_VALS[-1]})" | bc -l)
+  fi
+  if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+  fi
+  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
+done
+if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
+  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
+  VAL=$(echo "${VAL[@]} ${VAL_M}")
+fi
+echo ${VAL}
 
 #===============================================================================
 # End of Function
