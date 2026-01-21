@@ -2,6 +2,7 @@ clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
                           volume, mask.volume,
                           roi.thresh, peak.thresh,
                           cluster.size, connectivity=NULL,
+                          effect.name,
                           save.clusters=TRUE, save.table=TRUE, save.mask=TRUE,
                           dir.save, dir.scratch) {
 
@@ -66,7 +67,7 @@ clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
   if (missing(dir.scratch)) {
     dir.scratch <- sprintf("/scratch/tkni_clusterEffect_%s", format(Sys.time(), "%Y%m%dT%H%M%S"))
   }
-  dir.create(dir.scratch, showWarnings = F, recursive = F)
+  dir.create(dir.scratch, showWarnings = F, recursive = T)
 
   # copy files to scratch ------------------------------------------------------
   ## or unzip in scratch
@@ -74,7 +75,7 @@ clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
   if (tfext == "gz") {
     gunzip(filename=nii.coef, destname=sprintf("%s/coef.nii", dir.scratch), remove=F)
   } else {
-    file.copy(from = nii.coef, to = sprint("%s/coef.nii", dir.scratch))
+    file.copy(from = nii.coef, to = sprintf("%s/coef.nii", dir.scratch))
   }
   nii.coef <- sprintf("%s/coef.nii", dir.scratch)
 
@@ -82,7 +83,7 @@ clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
   if (tfext == "gz") {
     gunzip(filename=nii.test, destname=sprintf("%s/test.nii", dir.scratch), remove=F)
   } else {
-    file.copy(from = nii.test, to = sprint("%s/test.nii", dir.scratch))
+    file.copy(from = nii.test, to = sprintf("%s/test.nii", dir.scratch))
   }
   nii.test <- sprintf("%s/test.nii", dir.scratch)
 
@@ -90,7 +91,7 @@ clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
   if (tfext == "gz") {
     gunzip(filename=nii.pval, destname=sprintf("%s/pval.nii", dir.scratch), remove=F)
   } else {
-    file.copy(from = nii.pval, to = sprint("%s/pval.nii", dir.scratch))
+    file.copy(from = nii.pval, to = sprintf("%s/pval.nii", dir.scratch))
   }
   nii.pval <- sprintf("%s/pval.nii", dir.scratch)
 
@@ -99,7 +100,7 @@ clusterEffect <- function(nii.coef, nii.test, nii.pval, nii.mask,
     if (tfext == "gz") {
       gunzip(filename=nii.mask, destname=sprintf("%s/mask.nii", dir.scratch), remove=F)
     } else {
-      file.copy(from = nii.mask, to = sprint("%s/mask.nii", dir.scratch))
+      file.copy(from = nii.mask, to = sprintf("%s/mask.nii", dir.scratch))
     }
     nii.mask<- sprintf("%s/mask.nii", dir.scratch)
   }

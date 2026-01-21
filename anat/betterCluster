@@ -1,0 +1,285 @@
+#!/bin/bash -e
+#===============================================================================
+# Better procedure to dluster regions within NIFTI image based on local
+# intensity, using a watershed algorithm.
+# Authors: Timothy Koscik, PhD
+# Date: 2025-12-26
+# CHANGELOG: <description of major changes to functionality>
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvl --long value-nii:,value-vol:,\
+thresh-nii:,thresh-vol:,thresh-roi-lt:,thresh-roi-gt:,thresh-peak-lt:,thresh-peak-gt:,\
+mask-nii:,mask-vol:,\
+datum:,connectivity:,direction:,cluster-size,\
+no-positive,no-negative,use-mm,\
+filename:,dir-save:,dir-scratch:,\
+help,verbose,no-log -n 'parse-options' -- "$@")
+if [ $? != 0 ]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+VALUE=
+VALUE_VOL=
+
+THRESH=
+THRESH_VOL=
+THRESH_ROI_LT=0.05
+THRESH_PEAK_LT=0.001
+THRESH_ROI_GT=
+THRESH_PEAK_GT=
+
+MASK=
+MASK_VOL=
+
+DATUM=0
+CONNECTIVITY=18
+DIRECTION="both"
+NO_POSITIVE="false"
+NO_NEGATIVE="false"
+CLUSTER_SIZE=1
+USE_MM="false"
+
+FILENAME=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -v | --verbose) VERBOSE=1 ; shift ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
+    --value-nii) VALUE="$2" ; shift 2 ;;
+    --value-vol) VALUE_VOL="$2" ; shift 2 ;;
+    --mask-nii) MASK="$2" ; shift 2 ;;
+    --mask-vol) MASK_VOL="$2" ; shift 2 ;;
+    --thresh-nii) THRESH="$2" ; shift 2 ;;
+    --thresh-vol) THRESH_VOL="$2" ; shift 2 ;;
+    --thresh-roi-lt) THRESH_ROI="$2" ; shift 2 ;;
+    --thresh-peak-lt) THRESH_PEAK="$2" ; shift 2 ;;
+    --thresh-roi-gt) THRESH_ROI="$2" ; shift 2 ;;
+    --thresh-peak-gt) THRESH_PEAK="$2" ; shift 2 ;;
+    --datum) DATUM="$2" ; shift 2 ;;
+    --direction) DIRECTION="$2" ; shift 2 ;;
+    --connectivity) CONNECTIVITY="$2" ; shift 2 ;;
+    --no-positive) NO_POSITIVE="true" ; shift ;;
+    --no-negative) NO_POSITIVE="true" ; shift ;;
+    --cluster-size) CLUSTER_SIZE="$2" ; shift 2 ;;
+    --use-mm) USE_MM=true ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -l | --no-log            disable writing to output log'
+  echo '  --prefix  <optional>     filename, without extension to use for file'
+  echo '                     ${DIR_SAVE}/${PREFIX}_vol-#_clsz-#_watershed.nii.gz'
+  echo '  --value <filename>       filename for input file of intensity values'
+  echo '                           to use for clustering'
+  echo '  --value-vol <values>     which volumes to generate clusters for'
+  echo '                             e.g., 1,3:5,8 = 1,3,4,5,8'
+  echo '  --mask-nii <filename>    filename for image(s) to use to mask values'
+  echo '                           these inputs will be binarized, and the'
+  echo '                           intersection of all masks will be used'
+  echo '  --mask-vol <values>      which volumes to generate clusters for'
+  echo '                             e.g., 1,3:5,8 = 1,3,4,5,8'
+  echo '  --datum <value>          reference value for watershed calculation'
+  echo '                             default=0'
+  echo '  --direction <option>     direction to calculate watershed'
+  echo '    i|inc|increase|p|pos|positive: values increase from datum to peak'
+  echo '    d|dec|decrease|n|neg|negative: values decrease from datum to peak'
+  echo '    b|bi|bidirectional|both|duplex: both increasing and decreasing'
+  echo '                     B                         | A | B | C |'
+  echo '            A      /¯¯¯\             increasing| Y | Y | N |'
+  echo '           /¯\    /     \            decreasing| N | N | Y |'
+  echo '          /   \  /       \       C         both| Y | Y | Y |'
+  echo '         /     \/         \     ( )�                        '
+  echo '        /                  \   (   )                        '
+  echo '       /                    \ (     )                       '
+  echo '  ----/----------------------\-----  /---------------- datum'
+  echo '                              \     /                       '
+  echo '                               \   /                        '
+  echo '                                \_/                         '
+  echo '                                 C                          '
+  echo '                                                            '
+  echo '  --cluster-size <value>       minimum cluster size to keep,'
+  echo '                           default is number of contiguous voxels'
+  echo '                           cluster connectivity is 26 neighbor'
+  echo '  --use-mm                 toggle minimum cluster size in mm^3'
+  echo '  --dir-save               location to save output'
+  echo '  --dir-scratch            location for temporary files'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# SET UP VARIABLES AND WORKSPACE -----------------------------------------------
+if [[ -z ${FILENAME} ]]; then
+  FBASE=$(basename ${VALUE})
+  FILENAME="${FBASE%%.*}_betterCluster"
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=$(dirname ${VALUE})
+fi
+mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SCRATCH}
+
+# SETUP TEMPORARY FILES --------------------------------------------------------
+3dcalc -a ${VALUE}[${VALUE_VOL}] -expr a -prefix ${DIR_SCRATCH}/value.nii.gz
+3dcalc -a ${THRESH}[${THRESH_VOL}] -expr a -prefix ${DIR_SCRATCH}/thresh.nii.gz
+3dcalc -a ${MASK}[${MASK_VOL}] -expr a -prefix ${DIR_SCRATCH}/mask.nii.gz
+niimath ${DIR_SCRATCH}/mask.nii.gz -bin ${DIR_SCRATCH}/mask.nii.gz -odt char
+
+# set datum and direction ------------------------------------------------------
+niimath ${DIR_SCRATCH}/value.nii.gz -sub ${DATUM} ${DIR_SCRATCH}/value.nii.gz
+if [[ ${NO_NEGATIVE} == "true" ]]; then
+  niimath ${DIR_SCRATCH}/value.nii.gz -uthr 0 ${DIR_SCRATCH}/value.nii.gz
+fi
+if [[ ${NO_POSITIVE} == "true" ]]; then
+  niimath ${DIR_SCRATCH}/value.nii.gz -thr 0 ${DIR_SCRATCH}/value.nii.gz
+fi
+niimath ${DIR_SCRATCH}/value.nii.gz -abs ${DIR_SCRATCH}/value.nii.gz
+
+# make threshold masks ---------------------------------------------------------
+tfcn="niimath ${DIR_SCRATCH}/thresh.nii.gz"
+if [[ -n ${THRESH_ROI_LT} ]]; then tfcn="${tfcn} -uthr ${THRESH_ROI_LT}"; fi
+if [[ -n ${THRESH_ROI_GT} ]]; then tfcn="${tfcn} -thr ${THRESH_ROI_GT}"; fi
+tfcn="${tfcn} ${DIR_SCRATCH}/thresh_roi.nii.gz"
+eval ${tfcn}
+niimath ${DIR_SCRATCH}/thresh_roi.nii.gz \
+  -bin -mas ${DIR_SCRATCH}/mask.nii.gz \
+  ${DIR_SCRATCH}/mask_roi.nii.gz -odt char
+
+#tfcn="niimath ${DIR_SCRATCH}/thresh.nii.gz"
+#if [[ -n ${THRESH_PEAK_LT} ]]; then tfcn="${tfcn} -uthr ${THRESH_PEAK_LT}"; fi
+#if [[ -n ${THRESH_PEAK_GT} ]]; then tfcn="${tfcn} -thr ${THRESH_PEAK_GT}"; fi
+#tfcn="${tfcn} ${DIR_SCRATCH}/thresh_peak.nii.gz"
+#eval ${tfcn}
+#niimath ${DIR_SCRATCH}/thresh_peak.nii.gz \
+#  -bin -mas ${DIR_SCRATCH}/mask.nii.gz \
+#  ${DIR_SCRATCH}/mask_peak.nii.gz -odt char
+
+# apply masks ------------------------------------------------------------------
+niimath ${DIR_SCRATCH}/value.nii.gz \
+  -mas ${DIR_SCRATCH}/mask_roi.nii.gz \
+  ${DIR_SCRATCH}/value.nii.gz
+
+# identify Extrema -------------------------------------------------------------
+3dExtrema -prefix ${DIR_SCRATCH}/extrema.nii.gz \
+  -mask_file ${DIR_SCRATCH}/mask_roi.nii.gz \
+  -maxima -partial -closure -volume -sep_dist 0 \
+  ${DIR_SCRATCH}/value.nii.gz
+
+# apply peak mask to extrema to exclude clusters without peak value ------------
+#niimath ${DIR_SCRATCH}/extrema.nii.gz \
+#  -mas ${DIR_SCRATCH}/mask_peak.nii.gz \
+#  ${DIR_SCRATCH}/extrema.nii.gz
+##*** move to later, this leaves blanks that are unsightly
+
+# number extrema ---------------------------------------------------------------
+c3d ${DIR_SCRATCH}/extrema.nii.gz -comp -o ${DIR_SCRATCH}/extrema.nii.gz
+
+# FLOOD FILL WATERSHEDS --------------------------------------------------------
+gunzip ${DIR_SCRATCH}/*.gz
+Rscript ${TKNIPATH}/R/floodWatershed.R \
+  "nii.extrema" "${DIR_SCRATCH}/extrema.nii" \
+  "vol.extrema" 1 \
+  "nii.value" "${DIR_SCRATCH}/value.nii" \
+  "vol.value" 1 \
+  "nii.mask" "${DIR_SCRATCH}/mask_roi.nii" \
+  "vol.mask" 1 \
+  "datum" ${DATUM} \
+  "connectivity" ${CONNECTIVITY} \
+  "direction" ${DIRECTION} \
+  "dir-save" ${DIR_SCRATCH} \
+  "filename" "flooded.nii"
+#gzip ${DIR_SCRATCH}/*.nii
+
+# clean up small clusters ------------------------------------------------------
+## if small and isolated, delete
+## if small and connected to another, merge with others
+## exclude/merge clusters with sub-threshold peak
+# reorder by size
+PKSTR=
+if [[ -n ${THRESH_PEAK_LT} ]]; then
+  PKSTR='"peak.lt" "${THRESH_PEAK_LT}"'
+fi
+if [[ -n ${THRESH_PEAK_GT} ]]; then
+  PKSTR=${PKSTR}' "peak.gt" "${THRESH_PEAK_GT}"'
+fi
+
+Rscript ${TKNIPATH}/R/clusterClean.R \
+  "nii.cluster" "${DIR_SCRATCH}/flooded.nii" \
+  "nii.thresh" "${DIR_SCRATCH}/thresh.nii" \
+  "min.size" 10 "use.mm" "TRUE" \
+  "connectivity" ${CONNECTIVITY} \
+  ${PKSTR} \
+  "exclude" "TRUE" \
+  "merge" "TRUE" \
+  "dir-save" ${DIR_SCRATCH} \
+  "filename" "cleaned.nii"
+gzip ${DIR_SCRATCH}/*.nii
+
+# summarize clusters -----------------------------------------------
+## extract table with summary statistics
+#LabelGeometryMeasures 3 ${DIR_SCRATCH}/cleaned.nii.gz \
+#  ${DIR_SCRATCH}/value.nii.gz \
+#****move this to another function to summarize from this table
+
+
+# save output clusters ---------------------------------------------
+mv ${DIR_SCRATCH}/cleaned.nii.gz ${DIR_SAVE}/${FILENAME}.nii.gz
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0

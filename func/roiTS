@@ -120,11 +120,15 @@ fi
 mkdir -p ${DIR_SAVE}
 
 # gather ROI timeseries -------------------------------------------------------
-fslmeants -i ${TS_BOLD} \
-  -o ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv \
-  --label=${LABEL}
-sed -i s/"  "/","/g ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
-sed -i s/",$"//g ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
+#fslmeants -i ${TS_BOLD} \
+#  -o ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv \
+#  --label=${LABEL}
+#sed -i s/"  "/","/g ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
+#sed -i s/",$"//g ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
+3dROIstats -mask ${LABEL} -1DRformat -nobriklab -quiet \
+  ${TS_BOLD} > ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
+sed -i 's/\t/,/g' ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
+sed -i 's/^,//g' ${DIR_SAVE}/${PFX}_ts-${LABTXT}.csv
 
 #===============================================================================
 # End of function

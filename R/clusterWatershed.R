@@ -27,16 +27,21 @@ for (i in seq(1,length(args))) {
 }
 
 # load libraries ---------------------------------------------------------------
-requires("nifti.io")
-requires("data.table")
-requires("tools")
+require("nifti.io")
+require("data.table")
+require("tools")
+require("assertions")
 
 # parse inputs -----------------------------------------------------------------
 ## check nii NOT nii.gz
-if (has_extension(nii.distance, "gz")) {
+EXT <- unlist(strsplit(nii.distance, "[.]"))
+#if (has_extension(nii.distance, "gz")) {
+if (EXT[length(EXT)] == "gz") {
   stop("ERROR [TKNI:clusterWatershed.R] Distance NII file must be decompressed.")
 }
-if (has_extension(nii.mask, "gz")) {
+EXT <- unlist(strsplit(nii.distance, "[.]"))
+#if (has_extension(nii.mask, "gz")) {
+if (EXT[length(EXT)] == "gz") {
   stop("ERROR [TKNI:clusterWatershed.R] ROI mask NII file must be decompressed.")
 }
 if (dir.save == "default") {dir.save <- dirname(nii.distance)}
@@ -45,7 +50,9 @@ if (nii.save == "default") {
   TPFX <- unlist(strsplit(TBASE, split="_"))
   nii.save <- paste0(TPFX[-length(TPFX)], "segmentation.nii", collapse="_")
 }
-if (has_extension(nii.save, "gz")) {
+EXT <- unlist(strsplit(nii.save, "[.]"))
+# if (has_extension(nii.save, "gz")) {
+if (EXT[length(EXT)] == "gz") {
   stop("ERROR [TKNI:clusterWatershed.R] Desired NII save file must not be compressed.")
 }
 
@@ -53,7 +60,7 @@ if (has_extension(nii.save, "gz")) {
 voxel.size <- info.nii(nii.distance, "spacing")
 if (grepl("vox", altitude)) {
   altitude <- as.numeric(unlist(strsplit(altitude, "vox"))[1]) * min(voxel.size)
-} else
+} else {
   altitude <- as.numeric(altitude)
 }
 if (grepl("vox", datum)) {
@@ -159,7 +166,8 @@ write.nii.volume(nii.save, 1, connected)
 # Add small clusters with sub-datum peaks ------------------------------------
 if (nrow(blank.xyz) > 0) {
   small.labels <- array(0, dim=img.dims[1:3])
-  small.blobs <- (dist<distance.thresh & dist>=datum & connected==0) * 1
+  # small.blobs <- (dist<distance.thresh & dist>=datum & connected==0) * 1
+  small.blobs <- (dist>=datum & connected==0) * 1
   idx <- numeric()
   for (x in 1:img.dims[1]) {
     for (y in 1:img.dims[2]) {

@@ -61,24 +61,24 @@ for (i in seq(1,length(args))) {
 }
 
 # Show input values ------------------------------------------------------------
-# print(nii.coef)
-# print(nii.test)
-# print(nii.pval)
-# print(nii.mask)
-# print(effect.volume)
-# print(mask.volume)
-# print(effect.name)
-# print(roi.thresh)
-# print(peak.thresh)
-# print(cluster.size)
-# print(connectivity)
-# print(save.clusters)
-# print(save.table)
-# print(save.mask)
-# print(do.pos)
-# print(do.neg)
-# print(dir.save)
-# print(dir.scratch)
+ # print(nii.coef)
+ # print(nii.test)
+ # print(nii.pval)
+ # print(nii.mask)
+ # print(effect.volume)
+ # print(mask.volume)
+ # print(effect.name)
+ # print(roi.thresh)
+ # print(peak.thresh)
+ # print(cluster.size)
+ # print(connectivity)
+ # print(save.clusters)
+ # print(save.table)
+ # print(save.mask)
+ # print(do.pos)
+ # print(do.neg)
+ # print(dir.save)
+ # print(dir.scratch)
 
 # cluster function -------------------------------------------------------------
 cluster.func <- function(bin.array, dimensions, connectivity=26) {
@@ -123,7 +123,7 @@ cluster.func <- function(bin.array, dimensions, connectivity=26) {
 }
 
 # make scratch directory -------------------------------------------------------
-dir.create(dir.scratch, showWarnings = F, recursive = F)
+dir.create(dir.scratch, showWarnings = F, recursive = T)
 
 # copy files to scratch --------------------------------------------------------
 ## or unzip in scratch
@@ -169,6 +169,8 @@ orient <- info.nii(nii.coef, "orient")
 # load mask (if given) ---------------------------------------------------------
 mask <- array(1,dim=img.dims[1:3])
 if (!is.null(nii.mask)) { mask <- read.nii.volume(nii.mask, mask.volume) }
+## ensure mask is binarized
+mask <- (mask > 0) * 1
 
 # Coefficient Estimates --------------------------------------------------------
 coef <- read.nii.volume(nii.coef, effect.volume)

@@ -670,6 +670,23 @@ for (( i=0; i<${NTS}; i++ )); do
   if [[ ${NO_NORM} == "false" ]]; then
     if [[ ${VERBOSE} == "true" ]]; then echo -e "  >>>NORMALIZATION"; fi
     TS_NORM=${DIR_SCRATCH}/tmp/${TFX}_reg-${NORM_LABEL}_residual.nii.gz
+    #mkdir -p ${DIR_SCRATCH}/tnorm
+    ### disassemble timeseries (ants hogs memory)
+    #ImageMath 4 ${DIR_SCRATCH}/tnorm/tresid.nii.gz TimeSeriesDisassemble ${TS_RESID}
+    #TLS=($(ls ${DIR_SCRATCH}/tnorm/*.nii.gz))
+    #for (( j=0; j<${#TLS[@]}; j++ )); do
+    #  fcn_str="antsApplyTransforms -d 3 -n Linear"
+    #  fcn_str="${fcn_str} -i ${TLS[${j}]} -o ${TLS[${j}]}"\
+    #  fcn_str="${fcn_str} -r ${DIR_SCRATCH}/xfm/norm_ref.nii.gz"
+    #  fcn_str="${fcn_str} -t identity"
+    #  for (( k=0; k<${#NORM_XFM[@]}; k++ )); do
+    #    fcn_str="${fcn_str} -t ${NORM_XFM[${k}]}"
+    #  done
+    #  eval ${fcn_str}
+    #done
+    ### reassemble normalized timeseries
+    #ImageMath 4 ${TS_NORM} TimeSeriesAssemble ${TR} 0 ${DIR_SCRATCH}/tnorm/*.nii.gz
+
     fcn_str="antsApplyTransforms -d 3 -e 3 -n Linear"
     fcn_str="${fcn_str} -i ${TS_RESID} -o ${TS_NORM}"\
     fcn_str="${fcn_str} -r ${DIR_SCRATCH}/xfm/norm_ref.nii.gz"
