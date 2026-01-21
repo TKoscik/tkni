@@ -229,6 +229,7 @@ fi
 
 # Recon-all-clinical -----------------------------------------------------------
 recon-all-clinical.sh ${IMAGE} ${IDPFX} ${NTHREADS} ${DIR_FS}
+
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> RECON-ALL Clinical COMPLETE"
 fi

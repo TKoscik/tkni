@@ -1,0 +1,144 @@
+#!/bin/bash -e
+
+#===============================================================================
+# FUNCTION:      Soft Mask
+# DESCRIPTION:   Tool to apply a binary mask with soft edges
+# AUTHOR:        Timothy R. Koscik, PhD
+# DATE CREATED:  2025-11-11
+# README:
+# DATE MODIFIED:
+# CHANGELOG:
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+FCN_NAME=${FCN_NAME%.*}
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvn --long image:,mask:,kernel:,\
+dir-scratch:,filename:,dir-save:,\
+help,verbose,no-png -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+IMAGE=
+MASK=
+KERNEL=1
+THRESH=1
+
+MASKNAME=
+FILENAME=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
+    --kernel) KERNEL="$2" ; shift 2 ;;
+    --maskthresh) THRESH="$2" ; shift 2 ;;
+    --maskname) MASKNAME="$2" ; shift 2 ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help      display command help'
+  echo '  -v | --verbose   add verbose output to log file'
+  echo '  -l | --no-log    disable writing to output log'
+  echo '  -n | --no-png    disable making png of output'
+  echo '  --image          input nii.gz file'
+  echo '  --mask           binary mask of region for calculating rescale values'
+  echo '  --kernel         '
+  echo '  --filename       filename for output'
+  echo '                     default: sub-123_ses-1234abcd_roi-maskName_modality'
+  echo '  --dir-save       directory to save output,'
+  echo '      default: ${DIR_PROJECT}/derivatives/inc/prep/sub-${PID}/ses-${SID}'
+  echo '  --dir-scratch    directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+# ==============================================================================
+# SOFT MASK
+# ==============================================================================
+if [[ -z ${FILENAME} ]]; then
+  FILENAME=$(basename ${IMAGE})
+  if [[ -z ${MASKNAME} ]]; then
+    MASKNAME=$(getField -i ${MASK} -f "mask")
+  fi
+  if [[ -z ${MASKNAME} ]]; then
+    MASKNAME="mask"
+  fi
+  FILENAME=$(modField -i ${FILENAME} -a -f roi -v ${MASKNAME})
+fi
+
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=$(dirname ${IMAGE})
+fi
+
+# threshold mask and binarize
+# dilate by half of kernel size
+# apply gaussian blur of kernel size
+# multiply image by mask
+c3d ${MASK} \
+  -threshold ${THRESH} inf 1 0 \
+  -dilate 1 ${KERNEL}x${KERNEL}x${KERNEL}mm \
+  -mf ${KERNEL}x${KERNEL}x${KERNEL}mm \
+  -as softmask \
+  ${IMAGE} -push softmask \
+  -multiply \
+  -o ${DIR_SAVE}/${FILENAME}
+
+if [[ ${NO_PNG,,} == "false" ]]; then
+  make3Dpng --bg ${DIR_SAVE}/${FILENAME}
+fi

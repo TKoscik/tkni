@@ -1,0 +1,147 @@
+#!/bin/bash -e
+#===============================================================================
+# UHR Brain Extraction
+## -- nnUNet model for generating a brain mask for ex vivo MRI
+# Authors: Timothy R. Koscik, PhD
+# Date: 2025-11-12
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvkln --long image:,nnmodel:,\
+dir-save:,dir-scratch:,\
+help,verbose,no-log,no-png -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+IMAGE=
+NNMODEL="Dataset001_uhrbex"
+
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --image) IMAGE="$2" ; shift 2 ;;
+    --nnmodel) NNMODEL="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help      display command help'
+  echo '  -v | --verbose   add verbose output to log file'
+  echo '  -l | --no-log    disable writing to output log'
+  echo '  -n | --no-png    disable making png of output'
+  echo '  --image          input nii.gz file'
+  echo '  --dir-save       directory to save output,'
+  echo '  --dir-scratch    directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# EX VIVO BRAIN EXTRACTION
+#===============================================================================
+
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
+
+# set nnunet directories
+mkdir -p ${DIR_SCRATCH}/image
+mkdir -p ${DIR_SCRATCH}/label_lowres
+mkdir -p ${DIR_SCRATCH}/label_cascade
+mkdir -p ${DIR_SCRATCH}/label
+
+# copy image to scratch --------------------------------------------------------
+# use required nnunet filename structure
+cp ${IMAGE} ${DIR_SCRATCH}/image/exvivoBEX_1234_0000.nii.gz
+
+# predict low resolution -------------------------------------------------------
+nnUNetv2_predict -d ${NNMODEL} \
+  -i ${DIR_SCRATCH}/image \
+  -o ${DIR_SCRATCH}/label_lowres \
+  -f  0 1 2 3 4 -tr nnUNetTrainer -c 3d_lowres -p nnUNetPlans
+
+# predict full resolution cascading from low resolution ------------------------
+nnUNetv2_predict -d ${NNMODEL} \
+  -i ${DIR_SCRATCH}/image \
+  -o ${DIR_SCRATCH}/label_cascade \
+  -prev_stage_predictions ${DIR_SCRATCH}/label_lowres \
+  -f  0 1 2 3 4 -tr nnUNetTrainer -c 3d_cascade_fullres -p nnUNetPlans
+
+# apply post processing --------------------------------------------------------
+nnUNetv2_apply_postprocessing \
+  -i ${DIR_SCRATCH}/label_cascade \
+  -o ${DIR_SCRATCH}/label \
+  -pp_pkl_file ${nnUNet_results}/${NNMODEL}/nnUNetTrainer__nnUNetPlans__3d_cascade_fullres/crossval_results_folds_0_1_2_3_4/postprocessing.pkl \
+  -np 8 \
+  -plans_json ${nnUNet_results}/${NNMODEL}/nnUNetTrainer__nnUNetPlans__3d_cascade_fullres/crossval_results_folds_0_1_2_3_4/plans.json
+
+# save output -----------------------------------------------------------------
+FILENAME="$(getBidsBase -i ${IMAGE} -s)_mask-brain"
+mkdir -p ${DIR_SAVE}
+mv ${DIR_SCRATCH}/label/exvivoBEX_1234.nii.gz ${DIR_SAVE}/${FILENAME}.nii.gz
+
+if [[ ${NO_PNG} == "false" ]]; then
+  make3Dpng --bg ${IMAGE} \
+    --fg ${DIR_SAVE}/${FILENAME}.nii.gz --fg-alpha 50 --fg-cbar "false" \
+    --fg-mask ${DIR_SAVE}/${FILENAME}.nii.gz \
+    --fg-color "timbow:hue=#FF0000:sat=100:lum=65,65" \
+    --layout "9:x;9:x;9:y;9:y;9:z;9:z" \
+    --filename ${FILENAME} \
+    --dir-save ${DIR_SAVE}
+fi
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0

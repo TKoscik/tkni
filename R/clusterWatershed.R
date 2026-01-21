@@ -130,7 +130,7 @@ write.nii.volume(nii.save, 1, connected)
 rm("volume");   gc()
 
 # Fill in labels from core edges ---------------------------------------------
-## move 1 voxel of a boundary, add if they are touching a label
+# move 1 voxel of a boundary, add if they are touching a label
 label.xyz <- as.data.table(which(connected>0, arr.ind=T))
 blank.xyz <- as.data.table(which(dist<altitude & dist>=datum, arr.ind=TRUE))
 nn <- t(matrix(c(-1,0,0,0,-1,0,0,0,-1,1,0,0,0,1,0,0,0,1), nrow=3))

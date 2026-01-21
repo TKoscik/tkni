@@ -155,7 +155,11 @@ done
 unset SERIES_DESC SERIES_NUM ECHO DIRECTION
 for (( i=0; i<${N_NII}; i++ )); do
   JSON="${DIR_INPUT}/${FNAME[${i}]}.json"
-  SERIES_DESC+=($(jq ".SeriesDescription" < ${JSON} | tr -d '[],\n'))
+  TDESC=$(jq ".SeriesDescription" < ${JSON} | tr -d '[],\n')
+  TDESC=${TDESC// }
+  echo $TDESC
+  SERIES_DESC+=(${TDESC})
+  #SERIES_DESC+=($(jq ".SeriesDescription" < ${JSON} | tr -d '[],\n'))
   SERIES_NUM+=($(jq ".SeriesNumber" < ${JSON} | tr -d '[],\n'))
   ECHO+=($(jq ".EchoNumber" < ${JSON} | tr -d '[],\n'))
 done
@@ -190,6 +194,7 @@ unset F_AUTO NBOLD
 for (( i=0; i<${N_NII}; i++ )); do
   unset FTMP
   FTMP="${IDPFX}_${SUFFIX[${i}]}"
+  echo -e ">>>>>>1\t$FTMP"
   # add echo if present in JSON - - - - - - - - - - - - - - - - - - - - - - - -
   if [[ "${ECHO[${i}],,}" != "null" ]]; then
     FTMP=$(modField -i ${FTMP} -a -f echo -v ${ECHO[${i}]})
@@ -232,7 +237,8 @@ for (( i=0; i<${N_NII}; i++ )); do
   || [[ "${MOD,,}" == "dwi" ]]; then
     CHKDIR=$(getField -i ${FTMP} -f dir)
     if [[ -z ${CHKDIR} ]]; then
-      TDIRE=($(jq ".PhaseEncodingDirection" < ${F_ORIG[${i}]%%.*}.json | tr -d '[],\n'))
+      #TDIRE=($(jq ".PhaseEncodingDirection" < ${F_ORIG[${i}]%%.*}.json | tr -d '[],\n'))
+      TDIRE=($(jq ".PhaseEncodingDirection" < ${DIR_INPUT}/${FNAME[${i}]}.json | tr -d '[],\n'))
       TDIRE=${TDIRE//\"}
       if [[ "${TDIRE}" == "j" ]]; then
         FTMP=$(modField -i ${FTMP} -a -f dir -v fwd)
@@ -315,59 +321,59 @@ for (( i=0; i<${N_NII}; i++ )); do
   fi
 done
 
+### instead of this code, rely on series_description.json to define these as needed
 # add shell information to dwi --------------------------------------------------
-for (( i=0; i<${N_NII}; i++ )); do
-  unset MOD BSTR
-  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
-  if [[ ${MOD} == "dwi" ]]; then
-    BVAL=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
-    BTAB=($((IFS=$'\n'; sort <<< "${BVAL[*]}") | uniq -c))
-
-    for (( j=0; j<${#BTAB[@]}; j+=2 )); do
-      j2=$((${j}+1))
-      BLS+=("${BTAB[${j2}]}")
-      VLS+=("${BTAB[${j}]}")
-    done
-
-    if [[ ${#BLS[@]} -eq 1 ]]; then
-      ACQSTR="b${BLS[0]}"
-    else
-      HASB0="false"
-      for (( k=0; k<${#BLS[@]}; k++ )); do
-        if [[ ${BLS[${k}]} -ne 0 ]]; then
-          BOUT+=(${BLS[${k}]})
-        fi
-      done
-      if [[ ${#BOUT[@]} -gt 1 ]]; then
-        ACQSTR="multishell"
-      else
-        ACQSTR=${BOUT}
-      fi
-    fi
-    F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -m -f acq -v ${ACQSTR})
-  fi
-done
-
-# add shell information to DWI -------------------------------------------------
-## is this duplicative to section above?
-for (( i=0; i<${N_NII}; i++ )); do
-  unset MOD
-  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
-  if [[ ${MOD} == "dwi" ]]; then
-    BVALS=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
-    B0ALL="true"
-    for (( j=0; j<${#BVALS[@]}; j++ )); do
-      if [[ ${BVALS[${j}]} -ne 0 ]]; then
-        B0ALL="false"
-      fi
-    done
-    if [[ "${B0ALL}" == "true" ]]; then
-      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v b0)
-    else
-      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v multishell)
-    fi
-  fi
-done
+#for (( i=0; i<${N_NII}; i++ )); do
+#  unset MOD BSTR
+#  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
+#  if [[ ${MOD} == "dwi" ]]; then
+#    BVAL=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
+#    BTAB=($((IFS=$'\n'; sort <<< "${BVAL[*]}") | uniq -c))
+#    for (( j=0; j<${#BTAB[@]}; j+=2 )); do
+#      j2=$((${j}+1))
+#      BLS+=("${BTAB[${j2}]}")
+#      VLS+=("${BTAB[${j}]}")
+#    done
+#
+#    if [[ ${#BLS[@]} -eq 1 ]]; then
+#      ACQSTR="b${BLS[0]}"
+#    else
+#      HASB0="false"
+#      for (( k=0; k<${#BLS[@]}; k++ )); do
+#        if [[ ${BLS[${k}]} -ne 0 ]]; then
+#          BOUT+=(${BLS[${k}]})
+#        fi
+#      done
+#      if [[ ${#BOUT[@]} -gt 1 ]]; then
+#        ACQSTR="multishell"
+#      else
+#        ACQSTR=${BOUT}
+#      fi
+#    fi
+#    F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -m -f acq -v ${ACQSTR})
+#  fi
+#done
+#
+## add shell information to DWI -------------------------------------------------
+### is this duplicative to section above?
+#for (( i=0; i<${N_NII}; i++ )); do
+#  unset MOD
+#  MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
+#  if [[ ${MOD} == "dwi" ]]; then
+#    BVALS=($(cat ${DIR_INPUT}/${FNAME[${i}]}.bval))
+#    B0ALL="true"
+#    for (( j=0; j<${#BVALS[@]}; j++ )); do
+#      if [[ ${BVALS[${j}]} -ne 0 ]]; then
+#        B0ALL="false"
+#      fi
+#    done
+#    if [[ "${B0ALL}" == "true" ]]; then
+#      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v b0)
+#    else
+#      F_AUTO[${i}]=$(modField -i ${F_AUTO[${i}]} -a -f acq -v multishell)
+#    fi
+#  fi
+#done
 
 # final Autonames --------------------------------------------------------------
 for (( i=0; i<${N_NII}; i++ )); do
@@ -388,8 +394,14 @@ for (( i=0; i<${N_NII}; i++ )); do
     mkdir -p ${DIR_SAVE}
     unset MOD
     MOD=$(getField -i ${F_AUTO[${i}]} -f modality)
-    if [[ ${MOD} == "dwi" ]]; then
+    #if [[ ${MOD} == "dwi" ]]; then
+    #  cp ${DIR_INPUT}/${FNAME[${i}]}.bval ${DIR_SAVE}/${F_AUTO[${i}]}.bval
+    #  cp ${DIR_INPUT}/${FNAME[${i}]}.bvec ${DIR_SAVE}/${F_AUTO[${i}]}.bvec
+    #fi
+    if [[ -f ${DIR_INPUT}/${FNAME[${i}]}.bval ]]; then
       cp ${DIR_INPUT}/${FNAME[${i}]}.bval ${DIR_SAVE}/${F_AUTO[${i}]}.bval
+    fi
+    if [[ -f ${DIR_INPUT}/${FNAME[${i}]}.bvec ]]; then
       cp ${DIR_INPUT}/${FNAME[${i}]}.bvec ${DIR_SAVE}/${F_AUTO[${i}]}.bvec
     fi
     cp ${DIR_INPUT}/${FNAME[${i}]}.nii.gz ${DIR_SAVE}/${F_AUTO[${i}]}.nii.gz

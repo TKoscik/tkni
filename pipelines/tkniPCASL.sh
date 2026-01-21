@@ -608,6 +608,7 @@ fi
 
 # Brain mask -------------------------------------------------------------------
 mri_synthstrip -i ${DIR_SCRATCH}/M0.nii.gz -m ${DIR_SCRATCH}/mask-brain.nii.gz
+echo ">>>>>> brain masked"
 
 # Coregister to Native Space ---------------------------------------------------
 coregistrationChef --recipe-name ${COREG_RECIPE} \

@@ -322,22 +322,23 @@ MASK_BRAIN=${TMP_NII}/mask.nii.gz
 
 # check image dimensions and pad if uneven -------------------------------------
 for (( i=0; i<${N_DWI}; i++ )); do
-  unset TDIM
-  TDIM=$(PrintHeader ${TMP_NII}/dwi_${i}.nii.gz 2)
-  #echo -e "${i}: ${TDIM}"
-  TDIM=(${TDIM//x/ })
-  DIMCHK=0
-  for j in {0..2}; do
-    if [ $((${TDIM[${j}]}%2)) -eq 1 ]; then
-      TDIM[${j}]=$((${TDIM[${j}]} + 1))
-      DIMCHK=1
-    fi
-  done
-  if [ ${DIMCHK} -eq 1 ]; then
-    fslroi ${TMP_NII}/dwi_${i}.nii.gz \
-      ${TMP_NII}/dwi_${i}.nii.gz \
-      0 ${TDIM[0]} 0 ${TDIM[1]} 0 ${TDIM[2]}
-  fi
+#  unset TDIM
+#  TDIM=$(PrintHeader ${TMP_NII}/dwi_${i}.nii.gz 2)
+#  #echo -e "${i}: ${TDIM}"
+#  TDIM=(${TDIM//x/ })
+#  DIMCHK=0
+#  for j in {0..2}; do
+#    if [ $((${TDIM[${j}]}%2)) -eq 1 ]; then
+#      TDIM[${j}]=$((${TDIM[${j}]} + 1))
+#      DIMCHK=1
+#    fi
+#  done
+#  if [ ${DIMCHK} -eq 1 ]; then
+#    fslroi ${TMP_NII}/dwi_${i}.nii.gz \
+#      ${TMP_NII}/dwi_${i}.nii.gz \
+#      0 ${TDIM[0]} 0 ${TDIM[1]} 0 ${TDIM[2]}
+#  fi
+  c4d ${TMP_NII}/dwi_${i}.nii.gz -pad-to-multiple 2x2x2x1 0 -o ${TMP_NII}/dwi_${i}.nii.gz
 done
 
 ## convert to DWI to mif -------------------------------------------------------

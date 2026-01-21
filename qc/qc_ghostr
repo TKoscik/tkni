@@ -105,7 +105,7 @@ NONGHOST=${DIR_SCRATCH}/nonghost.nii.gz
 for (( i=0; i<${#XY[@]}; i++ )); do
   if [[ "${XY[${i}],,}" == "x" ]]; then
     WRAP="$((${IMGDIMS[0]}/2))x0x0"
-  elif [[ "${XY[${i}],,}" == "x" ]]; then
+  elif [[ "${XY[${i}],,}" == "y" ]]; then
     WRAP="0x$((${IMGDIMS[1]}/2))x0"
   elif [[ "${XY[${i}],,}" == "z" ]]; then
     WRAP="0x0x$((${IMGDIMS[0]}/2))"

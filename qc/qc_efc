@@ -38,7 +38,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,framemask:,dir-scratch:,\
+OPTS=$(getopt -o hvl --long image:,frame:,dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -48,7 +48,7 @@ eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
 IMAGE=
-MASK=
+FRAME=
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
 VERBOSE=false
@@ -59,7 +59,7 @@ while true; do
     -v | --verbose) VERBOSE=1 ; shift ;;
     -l | --no-log) NO_LOG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
-    --framemask) MASK="$2" ; shift 2 ;;
+    --frame) FRAME="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -85,7 +85,7 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  -h | --help              display command help'
   echo '  -l | --no-log            disable writing to output log'
   echo '  --image    <required>    NIfTI image to calculate stats for'
-  echo '  --framemask              binary mask indicating region for'
+  echo '  --frame                  binary mask indicating region for'
   echo '                           calculation. This is a mask that includes'
   echo '                           only voxels with collected data so needs to'
   echo '                           account for rotation of data'
@@ -100,24 +100,34 @@ fi
 #===============================================================================
 mkdir -p ${DIR_SCRATCH}
 
-if [[ -z ${MASK} ]]; then
-  niimath ${IMAGE} -add 1 -bin ${DIR_SCRATCH}/FRAME.nii.gz
-  MASK=${DIR_SCRATCH}/FRAME.nii.gz
+if [[ -z ${FRAME} ]]; then
+  FRAME=${DIR_SCRATCH}/FRAME.nii.gz
+  3dcalc -a ${IMAGE}[0] -expr a -prefix ${FRAME}
+  niimath ${FRAME} -add 1 -bin ${FRAME}
 fi
 
-niimath ${IMAGE} -mas ${MASK} -mul ${IMAGE} ${DIR_SCRATCH}/BMAX.nii.gz
-BMAX=($(3dROIstats -mask ${MASK} -nzsum ${DIR_SCRATCH}/BMAX.nii.gz))
-BMAX=$(echo "scale=4; sqrt(${BMAX[-1]})" | bc -l)
-niimath ${IMAGE} -div ${BMAX} ${DIR_SCRATCH}/BRATIO.nii.gz
-niimath ${DIR_SCRATCH}/BRATIO.nii.gz -log ${DIR_SCRATCH}/LN_BRATIO.nii.gz
-niimath ${DIR_SCRATCH}/BRATIO.nii.gz -mul ${DIR_SCRATCH}/LN_BRATIO.nii.gz ${DIR_SCRATCH}/EFC.nii.gz
-EFC=($(3dROIstats -mask ${MASK} -nzsum ${DIR_SCRATCH}/EFC.nii.gz))
-EFC=${EFC[-1]}
-NTMP=($(3dROIstats -mask ${MASK} -nzsum ${MASK}))
-N=${NTMP[-1]}
-SCALE=$(echo "scale=4; ((${N} / sqrt(${N})) * (l(1 / sqrt(${N}))))" | bc -l)
-EFC_SCALED=$(echo "scale=4; ${EFC} / ${SCALE}" | bc -l)
-echo ${EFC_SCALED}
+NV=$(niiInfo -i ${IMAGE} -f volumes)
+N=($(3dROIstats -mask ${FRAME} -nzsum ${FRAME}))
+N=${N[-1]}
+unset EFC_SCALED
+for (( i=0; i<${NV}; i++ )); do
+  TIMG=${DIR_SCRATCH}/TIMG.nii.gz
+  3dcalc -a ${IMAGE}[${i}] -overwrite -expr a -prefix ${TIMG}
+
+  niimath ${TIMG} -mas ${FRAME} -mul ${TIMG} ${DIR_SCRATCH}/BMAX$.nii.gz
+  BMAX=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/BMAX.nii.gz))
+  BMAX=$(echo "scale=4; sqrt(${BMAX[-1]})" | bc -l)
+
+  niimath ${TIMG} -div ${BMAX} ${DIR_SCRATCH}/BRATIO.nii.gz
+  niimath ${DIR_SCRATCH}/BRATIO.nii.gz -log ${DIR_SCRATCH}/LN_BRATIO.nii.gz
+  niimath ${DIR_SCRATCH}/BRATIO.nii.gz -mul ${DIR_SCRATCH}/LN_BRATIO.nii.gz ${DIR_SCRATCH}/EFC.nii.gz
+  EFC=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/EFC.nii.gz))
+  EFC=${EFC[-1]}
+
+  SCALE=$(echo "scale=4; ((${N} / sqrt(${N})) * (l(1 / sqrt(${N}))))" | bc -l)
+  EFC_SCALED+=($(echo "scale=4; ${EFC} / ${SCALE}" | bc -l))
+done
+echo ${EFC_SCALED[@]}
 
 #===============================================================================
 # End of Function
