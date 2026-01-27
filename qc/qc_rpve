@@ -100,7 +100,7 @@ P_GT5=${DIR_SCRATCH}/Pgt5.nii.gz
 P_LE5=${DIR_SCRATCH}/Ple5.nii.gz
 
 NV=$(niiInfo -i ${POSTERIOR} -f volumes)
-if [[ ${VOLUME}== "all" ]]; then
+if [[ ${VOLUME} == "all" ]]; then
   VOLUME=($(seq 0 $((${NV}-1))))
 else
   VOLUME=(${VOLUME//,/ })
