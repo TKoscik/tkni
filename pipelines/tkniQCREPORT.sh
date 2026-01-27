@@ -1,3 +1,7 @@
+#!/bin/bash -e
+
+#========================================================================================
+
 PI=evanderplas
 PROJECT=unitcall
 DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
