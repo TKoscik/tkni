@@ -107,12 +107,10 @@ else
 fi
 
 VAL_M=0
+mkdir -p ${DIR_SCRATCH}
 for i in "${VOLUME[@]}"; do
   3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
-  echo "******"
-  ls ${DIR_SCRATCH}
   WMMED=($(3dROIstats -mask ${MASK} -median ${DIR_SCRATCH}/IMG.nii.gz))
-  #DESC=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${DIR_SCRATCH}/IMG.nii.gz))
   IMGPCT=($(3dBrickStat -perclist 1 95 ${DIR_SCRATCH}/IMG.nii.gz))
   TVAL=$(echo "scale=6; ${WMMED[-1]} / ${IMGPCT}" | bc -l)
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
