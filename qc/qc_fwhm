@@ -38,7 +38,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvl --long image:,mask:,\
+OPTS=$(getopt -o hvl --long image:,mask:,dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -51,6 +51,7 @@ IMAGE=
 MASK=
 HELP=false
 VERBOSE=false
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${DATE_SUFFIX}
 
 while true; do
   case "$1" in
@@ -85,6 +86,7 @@ fi
 #===============================================================================
 # Start of Function
 #===============================================================================
+mkdir -p ${DIR_SCRATCH}
 fwhm_fcn="3dFWHMx"
 if [[ -n ${MASK} ]]; then fwhm_fcn="${fwhm_fcn} -mask ${MASK}"; fi
 fwhm_fcn="${fwhm_fcn} -out -"
