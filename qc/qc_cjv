@@ -130,7 +130,7 @@ else
 fi
 
 NV=$(niiInfo -i ${IMAGE} -f volumes)
-if [[ ${VOLUME}== "all" ]]; then
+if [[ ${VOLUME} == "all" ]]; then
   VOLUME=($(seq 0 $((${NV}-1))))
 else
   VOLUME=(${VOLUME//,/ })
