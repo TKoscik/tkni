@@ -64,6 +64,7 @@ DIR_PROJECT=
 DIR_SCRATCH=
 IDPFX=
 IDDIR=
+IDSTR=
 
 TEMPLATE="HCPYAX"
 
@@ -228,8 +229,8 @@ if [[ ${NO_RAW} == "false" ]]; then
   unset IMGLS
   IMGLS=($(ls ${DIRRAW}/anat/*.nii.gz))
   for (( j=0; j<${#IMGLS[@]}; j++ )); do
-    NV=$(niiInfo -i ${RAWLS[${j}]} -f volumes)
-    MOD=$(getField -i ${RAWLS[${j}]} -f modality)
+    NV=$(niiInfo -i ${IMGLS[${j}]} -f volumes)
+    MOD=$(getField -i ${IMGLS[${j}]} -f modality)
     if [[ ${MOD} == "qalas" ]]; then MOD=${MOD^^}; fi
     TIMG=${DIRTMP}/timg.nii.gz
     FRAME=${DIRTMP}/frame.nii.gz
@@ -251,26 +252,26 @@ if [[ ${NO_RAW} == "false" ]]; then
     antsApplyTransforms -d 3 -n GenericLabel -i ${FRAME} -o ${FRAME} -r ${REF} ${XSTR}
     
     unset CJV CNR EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX
-    CJV=($(qc_cjv --image ${TIMG} --tissue ${LAB_TISSUE} --label "2,4"))
-    CNR=$(qc_cnr --image ${TIMG} --fg ${MASK_FG} --tissue ${LAB_TISSUE} --label "2,4")
-    EFC=$(qc_efc --image ${TIMG} --frame ${FRAME})
-    FBER=$(qc_fber --image ${TIMG} --mask ${MASK_FG})
-    SNR_FRAME=$(qc_snr --image ${TIMG} --mask ${FRAME})
-    SNR_FG=$(qc_snr --image ${TIMG} --mask ${MASK_FG})
-    SNR_BRAIN=$(qc_snr --image ${TIMG} --mask ${MASK_BRAIN})
-    SNR_D=$(qc_snrd --image ${TIMG} --frame ${FRAME} --fg ${MASK_FG})
-    WM2MAX=$(qc_wm2max --image ${TIMG} --mask ${MASK_WM})
+    CJV=($(qc_cjv --image ${TIMG} --tissue ${LAB_TISSUE} --label "2,4" --add-mean))
+    CNR=($(qc_cnr --image ${TIMG} --fg ${MASK_FG} --tissue ${LAB_TISSUE} --label "2,4" --add-mean))
+    EFC=($(qc_efc --image ${TIMG} --frame ${FRAME} --add-mean))
+    FBER=($(qc_fber --image ${TIMG} --mask ${MASK_FG} --add-mean))
+    SNR_FRAME=($(qc_snr --image ${TIMG} --mask ${FRAME} --add-mean))
+    SNR_FG=($(qc_snr --image ${TIMG} --mask ${MASK_FG} --add-mean))
+    SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${MASK_BRAIN} --add-mean))
+    SNR_D=($(qc_snrd --image ${TIMG} --frame ${FRAME} --fg ${MASK_FG} --add-mean))
+    WM2MAX=($(qc_wm2max --image ${TIMG} --mask ${MASK_WM} --add-mean))
     FWHM=($(qc_fwhm --image ${TIMG} --mask ${MASK_FG}))
-    for (( k=1; k<=${NV}; k++ )); do
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},cjv,${CJV[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},cnr,${CNR[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},efc,${EFC[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},fber,${FBER[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},raw,anat,${MOD},${k},wm2max,${WM2MAX[${k}]}" >> ${CSV}
+    for (( k=0; k<${NV}; k++ )); do
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),cjv,${CJV[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),cnr,${CNR[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},raw,anat,${MOD},$((${k}+1)),wm2max,${WM2MAX[${k}]}" >> ${CSV}
     done
     echo "${IDSTR},${DSFX},raw,anat,${MOD},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
     echo "${IDSTR},${DSFX},raw,anat,${MOD},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -297,27 +298,27 @@ for (( j=0; j<${#IMGLS[@]}; j++ )); do
   MOD=$(getField -i ${TIMG} -f modality)
   
   unset CJV CNR EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX
-  CJV=($(qc_cjv --image ${TIMG} --tissue ${LAB_TISSUE} --label "2,4"))
-  CNR=($(qc_cnr --image ${TIMG} --fg ${MASK_FG} --tissue ${LAB_TISSUE} --label "2,4"))
-  EFC=($(qc_efc --image ${TIMG}))
-  FBER=$(qc_fber --image ${TIMG} --mask ${MASK_FG}))
+  CJV=($(qc_cjv --image ${TIMG} --tissue ${LAB_TISSUE} --label "2,4" --add-mean))
+  CNR=($(qc_cnr --image ${TIMG} --fg ${MASK_FG} --tissue ${LAB_TISSUE} --label "2,4" --add-mean))
+  EFC=($(qc_efc --image ${TIMG} --add-mean))
+  FBER=$(qc_fber --image ${TIMG} --mask ${MASK_FG} --add-mean))
   RPVE=($(qc_rpve --posterior ${PST_TISSUE})))
-  SNR_FRAME=($(qc_snr --image ${TIMG}))
-  SNR_FG=($(qc_snr --image ${TIMG} --mask ${MASK_FG}))
-  SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${MASK_BRAIN}))
-  SNR_D=($(qc_snrd --image ${TIMG} --fg ${MASK_FG}))
-  WM2MAX=($(qc_wm2max --image ${TIMG} --mask ${MASK_WM}))
+  SNR_FRAME=($(qc_snr --image ${TIMG} --add-mean))
+  SNR_FG=($(qc_snr --image ${TIMG} --mask ${MASK_FG} --add-mean))
+  SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${MASK_BRAIN} --add-mean))
+  SNR_D=($(qc_snrd --image ${TIMG} --fg ${MASK_FG} --add-mean))
+  WM2MAX=($(qc_wm2max --image ${TIMG} --mask ${MASK_WM} --add-mean))
   FWHM=($(qc_fwhm --image ${TIMG} --mask ${MASK_FG}))
-  for (( k=1; k<=${NV}; k++ )); do
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},cjv,${CJV[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},cnr,${CNR[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},efc,${EFC[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},fber,${FBER[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
-    echo "${IDSTR},${DSFX},clean,anat,${MOD},${k},wm2max,${WM2MAX[${k}]}" >> ${CSV}
+  for (( k=0; k<${NV}; k++ )); do
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),cjv,${CJV[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),cnr,${CNR[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+    echo "${IDSTR},${DSFX},clean,anat,${MOD},$((${k}+1)),wm2max,${WM2MAX[${k}]}" >> ${CSV}
   done
   echo "${IDSTR},${DSFX},clean,anat,${MOD},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
   echo "${IDSTR},${DSFX},clean,anat,${MOD},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -353,20 +354,20 @@ if [[ ${NO_RAW}=="false" ]]; do
       antsApplyTransforms -d 3 -n GenericLabel -i ${MASK_BRAIN} -o ${TMASK_BRAIN} -r ${TIMG} ${XSTR}
     
       unset EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX
-      EFC=($(qc_efc --image ${TIMG}))
-      FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG}))
-      SNR_FRAME=($(qc_snr --image ${TIMG}))
-      SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG}))
-      SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN}))
-      SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG}))
+      EFC=($(qc_efc --image ${TIMG} --add-mean))
+      FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+      SNR_FRAME=($(qc_snr --image ${TIMG} --add-mean))
+      SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+      SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+      SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG} --add-mean))
       FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN}))    
-      for (( k=1; k<=${NV}; k++ )); do
-        echo "${IDSTR},${DSFX},raw,func,${TASK},${k},efc,${EFC[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},raw,func,${TASK},${k},fber,${FBER[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},raw,func,${TASK},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},raw,func,${TASK},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},raw,func,${TASK},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},raw,func,${TASK},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+      for (( k=0; k<${NV}; k++ )); do
+        echo "${IDSTR},${DSFX},raw,func,${TASK},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},raw,func,${TASK},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},raw,func,${TASK},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},raw,func,${TASK},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},raw,func,${TASK},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},raw,func,${TASK},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
       done
       echo "${IDSTR},${DSFX},raw,func,${TASK},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
       echo "${IDSTR},${DSFX},raw,func,${TASK},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -395,20 +396,20 @@ if [[ ${#IMGLS[@]} -gt 0 ]]; then
     antsApplyTransforms -d 3 -n GenericLabel -i ${MASK_BRAIN} -o ${TMASK_BRAIN} -r ${TIMG}
     
     unset EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX
-    EFC=($(qc_efc --image ${TIMG}))
-    FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG}))
-    SNR_FRAME=($(qc_snr --image ${TIMG}))
-    SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG}))
-    SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN}))
-    SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG}))
-    FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN}))  
-    for (( k=1; k<=${NV}; k++ )); do
-      echo "${IDSTR},${DSFX},clean,func,${TASK},${k},efc,${EFC[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},clean,func,${TASK},${k},fber,${FBER[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},clean,func,${TASK},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},clean,func,${TASK},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},clean,func,${TASK},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},clean,func,${TASK},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+    EFC=($(qc_efc --image ${TIMG} --add-mean))
+    FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+    SNR_FRAME=($(qc_snr --image ${TIMG} --add-mean))
+    SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+    SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+    SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG} --add-mean))
+    FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))  
+    for (( k=0; k<${NV}; k++ )); do
+      echo "${IDSTR},${DSFX},clean,func,${TASK},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},clean,func,${TASK},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},clean,func,${TASK},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},clean,func,${TASK},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},clean,func,${TASK},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},clean,func,${TASK},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
     done
     echo "${IDSTR},${DSFX},clean,func,${TASK},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
     echo "${IDSTR},${DSFX},clean,func,${TASK},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -436,20 +437,20 @@ if [[ ${#IMGLS[@]} -gt 0 ]]; then
     antsApplyTransforms -d 3 -n GenericLabel -i ${MASK_BRAIN} -o ${TMASK_BRAIN} -r ${TIMG}
     
     unset EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D FWHM
-    EFC=($(qc_efc --image ${TIMG}))
-    FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG}))
-    SNR_FRAME=($(qc_snr --image ${TIMG}))
-    SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG}))
-    SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN}))
-    SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG}))
-    FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN}))  
-    for (( k=1; k<=${NV}; k++ )); do
-      echo "${IDSTR},${DSFX},resid,func,${TASK},${k},efc,${EFC[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},resid,func,${TASK},${k},fber,${FBER[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},resid,func,${TASK},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},resid,func,${TASK},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},resid,func,${TASK},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-      echo "${IDSTR},${DSFX},resid,func,${TASK},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+    EFC=($(qc_efc --image ${TIMG} --add-mean))
+    FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+    SNR_FRAME=($(qc_snr --image ${TIMG} --add-mean))
+    SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+    SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+    SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG} --add-mean))
+    FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))  
+    for (( k=0; k<=${NV}; k++ )); do
+      echo "${IDSTR},${DSFX},resid,func,${TASK},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},resid,func,${TASK},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},resid,func,${TASK},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},resid,func,${TASK},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},resid,func,${TASK},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+      echo "${IDSTR},${DSFX},resid,func,${TASK},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
     done
     echo "${IDSTR},${DSFX},resid,func,${TASK},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
     echo "${IDSTR},${DSFX},resid,func,${TASK},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -529,24 +530,24 @@ if [[ ${NO_RAW}=="false" ]]; do
         TIMG=${DIRTMP}/DWI_B${TB}.nii.gz
         
         unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX
-        EFC=($(qc_efc --image ${TIMG}))
-        FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG}))
-        SNR_FRAME=($(qc_snr --image ${TIMG}))
-        SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG}))
-        SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN}))
-        SNR_CC=($(qc_snr --image ${TIMG} --mask ${TMASK_CC}))
-        SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG}))
+        EFC=($(qc_efc --image ${TIMG} --add-mean))
+        FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+        SNR_FRAME=($(qc_snr --image ${TIMG} --add-mean))
+        SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+        SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+        SNR_CC=($(qc_snr --image ${TIMG} --mask ${TMASK_CC} --add-mean))
+        SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG} --add-mean))
         FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN}))
-      PIESNO=$(qc_piesnoish --image ${TIMG} --mask ${TMASK_BRAIN})
-        for (( k=1; k<=${NV}; k++ )); do
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},efc,${EFC[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},fber,${FBER[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},snr_cc,${SNR_CC[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
-          echo "${IDSTR},${DSFX},raw,dwi,${TB},${k},pieshoish,${PIESNO[${k}]}" >> ${CSV}
+        PIESNO=($(qc_piesnoish --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+        for (( k=0; k<${NV}; k++ )); do
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),snr_cc,${SNR_CC[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+          echo "${IDSTR},${DSFX},raw,dwi,${TB},$((${k}+1)),pieshoish,${PIESNO[${k}]}" >> ${CSV}
         done
         echo "${IDSTR},${DSFX},raw,dwi,${TB},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
         echo "${IDSTR},${DSFX},raw,dwi,${TB},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -593,22 +594,22 @@ if [[ ${#IMGLS[@]} -gt 0 ]]; then
       TIMG=${DIRTMP}/DWI_B${TB}.nii.gz
       
       unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX
-      EFC=($(qc_efc --image ${TIMG}))
-      FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG}))
-      SNR_FRAME=($(qc_snr --image ${TIMG}))
-      SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG}))
-      SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN}))
-      SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG}))
+      EFC=($(qc_efc --image ${TIMG} --add-mean))
+      FBER=$(qc_fber --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+      SNR_FRAME=($(qc_snr --image ${TIMG} --add-mean))
+      SNR_FG=($(qc_snr --image ${TIMG} --mask ${TMASK_FG} --add-mean))
+      SNR_BRAIN=($(qc_snr --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+      SNR_D=($(qc_snrd --image ${TIMG} --fg ${TMASK_FG} --add-mean))
       FWHM=($(qc_fwhm --image ${TIMG} --mask ${TMASK_BRAIN}))
-      PIESNO=$(qc_piesnoish --image ${TIMG} --mask ${TMASK_BRAIN})
-      for (( k=1; k<=${NV}; k++ )); do
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},efc,${EFC[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},fber,${FBER[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
-        echo "${IDSTR},${DSFX},clean,dwi,${TB},${k},pieshoish,${PIESNO[${k}]}" >> ${CSV}
+      PIESNO=($(qc_piesnoish --image ${TIMG} --mask ${TMASK_BRAIN} --add-mean))
+      for (( k=0; k<${NV}; k++ )); do
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),efc,${EFC[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),fber,${FBER[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),snr_frame,${SNR_FRAME[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),snr_fg,${SNR_FG[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),snr_dietrich,${SNR_D[${k}]}" >> ${CSV}
+        echo "${IDSTR},${DSFX},clean,dwi,${TB},$((${k}+1)),pieshoish,${PIESNO[${k}]}" >> ${CSV}
       done
       echo "${IDSTR},${DSFX},clean,dwi,${TB},NA,fwhm_x,${FWHM[0]}" >> ${CSV}
       echo "${IDSTR},${DSFX},clean,dwi,${TB},NA,fwhm_y,${FWHM[1]}" >> ${CSV}
@@ -639,8 +640,8 @@ if [[ ${#IMGLS[@]} -gt 0 ]]; then
     antsApplyTransforms -d 3 -n GenericLabel -i ${MASK_BRAIN} -o ${TMASK_BRAIN} -r ${TREF}
     
     unset ISNAN ISDEGEN
-    ISNAN=$(qc_isnan --image ${IMGLS[${j}]})
-    ISDEGEN=$(qc_isoutrange --image ${IMGLS[${j}]})
+    ISNAN=($(qc_isnan --image ${IMGLS[${j}]} --add-mean))
+    ISDEGEN=($(qc_isoutrange --image ${IMGLS[${j}]} --add-mean))
     echo "${IDSTR},${DSFX},clean,dwi,${TB},pct,fa_isnan,${ISNAN}" >> ${CSV}
     echo "${IDSTR},${DSFX},clean,dwi,${TB},pct,fa_isdegen,${ISDEGEN}" >> ${CSV}
   done
