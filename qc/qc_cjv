@@ -153,10 +153,9 @@ for i in "${VOLUME[@]}"; do
   VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
 done
 if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
-  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
-  VAL=(${VAL[@]} ${VAL_M})
+  VAL+=($(printf "%.*f" ${PRECISION} ${VAL_M}))
 fi
-echo ${VAL}
+echo ${VAL[@]}
 
 #===============================================================================
 # End of Function
