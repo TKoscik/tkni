@@ -92,7 +92,7 @@ if [[ -n ${MASK} ]]; then fwhm_fcn="${fwhm_fcn} -mask ${MASK}"; fi
 fwhm_fcn="${fwhm_fcn} -out -"
 if [[ "${IS4D}" == "false" ]]; then fwhm_fcn="${fwhm_fcn} -2difMAD"; fi
 fwhm_fcn="${fwhm_fcn} -ShowMeClassicFWHM"
-fwhm_fcn="${fwhm_fcn} -dset ${DIR_SCRATCH}/IMG.nii.gz"
+fwhm_fcn="${fwhm_fcn} -dset ${IMAGE}"
 VAL=($(eval ${fwhm_fcn}))
 echo ${FWHM[@]:0:3}
 
