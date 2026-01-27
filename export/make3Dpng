@@ -757,9 +757,9 @@ if [[ ${PMAX} -gt ${MAX_PIXELS} ]]; then
   YPXL=$(echo "scale=0; ${YPXL} / ${PRATIO}" | bc -l)
   ZPXL=$(echo "scale=0; ${ZPXL} / ${PRATIO}" | bc -l)
 fi
-if [[ ${XPXL} -le 0 ]]; then ${XPXL}=1; fi
-if [[ ${YPXL} -le 0 ]]; then ${YPXL}=1; fi
-if [[ ${ZPXL} -le 0 ]]; then ${ZPXL}=1; fi
+if [[ ${XPXL} -le 0 ]]; then XPXL=1; fi
+if [[ ${YPXL} -le 0 ]]; then YPXL=1; fi
+if [[ ${ZPXL} -le 0 ]]; then ZPXL=1; fi
 RESIZE_X="${YPXL}x${ZPXL}"
 RESIZE_Y="${XPXL}x${ZPXL}"
 RESIZE_Z="${XPXL}x${YPXL}"
