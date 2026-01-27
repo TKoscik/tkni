@@ -134,7 +134,7 @@ for (( i=0; i<${NV}; i++ )); do
   EFC=($(3dROIstats -mask ${FRAME} -nzsum ${DIR_SCRATCH}/EFC.nii.gz))
   EFC=${EFC[-1]}
 
-  TVAL=(($(echo "scale=6; ${EFC} / ${SCALE}" | bc -l)))
+  TVAL=($(echo "scale=6; ${EFC} / ${SCALE}" | bc -l))
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
     VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
   fi
