@@ -122,7 +122,7 @@ niimath ${GHOST} -sub ${MASK} -thr 1 -bin ${GHOST}
 niimath ${MASK} -add ${GHOST} -binv ${NONGHOST}
 
 NV=$(niiInfo -i ${IMAGE} -f volumes)
-if [[ ${VOLUME}== "all" ]]; then
+if [[ ${VOLUME} == "all" ]]; then
   VOLUME=($(seq 0 $((${NV}-1))))
 else
   VOLUME=(${VOLUME//,/ })
