@@ -124,14 +124,13 @@ for i in "${VOLUME[@]}"; do
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
     VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
   fi
-  VAL+=$(printf "%.*f" ${PRECISION} ${TVAL})
   rm ${DIR_SCRATCH}/P*
+  VAL+=($(printf "%.*f" ${PRECISION} ${TVAL}))
 done
 if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
-  VAL_M=$(printf "%.*f" ${PRECISION} ${VAL_M})
-  VAL=$(echo "${VAL[@]} ${VAL_M}")
+  VAL+=($(printf "%.*f" ${PRECISION} ${VAL_M}))
 fi
-echo ${VAL}
+echo ${VAL[@]}
 
 #===============================================================================
 # End of Function
