@@ -93,6 +93,7 @@ fwhm_fcn="${fwhm_fcn} -out -"
 if [[ "${IS4D}" == "false" ]]; then fwhm_fcn="${fwhm_fcn} -2difMAD"; fi
 fwhm_fcn="${fwhm_fcn} -ShowMeClassicFWHM"
 fwhm_fcn="${fwhm_fcn} -dset ${IMAGE}"
+echo ${fwhm_fcn}
 VAL=($(eval ${fwhm_fcn}))
 echo ${FWHM[@]:0:3}
 
