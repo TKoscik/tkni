@@ -224,6 +224,7 @@ if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
+# set output files and initialize with header as needed ----------------------
 HDR="participant_id"
 if [[ ${IDVARS[@]} == *"ses"* ]]; then HDR="${HDR},session-id"; fi
 if [[ ${#IDVARS[@]} -gt 2 ]]; then 
@@ -238,6 +239,12 @@ CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary.csv
 if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
 CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat_${TIMESTAMP}.csv
 if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
+
+if [[ "${NO_LOG}" == "false" ]]; then
+  if [[ ! -f ${TKNI_LOG}/log_QCANAT.csv ]]; then
+    echo "pi,project,idPrefix,timestamp,stage,modality,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
+  fi
+fi
 
 # Find images -------------------------------------------------------------------
 IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*.nii.gz))
@@ -338,7 +345,7 @@ ${WM2MAX[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,NA,NA"
   echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
   
   if [[ "${NO_LOG}" == "false" ]]; then
-    OPFX="${PI},${PROJECT},${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD}"
+    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${MOD}"
     for (( j=0; j<${NV}; j++ )); do
       echo "${OPFX},${j},cjv,${CJV[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
       echo "${OPFX},${j},cnr,${CNR[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
@@ -371,7 +378,7 @@ RPVE=($(qc_rpve --posterior ${POSTERIOR_TISSUE})))
 OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,${RPVE[0]},${RPVE[1]},${RPVE[2]},${RPVE[3]}"
 echo "${IDSTR},${TIMESTAMP},NA,NA,${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
 if [[ "${NO_LOG}" == "false" ]]; then
-  OPFX="${PI},${PROJECT},${IDSTR},${TIMESTAMP},NA,NA"
+  OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},NA,NA"
   echo "${OPFX},NA,rpve_gm,${RPVE[0]}" >> ${TKNI_LOG}/log_QCANAT.csv
   echo "${OPFX},NA,rpve_deepgm,${RPVE[1]}" >> ${TKNI_LOG}/log_QCANAT.csv
   echo "${OPFX},NA,rpve_wm,${RPVE[2]}" >> ${TKNI_LOG}/log_QCANAT.csv
