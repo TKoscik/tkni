@@ -152,6 +152,8 @@ fi
 #===============================================================================
 # Start of Function
 #===============================================================================
+TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+
 # set project defaults ---------------------------------------------------------
 if [[ -z ${PI} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PI must be provided"
@@ -182,6 +184,7 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 # make ID String for output ------
+HDR=${IDVARS}
 IDVARS=(${IDVARS//,/ })
 IDSTR=""
 for i in "${IDVARS[@]}"; do IDSTR="${IDSTR},$(getField -i ${IDPFX} -f ${i})"; done
@@ -214,6 +217,27 @@ fi
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/qc
+fi
+if [[ -z ${DIR_SUMMARY} ]]; then
+  DIR_SUMMARY=${DIR_PROJECT}/summary
+fi
+
+HDR="participant_id"
+if [[ ${IDVARS[@]} == *"ses"* ]]; then HDR="${HDR},session-id"; fi
+if [[ ${#IDVARS[@]} -gt 2 ]]; then 
+  for (( i=2; i<${#IDVARS[@]}; i++ )); do
+    HDR="${HDR},${IDVARS[${i}]}"
+  done
+fi
+HDR="${HDR},dateCalculated,processingStage,imageType,\
+cjv,cnr,efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max,fwhm_x,fwhm_y,fwhm_z,\
+rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
+CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary.csv
+if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
+CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat_${TIMESTAMP}.csv
+if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
 
 # Find images -------------------------------------------------------------------
 IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*.nii.gz))
@@ -287,15 +311,15 @@ fi
 
 # CALCULATE METRICS ===============================================================
 NIMG=${#IMGS[@]}
-TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 for (( i=0; i<${NIMG}; i++ )); do
   IMG=${IMGS[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
   NV=$(niiInfo -i ${IMG} -f volumes)
   FRAME=${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz
-  OUTSTR="${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD}"
-
+  OPFX="${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD}"
+  
+  unset CJV CNR EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX FWHM
   CJV=($(qc_cjv --image ${IMG} --tissue ${LAB_TISSUE} --label "${LAB_GM},${LAB_WM}" --add-mean))
   CNR=($(qc_cnr --image ${IMG} --fg ${MASK_FG} --tissue ${LAB_TISSUE} --label "${LAB_GM},${LAB_WM}" --add-mean))
   EFC=($(qc_efc --image ${IMG} --frame ${FRAME} --add-mean))
@@ -306,4 +330,51 @@ for (( i=0; i<${NIMG}; i++ )); do
   SNR_D=($(qc_snrd --image ${IMG} --frame ${FRAME} --fg ${MASK_FG} --add-mean))
   WM2MAX=($(qc_wm2max --image ${IMG} --mask ${MASK_WM} --add-mean))
   FWHM=($(qc_fwhm --image ${IMG} --mask ${MASK_FG}))
-  for (( j=0; j<${NV}; j++ )); do
+  PIESNO=($(qc_piesnoish --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
+
+  OSTR="${CJV[-1]},${CNR[-1]},${EFC[-1]},${FBER[-1]},\
+${SNR_FRAME[-1]},${SNR_FG[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
+${WM2MAX[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,NA,NA"
+  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+  
+  if [[ "${NO_LOG}" == "false" ]]; then
+    OPFX="${PI},${PROJECT},${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD}"
+    for (( j=0; j<${NV}; j++ )); do
+      echo "${OPFX},${j},cjv,${CJV[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},cnr,${CNR[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},efc,${EFC[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},fber,${FBER[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},snr_frame,${SNR_FRAME[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},snr_fg,${SNR_FG[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},snr_brain,${SNR_BRAIN[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},snr_dietrich,${SNR_D[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},wm2max,${WM2MAX[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},piesno,${PIESNO[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    done
+    echo "${OPFX},NA,fwhm_x,${FWHM[0]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},NA,fwhm_y,${FWHM[1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},NA,fwhm_z,${FWHM[2]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,cjv,${CJV[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,cnr,${CNR[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,efc,${EFC[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,fber,${FBER[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv}
+    echo "${OPFX},mean,snr_frame,${SNR_FRAME[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,snr_fg,${SNR_FG[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,snr_brain,${SNR_BRAIN[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,snr_dietrich,${SNR_D[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,wm2max,${WM2MAX[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},mean,piesno,${PIESNO[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+  fi
+done
+
+RPVE=($(qc_rpve --posterior ${POSTERIOR_TISSUE})))
+OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,${RPVE[0]},${RPVE[1]},${RPVE[2]},${RPVE[3]}"
+echo "${IDSTR},${TIMESTAMP},NA,NA,${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+if [[ "${NO_LOG}" == "false" ]]; then
+  OPFX="${PI},${PROJECT},${IDSTR},${TIMESTAMP},NA,NA"
+  echo "${OPFX},NA,rpve_gm,${RPVE[0]}" >> ${TKNI_LOG}/log_QCANAT.csv
+  echo "${OPFX},NA,rpve_deepgm,${RPVE[1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+  echo "${OPFX},NA,rpve_wm,${RPVE[2]}" >> ${TKNI_LOG}/log_QCANAT.csv
+  echo "${OPFX},NA,rpve_csf,${RPVE[3]}" >> ${TKNI_LOG}/log_QCANAT.csv
+fi
+
