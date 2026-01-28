@@ -242,7 +242,7 @@ if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
 
 if [[ "${NO_LOG}" == "false" ]]; then
   if [[ ! -f ${TKNI_LOG}/log_QCANAT.csv ]]; then
-    echo "pi,project,idPrefix,timestamp,stage,modality,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
+    echo "pi,project,id,timestamp,stage,modality,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
   fi
 fi
 
@@ -385,3 +385,11 @@ if [[ "${NO_LOG}" == "false" ]]; then
   echo "${OPFX},NA,rpve_csf,${RPVE[3]}" >> ${TKNI_LOG}/log_QCANAT.csv
 fi
 
+# set status file --------------------------------------------------------------
+mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
+touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
