@@ -39,6 +39,7 @@ trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvl --long image:,mask:,dir-scratch:,\
+volume:,add-mean,precision:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
   echo "Failed parsing options" >&2
@@ -54,6 +55,7 @@ ADD_MEAN="false"
 PRECISION=4
 HELP=false
 VERBOSE=false
+DIR_SCRATCH="${TKNI_SCRATCH}/${PIPE}${FLOW}_${DATE_SUFFIX}"
 
 while true; do
   case "$1" in
@@ -62,6 +64,9 @@ while true; do
     -l | --no-log) NO_LOG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --mask) MASK="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --add-mean) ADD_MEAN="true" ; shift  ;;
+    --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -99,21 +104,19 @@ fi
 
 if [[ -z ${MASK} ]]; then
   MASK=${DIR_SCRATCH}/MASK.nii.gz
-  3dcalc -a ${IMAGE}[0] -expr a -overwrite -prefix ${MASK}
+  3dcalc -a ${IMAGE}[0] -expr a -quiet -overwrite -prefix ${MASK}
   niimath ${MASK} -add 1 -bin ${MASK}
 fi
-N=($(3dROIstats -mask ${MASK} -nzsum ${MASK}))
+N=($(3dROIstats -mask ${MASK} -quiet -nzsum ${MASK}))
 
 unset OUT
 VAL_M=0
 for i in "${VOLUME[@]}"; do
   TIMG=${DIR_SCRATCH}/timg.nii.gz
-  3dcalc -a ${IMAGE}[${i}] -expr a -prefix ${TIMG}
-  
+  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -overwrite -prefix ${TIMG}
   niimath ${TIMG} -nanm ${TIMG} -odt char
-  
-  STATS=($(3dROIstats -mask ${MASK} -nzsum -prefix ${TIMG}))
-  TVAL=$(echo "scale=6; ${STATS[-2]} / ${N} | bc -l)
+    STATS=($(3dROIstats -mask ${MASK} -quiet -nzsum -prefix ${TIMG}))
+  TVAL=$(echo "scale=6; ${STATS[-2]} / ${N}" | bc -l)
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
     VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
   fi

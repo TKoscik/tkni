@@ -45,11 +45,13 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
-id:,dir-id:,base-img:,base-mod:,\
-align-manual:,align-to:,\
-fg-clip:,ants-template:,\
-dir-scratch:,requires:,\
+OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
+dir-raw:,dir-native:,dir-add:,dir-xfm:,dir-mask:,dir-label:,dir-posterior:,\
+mask-fg:,mask-brain:,mask-wm:,\
+label-tissue:,value-gm:,value-wm:,value-deep:,value-csf:,\
+posterior-tissue:,vol-gm:,vol-wm:,vol-deep:,vol-csf:,\
+ref-native:,redo-frame,\
+dir-save:,dir-summary:,dir-scratch:,requires:,\
 help,verbose,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -64,13 +66,12 @@ DIR_PROJECT=
 DIR_SCRATCH=
 IDPFX=
 IDDIR=
-IDVARS="sub,ses"
 
 DIR_RAW=
 DIR_NATIVE=
 DIR_ADD=
 DIR_MASK=
-DIR_LABEL
+DIR_LABEL=
 DIR_XFM=
 DIR_POST=
 
@@ -78,11 +79,12 @@ MASK_FG=
 MASK_BRAIN=
 MASK_WM=
 LABEL_TISSUE=
+POSTERIOR_TISSUE=
 
 #METRICS="cjv,cnr,efc,fber,fwhm,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max"
 # disabling option to select metrics, will require rework of output generation to implement
-ADD_MEAN="true"
-VOLUME="all"
+#ADD_MEAN="true"
+#VOLUME="all"
 REF_NATIVE=
 LAB_GM=2
 LAB_WM=4
@@ -92,6 +94,8 @@ VOL_GM=1
 VOL_WM=3
 VOL_DEEP=2
 VOL_CSF=4
+
+REDO_FRAME="false"
 
 HELP="false"
 VERBOSE="false"
@@ -114,12 +118,36 @@ while true; do
     -r | --no-rmd) NO_RMD=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
+    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
+    --dir-raw) DIR_RAW="$2" ; shift 2 ;;
+    --dir-native) DIR_NATIVE="$2" ; shift 2 ;;
+    --dir-add) DIR_ADD="$2" ; shift 2 ;;
+    --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
+    --dir-mask) DIR_MASK="$2" ; shift 2 ;;
+    --dir-label) DIR_LABEL="$2" ; shift 2 ;;
+    --dir-posterior) DIR_POSTERIOR="$2" ; shift 2 ;;
+    --mask-fg) MASK_FG="$2" ; shift 2 ;;
+    --mask-brain) MASK_BRAIN="$2" ; shift 2 ;;
+    --mask-wm) MASK_WM="$2" ; shift 2 ;;
+    --label-tissue) LABEL_TISSUE="$2" ; shift 2 ;;
+    --value-gm) LAB_GM="$2" ; shift 2 ;;
+    --value-wm) LAB_WM="$2" ; shift 2 ;;
+    --value-deep) LAB_DEEP="$2" ; shift 2 ;;
+    --value-csf) CSF="$2" ; shift 2 ;;
+    --posterior-tissue) POSTERIOR_TISSUE="$2" ; shift 2 ;;
+    --vol-gm) VOL_GM="$2" ; shift 2 ;;
+    --vol-wm) VOL_WM="$2" ; shift 2 ;;
+    --vol-deep) VOL_DEEP="$2" ; shift 2 ;;
+    --vol-csf) VOL_CSF="$2" ; shift 2 ;;
+    --ref-native) REF_NATIVE="$2" ; shift 2 ;;
+    --redo-frame) REDO_FRAME="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-summary) DIR_SUMMARY="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
-    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
-    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
   esac
@@ -184,10 +212,16 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 # make ID String for output ------
-HDR=${IDVARS}
-IDVARS=(${IDVARS//,/ })
-IDSTR=""
-for i in "${IDVARS[@]}"; do IDSTR="${IDSTR},$(getField -i ${IDPFX} -f ${i})"; done
+unset HDR IDSTR TV
+TV=(${IDPFX//_/ })
+for (( i=0; i<${#TVARS[@]}; i++ )); do
+  TTV=(${TV[${i}]//-/ })
+  HDR="${HDR},${TTV[0]}"
+  IDSTR="${IDSTR},${TTV[1]}"
+done
+HDR=${HDR:1}
+HDR=${HDR//sub,/participant_id,}
+HDR=${HDR//ses,/session_id,}
 IDSTR=${IDSTR:1}
 
 ### PIPELINE
@@ -224,6 +258,9 @@ if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
 # set output files and initialize with header as needed ----------------------
 HDR="participant_id"
 if [[ ${IDVARS[@]} == *"ses"* ]]; then HDR="${HDR},session-id"; fi
@@ -241,8 +278,9 @@ CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat_${TIMESTAMP}.csv
 if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
 
 if [[ "${NO_LOG}" == "false" ]]; then
-  if [[ ! -f ${TKNI_LOG}/log_QCANAT.csv ]]; then
-    echo "pi,project,id,timestamp,stage,modality,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
+  CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
+  if [[ ! -f ${CSV_LOG} ]]; then
+    echo "pi,project,id,timestamp,stage,modality,volume,metric,value" > ${CSV_LOG}
   fi
 fi
 
@@ -260,20 +298,22 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
+  if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
   TYPES+=("raw")
-  IMGS+=("${DIR_SCRATCH}/${IMG}")
-  XFMFCN="antsApplyTransforms -d 3 -n Linear"
-  if [[ ${NV} -gt 1 ]]; then XFMFCN="${XFMFCN} -e 3"; fi
-  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/${PFX}_${MOD}.nii.gz -r ${REF_NATIVE}"
-  if [[ -f ${DIR_XFM}/${IDPFX}_from-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
-    XFMSTR="${DIR_XFM}/${IDPFX}_from-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
+  IMGS+=("${DIR_SCRATCH}/$(basename ${IMG})")
+  if [[ -f ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
+    XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
   else
     XFMSTR="-t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz"
     XFMSTR="${XFMSTR} -t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-affine.mat"
   fi
-  XFMFCN="${XFMFCN} -t identity -t ${XFMSTR}"
-  eval ${XFMSTR}
+  XFMFCN="antsApplyTransforms -d 3 -n Linear"
+  if [[ ${NV} -gt 1 ]]; then XFMFCN="${XFMFCN} -e 3"; fi
+  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/$(basename ${IMG}) -r ${REF_NATIVE}"
+  XFMFCN="${XFMFCN} -t identity ${XFMSTR}"
+#  echo -e "\n\n${XFMFCN}\n\n"
+  eval ${XFMFCN}
 done
 
 for (( i=0; i<${#IMGS_NATIVE[@]}; i++ )); do
@@ -283,25 +323,29 @@ done
 
 # find masks and labels ========================================================
 # find/create frame masks ------
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>Create frame masks as needed"; fi
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
+  if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   TFRAME=${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz
-  if [[ ! -f ${TFRAME} ]]; then
+  if [[ ! -f ${TFRAME} ]] || [[ ${REDO_FRAME} == "true" ]]; then
+    unset XFMSTR
     # consider moving frame mask creation to AINIT and AMOD
-    if [[ -f ${DIR_XFM}/${IDPFX}_from-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
-      XFMSTR="${DIR_XFM}/${IDPFX}_from-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
+    if [[ -f ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
+      XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
     else
       XFMSTR="-t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz"
       XFMSTR="${XFMSTR} -t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-affine.mat"
     fi
-    3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${TFRAME}
+    3dcalc -a ${IMG}[0] -expr a -quiet -overwrite -prefix ${TFRAME}
     niimath ${TFRAME} -mul 0 -add 1 ${TFRAME} -odt char
     XFMFCN="antsApplyTransforms -d 3 -n Linear"
     XFMFCN="${XFMFCN} -i ${TFRAME} -o ${TFRAME}.nii.gz -r ${REF_NATIVE}"
-    XFMFCN="${XFMFCN} -t identity -t ${XFMSTR}"
-    eval ${XFMSTR}
+    XFMFCN="${XFMFCN} -t identity ${XFMSTR}"
+#    echo -e "\n\n${XFMFCN}\n\n"
+    eval ${XFMFCN}
   fi
 done
 
@@ -322,13 +366,23 @@ for (( i=0; i<${NIMG}; i++ )); do
   IMG=${IMGS[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
+  if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
   FRAME=${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz
+ 
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e "\n>>>Calculating QC Metrics: ------"
+    echo -e "\tIMAGE: ${IMG}"
+    echo -e "\tFRAME: ${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz\n"
+  fi
+ 
   OPFX="${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD}"
   
   unset CJV CNR EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX FWHM
-  CJV=($(qc_cjv --image ${IMG} --tissue ${LAB_TISSUE} --label "${LAB_GM},${LAB_WM}" --add-mean))
-  CNR=($(qc_cnr --image ${IMG} --fg ${MASK_FG} --tissue ${LAB_TISSUE} --label "${LAB_GM},${LAB_WM}" --add-mean))
+  CJV=($(qc_cjv --image ${IMG} --tissue ${LABEL_TISSUE} \
+	        --label "${LAB_GM},${LAB_WM}" --add-mean))
+  CNR=($(qc_cnr --image ${IMG} --fg ${MASK_FG} --tissue ${LABEL_TISSUE} \
+	        --label "${LAB_GM},${LAB_WM}" --add-mean))
   EFC=($(qc_efc --image ${IMG} --frame ${FRAME} --add-mean))
   FBER=($(qc_fber --image ${IMG} --mask ${MASK_FG} --add-mean))
   SNR_FRAME=($(qc_snr --image ${IMG} --mask ${FRAME} --add-mean))
@@ -339,43 +393,86 @@ for (( i=0; i<${NIMG}; i++ )); do
   FWHM=($(qc_fwhm --image ${IMG} --mask ${MASK_FG}))
   PIESNO=($(qc_piesnoish --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
 
+  unset M SD MED MAD SKEW KURT P05 P95
+  M_M=0; M_SD=0; M_MED=0; M_MAD=0; M_SKEW=0; M_KURT=0; M_P05=0; M_P95=0;
+  for (( j=0; j<${NV}; j++ )); do
+    TV=($(Rscript ${TKNIPATH}/R/qc_descriptives.R \
+            "image" ${IMG} "mask" ${MASK_BRAIN} "volume" $((${j}+1))))
+    M+=${TV[0]}
+    SD+=${TV[1]}
+    MED+=${TV[2]}
+    MAD+=${TV[3]}
+    SKEW+=${TV[4]}
+    KURT+=${TV[5]}
+    P05+=${TV[6]}
+    P95+=${TV[7]}
+    M_M=$(echo "scale=6; ${M_M} + ${M[-1]} / ${NV}" | bc -l)
+    M_SD=$(echo "scale=6; ${M_SD} + ${SD[-1]} / ${NV}" | bc -l)
+    M_MED=$(echo "scale=6; ${M_MED} + ${MED[-1]} / ${NV}" | bc -l)
+    M_MAD=$(echo "scale=6; ${M_MAD} + ${MAD[-1]} / ${NV}" | bc -l)
+    M_SKEW=$(echo "scale=6; ${M_SKEW} + ${SKEW[-1]} / ${NV}" | bc -l)
+    M_KURT=$(echo "scale=6; ${M_KURT} + ${KURT[-1]} / ${NV}" | bc -l)
+    M_P05=$(echo "scale=6; ${M_P05} + ${P05[-1]} / ${NV}" | bc -l)
+    M_P95=$(echo "scale=6; ${M_P95} + ${P95[-1]} / ${NV}" | bc -l)
+  done
+
   OSTR="${CJV[-1]},${CNR[-1]},${EFC[-1]},${FBER[-1]},\
 ${SNR_FRAME[-1]},${SNR_FG[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
-${WM2MAX[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,NA,NA"
+${WM2MAX[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},\
+${M_M},${M_SD},${M_MED},${M_MAD},${M_SKEW},${M_KURT},${M_P05},${M_P95},\
+NA,NA,NA,NA"
   echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
   
   if [[ "${NO_LOG}" == "false" ]]; then
     OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${MOD}"
     for (( j=0; j<${NV}; j++ )); do
-      echo "${OPFX},${j},cjv,${CJV[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},cnr,${CNR[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},efc,${EFC[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},fber,${FBER[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},snr_frame,${SNR_FRAME[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},snr_fg,${SNR_FG[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},snr_brain,${SNR_BRAIN[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},snr_dietrich,${SNR_D[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},wm2max,${WM2MAX[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
-      echo "${OPFX},${j},piesno,${PIESNO[${j}]}" >> ${TKNI_LOG}/log_QCANAT.csv
+      echo "${OPFX},${j},cjv,${CJV[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},cnr,${CNR[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},efc,${EFC[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},fber,${FBER[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},snr_frame,${SNR_FRAME[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},snr_fg,${SNR_FG[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},snr_brain,${SNR_BRAIN[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},snr_dietrich,${SNR_D[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},wm2max,${WM2MAX[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},piesno,${PIESNO[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},mean,${M[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},sigma,${SD[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},median,${MED[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},mad,${MAD[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},skew,${SKEW[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},kurtosis,${KURT[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},p05,${P05[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},p95,${P95[${j}]}" >> ${CSV_LOG}
     done
-    echo "${OPFX},NA,fwhm_x,${FWHM[0]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},NA,fwhm_y,${FWHM[1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},NA,fwhm_z,${FWHM[2]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,cjv,${CJV[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,cnr,${CNR[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,efc,${EFC[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,fber,${FBER[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv}
-    echo "${OPFX},mean,snr_frame,${SNR_FRAME[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,snr_fg,${SNR_FG[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,snr_brain,${SNR_BRAIN[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,snr_dietrich,${SNR_D[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,wm2max,${WM2MAX[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-    echo "${OPFX},mean,piesno,${PIESNO[-1]}" >> ${TKNI_LOG}/log_QCANAT.csv
+    echo "${OPFX},NA,fwhm_x,${FWHM[0]}" >> ${CSV_LOG}
+    echo "${OPFX},NA,fwhm_y,${FWHM[1]}" >> ${CSV_LOG}
+    echo "${OPFX},NA,fwhm_z,${FWHM[2]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,cjv,${CJV[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,cnr,${CNR[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,efc,${EFC[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,fber,${FBER[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_frame,${SNR_FRAME[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_fg,${SNR_FG[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_brain,${SNR_BRAIN[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_dietrich,${SNR_D[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,wm2max,${WM2MAX[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,piesno,${PIESNO[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,mean,${M_M}" >> ${CSV_LOG}
+    echo "${OPFX},mean,sigma,${M_SD}" >> ${CSV_LOG}
+    echo "${OPFX},mean,median,${M_MED}" >> ${CSV_LOG}
+    echo "${OPFX},mean,mad,${M_MAD}" >> ${CSV_LOG}
+    echo "${OPFX},mean,skew,${M_SKEW}" >> ${CSV_LOG}
+    echo "${OPFX},mean,kurtosis,${M_KURT}" >> ${CSV_LOG}
+    echo "${OPFX},mean,p05,${M_P05}" >> ${CSV_LOG}
+    echo "${OPFX},mean,p95,${M_P95}" >> ${CSV_LOG}
   fi
 done
 
-RPVE=($(qc_rpve --posterior ${POSTERIOR_TISSUE})))
-OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,${RPVE[0]},${RPVE[1]},${RPVE[2]},${RPVE[3]}"
+if [[ ${VERBOSE} == "true" ]]; then echo ">>>calculating RPVE"; fi
+RPVE=($(qc_rpve --posterior ${POSTERIOR_TISSUE}))
+OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,\
+${RPVE[0]},${RPVE[1]},${RPVE[2]},${RPVE[3]}"
 echo "${IDSTR},${TIMESTAMP},NA,NA,${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
 if [[ "${NO_LOG}" == "false" ]]; then
   OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},NA,NA"
@@ -384,6 +481,8 @@ if [[ "${NO_LOG}" == "false" ]]; then
   echo "${OPFX},NA,rpve_wm,${RPVE[2]}" >> ${TKNI_LOG}/log_QCANAT.csv
   echo "${OPFX},NA,rpve_csf,${RPVE[3]}" >> ${TKNI_LOG}/log_QCANAT.csv
 fi
+
+if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}

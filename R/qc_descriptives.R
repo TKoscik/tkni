@@ -9,7 +9,7 @@ for (i in seq(1,length(args))) {
   if (args[i] %in% c("i", "image", "-i")) {
     img <- args[i+1]
   } else if (args[i] %in% c("v", "vol", "volume", "-v")) {
-    vol <- args[i+1]
+    vol <- as.numeric(args[i+1])
   } else if (args[i] %in% c("m", "mask", "-m")) {
     mask <- args[i+1]
   } else if (args[i] %in% c("scratch", "dir.scratch", "-dir.scratch")) {

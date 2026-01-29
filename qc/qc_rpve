@@ -108,17 +108,17 @@ fi
 
 VAL_M=0
 for i in "${VOLUME[@]}"; do
-  3dcalc -a ${POSTERIOR}[${i}] -expr a -overwrite -prefix ${P} > /dev/null
+  3dcalc -a ${POSTERIOR}[${i}] -expr a -quiet -overwrite -prefix ${P} > /dev/null
   niimath ${P} -thr 0.02 -uthr 0.98 ${P}
   niimath ${P} -bin ${P_MSK}
-  TOTAL=($(3dROIstats -mask ${P_MSK} -nzsum ${P}))
+  TOTAL=($(3dROIstats -mask ${P_MSK} -quiet -nzsum ${P}))
 
   niimath ${P} -thr 0.5 -uthr 0.5 -binv ${P_NE5}
   niimath ${P} -thr 0.5 -mas ${P_NE5} ${P_GT5}
-  PVGT5=($(3dROIstats -mask ${P_MSK} -nzsum ${P_GT5}))
+  PVGT5=($(3dROIstats -mask ${P_MSK} -quiet -nzsum ${P_GT5}))
 
   niimath ${P} -uthr 0.5 -mul -1 -add 1 ${P_LE5}
-  PVLE5=($(3dROIstats -mask ${P_MSK} -nzsum ${P_LE5}))
+  PVLE5=($(3dROIstats -mask ${P_MSK} -quiet -nzsum ${P_LE5}))
 
   TVAL=($(echo "scale=6; (${PVGT5[-1]} + ${PVLE5[-1]}) / ${TOTAL[-1]}" | bc -l))
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then

@@ -107,15 +107,16 @@ fi
 
 if [[ -z ${MASK} ]]; then
   MASK=${DIR_SCRATCH}/MASK.nii.gz
-  3dcalc -a ${IMAGE}[0] -expr a -overwrite -prefix ${MASK}
+  3dcalc -a ${IMAGE}[0] -expr a -quiet -overwrite -prefix ${MASK}
   niimath ${MASK} -add 1 -bin ${MASK}
 fi
-N=($(3dROIstats -mask ${MASK} -nzsum ${MASK}))
+N=($(3dROIstats -mask ${MASK} -quiet -nzsum ${MASK}))
 
 VAL_M=0
 for i in "${VOLUME[@]}"; do
-  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
-  STATS=($(3dROIstats -mask ${MASK} -sigma ${DIR_SCRATCH}/IMG.nii.gz))
+  TIMG=${DIR_SCRATCH}/IMG.nii.gz
+  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -overwrite -prefix ${TIMG}
+  STATS=($(3dROIstats -mask ${MASK} -quiet -sigma ${TIMG}))
   TVAL=$(echo "scale=6; ${STATS[-2]} / (${STATS[-1]} * sqrt(${N[-1]} / (${N[-1]} - 1)))" | bc -l)
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
     VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)

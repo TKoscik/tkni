@@ -111,15 +111,18 @@ else
   VOLUME=(${VOLUME//,/ })
 fi
 
-niimath ${MASK} -binv ${DIR_SCRATCH}/mask-inv.nii.gz
+MASKINV=${DIR_SCRATCH}/mask-inv.nii.gz
+niimath ${MASK} -binv ${MASKINV}
 
 VAL_M=0
 for i in "${VOLUME[@]}"; do
-  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
-  niimath ${DIR_SCRATCH}/IMG.nii.gz -mul ${DIR_SCRATCH}/IMG.nii.gz ${DIR_SCRATCH}/image_sq.nii.gz
-  FGMED=($(3dROIstats -mask ${MASK} -median ${DIR_SCRATCH}/image_sq.nii.gz))
+  TIMG=${DIR_SCRATCH}/IMG.nii.gz
+  TSQD=${DIR_SCRATCH}/IMGSQD.nii.gz
+  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -overwrite -prefix ${TIMG}
+  niimath ${TIMG} -mul ${TIMG} ${TSQD}
+  FGMED=($(3dROIstats -mask ${MASK} -quiet -median ${TSQD}))
   FGMED=${FGMED[-1]}
-  BGMED=($(3dROIstats -mask ${DIR_SCRATCH}/mask-inv.nii.gz -median ${DIR_SCRATCH}/image_sq.nii.gz))
+  BGMED=($(3dROIstats -mask ${MASKINV} -quiet -median ${TSQD}))
   BGMED=${BGMED[-1]}
 
   if [[ "${BGMED}" == "0.000000" ]]; then

@@ -145,10 +145,11 @@ fi
 VAL_M=0
 CONST=$(echo "scale=6; sqrt(2 / (4 - 3.14159))" | bc -l)
 for i in "${VOLUME[@]}"; do
-  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
+  TIMG=${DIR_SCRATCH}/IMG.nii.gz
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${TIMG}
   # calculate SNR --------------------------------------------------------------
-  FG_VALS=($(3dROIstats -mask ${MASK_FG} ${DIR_SCRATCH}/IMG.nii.gz))
-  BG_VALS=($(3dROIstats -mask ${MASK_BG} -sigma ${DIR_SCRATCH}/IMG.nii.gz))
+  FG_VALS=($(3dROIstats -mask ${MASK_FG} -quiet ${TIMG}))
+  BG_VALS=($(3dROIstats -mask ${MASK_BG} -quiet -sigma ${TIMG}))
 
   if [[ "${BG_VALS[-1]}" == "0.000000" ]]; then
     TVAL=-1

@@ -87,7 +87,7 @@ fi
 # Start of Function
 #===============================================================================
 mkdir -p ${DIR_SCRATCH}
-fwhm_fcn="3dFWHMx"
+fwhm_fcn="3dFWHMx -overwrite"
 if [[ -n ${MASK} ]]; then fwhm_fcn="${fwhm_fcn} -mask ${MASK}"; fi
 fwhm_fcn="${fwhm_fcn} -out -"
 if [[ "${IS4D}" == "false" ]]; then fwhm_fcn="${fwhm_fcn} -2difMAD"; fi
