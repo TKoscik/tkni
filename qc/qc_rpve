@@ -49,7 +49,7 @@ eval set -- "$OPTS"
 
 # Set default values for function ---------------------------------------------
 POSTERIOR=
-VOLUME=
+VOLUME="all"
 PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
 HELP=false
@@ -108,7 +108,7 @@ fi
 
 VAL_M=0
 for i in "${VOLUME[@]}"; do
-  3dcalc -a ${POSTERIOR}[${i}] -expr a -quiet -overwrite -prefix ${P} > /dev/null
+  3dcalc -a ${POSTERIOR}[${i}] -expr a -overwrite -prefix ${P}
   niimath ${P} -thr 0.02 -uthr 0.98 ${P}
   niimath ${P} -bin ${P_MSK}
   TOTAL=($(3dROIstats -mask ${P_MSK} -quiet -nzsum ${P}))

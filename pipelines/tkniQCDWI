@@ -45,10 +45,9 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
-id:,dir-id:,base-img:,base-mod:,\
-align-manual:,align-to:,\
-fg-clip:,ants-template:,\
+OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
+dir-raw:,dir-clean:,dir-scalar:,dir-mask:,dir-label:,dir-xfm:,\
+mask-fg:,mask-brain:,mask-wm:,label-cc:,\
 dir-scratch:,requires:,\
 help,verbose,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -70,7 +69,7 @@ DIR_RAW=
 DIR_CLEAN=
 DIR_SCALAR=
 DIR_MASK=
-DIR_LABEL
+DIR_LABEL=
 DIR_XFM=
 DIR_POST=
 
@@ -78,6 +77,7 @@ MASK_FG=
 MASK_BRAIN=
 MASK_WM=
 LABEL_CC=
+VALUE_CC="251,252,253,254,255"
 
 #METRICS="cjv,cnr,efc,fber,fwhm,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max"
 # disabling option to select metrics, will require rework of output generation to implement

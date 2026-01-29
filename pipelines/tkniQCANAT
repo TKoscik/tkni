@@ -285,11 +285,13 @@ if [[ "${NO_LOG}" == "false" ]]; then
 fi
 
 # Find images -------------------------------------------------------------------
+shopt -s nullglob
 IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*.nii.gz))
 IMGS_NATIVE=($(ls ${DIR_NATIVE}/${IDPFX}*.nii.gz))
 for (( i=0; i<${#DIR_ADD[@]}; i++ )); do
   IMGS_NATIVE+=($(ls ${DIR_ADD[${i}]}/${IDPFX}*.nii.gz))
 done
+shopt -u nullglob
 
 # Copy to scratch (and push raw to native space) ---------------------------------
 if [[ -z ${REF_NATIVE} ]]; then REF_NATIVE=${DIR_NATIVE}/${IDPFX}_T1w.nii.gz; fi
@@ -339,7 +341,7 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
       XFMSTR="-t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz"
       XFMSTR="${XFMSTR} -t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-affine.mat"
     fi
-    3dcalc -a ${IMG}[0] -expr a -quiet -overwrite -prefix ${TFRAME}
+    3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${TFRAME}
     niimath ${TFRAME} -mul 0 -add 1 ${TFRAME} -odt char
     XFMFCN="antsApplyTransforms -d 3 -n Linear"
     XFMFCN="${XFMFCN} -i ${TFRAME} -o ${TFRAME}.nii.gz -r ${REF_NATIVE}"
@@ -350,6 +352,9 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
 done
 
 if [[ -z ${MASK_FG} ]]; then MASK_FG=${DIR_MASK}/${IDPFX}_mask-fg.nii.gz; fi
+if [[ ! -f ${MASK_FG} ]]; then
+  3dAutomask -prefix ${MASK_FG} -clfrac 0.25 ${REF_NATIVE}
+fi
 if [[ -z ${MASK_BRAIN} ]]; then MASK_BRAIN=${DIR_MASK}/${IDPFX}_mask-brain.nii.gz; fi
 if [[ -z ${LABEL_TISSUE} ]]; then LABEL_TISSUE=${DIR_LABEL}/${IDPFX}_label-tissue.nii.gz; fi
 if [[ -z ${MASK_WM} ]]; then MASK_WM=${DIR_MASK}/${IDPFX}_mask-wm.nii.gz; fi
@@ -368,15 +373,26 @@ for (( i=0; i<${NIMG}; i++ )); do
   MOD=$(getField -i ${IMG} -f modality)
   if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
-  FRAME=${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz
+  
+  FMOD=${MOD}
+  if [[ ${MOD} == "PD" ]] \
+  || [[ ${MOD} == "T1map" ]] \
+  || [[ ${MOD} == "T2map" ]]; then
+    FMOD="QALAS"
+  fi
+  FRAME=${DIR_MASK}/${IDPFX}_mod-${FMOD}_mask-frame.nii.gz
+  if [[ ! -f ${FRAME} ]]; then
+    echo -e "\n\n\npseudo frame for ${IMG}\n\n\n"
+    FRAME=${DIR_SCRATCH}/FRAME.nii.gz
+    3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${FRAME}
+    niimath ${FRAME} -mul 0 -add 1 -bin ${FRAME} -odt char
+  fi
  
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e "\n>>>Calculating QC Metrics: ------"
     echo -e "\tIMAGE: ${IMG}"
     echo -e "\tFRAME: ${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz\n"
   fi
- 
-  OPFX="${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD}"
   
   unset CJV CNR EFC FBER RPVE SNR_FRAME SNR_FG SNR_BRAIN SNR_D WM2MAX FWHM
   CJV=($(qc_cjv --image ${IMG} --tissue ${LABEL_TISSUE} \
@@ -398,14 +414,14 @@ for (( i=0; i<${NIMG}; i++ )); do
   for (( j=0; j<${NV}; j++ )); do
     TV=($(Rscript ${TKNIPATH}/R/qc_descriptives.R \
             "image" ${IMG} "mask" ${MASK_BRAIN} "volume" $((${j}+1))))
-    M+=${TV[0]}
-    SD+=${TV[1]}
-    MED+=${TV[2]}
-    MAD+=${TV[3]}
-    SKEW+=${TV[4]}
-    KURT+=${TV[5]}
-    P05+=${TV[6]}
-    P95+=${TV[7]}
+    M+=(${TV[0]})
+    SD+=(${TV[1]})
+    MED+=(${TV[2]})
+    MAD+=(${TV[3]})
+    SKEW+=(${TV[4]})
+    KURT+=(${TV[5]})
+    P05+=(${TV[6]})
+    P95+=(${TV[7]})
     M_M=$(echo "scale=6; ${M_M} + ${M[-1]} / ${NV}" | bc -l)
     M_SD=$(echo "scale=6; ${M_SD} + ${SD[-1]} / ${NV}" | bc -l)
     M_MED=$(echo "scale=6; ${M_MED} + ${MED[-1]} / ${NV}" | bc -l)
@@ -421,10 +437,11 @@ ${SNR_FRAME[-1]},${SNR_FG[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
 ${WM2MAX[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},\
 ${M_M},${M_SD},${M_MED},${M_MAD},${M_SKEW},${M_KURT},${M_P05},${M_P95},\
 NA,NA,NA,NA"
-  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${MOD},${OSTR}" >> ${CSV_SUMMARY}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${MOD},${OSTR}" >> ${CSV_PX}
   
   if [[ "${NO_LOG}" == "false" ]]; then
-    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${MOD}"
+    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${MOD}"
     for (( j=0; j<${NV}; j++ )); do
       echo "${OPFX},${j},cjv,${CJV[${j}]}" >> ${CSV_LOG}
       echo "${OPFX},${j},cnr,${CNR[${j}]}" >> ${CSV_LOG}
@@ -473,13 +490,14 @@ if [[ ${VERBOSE} == "true" ]]; then echo ">>>calculating RPVE"; fi
 RPVE=($(qc_rpve --posterior ${POSTERIOR_TISSUE}))
 OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,\
 ${RPVE[0]},${RPVE[1]},${RPVE[2]},${RPVE[3]}"
-echo "${IDSTR},${TIMESTAMP},NA,NA,${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+echo "${IDSTR},${TIMESTAMP},NA,NA,${OSTR}" >> ${CSV_SUMMARY}
+echo "${IDSTR},${TIMESTAMP},NA,NA,${OSTR}" >> ${CSV_PX}
 if [[ "${NO_LOG}" == "false" ]]; then
   OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},NA,NA"
-  echo "${OPFX},NA,rpve_gm,${RPVE[0]}" >> ${TKNI_LOG}/log_QCANAT.csv
-  echo "${OPFX},NA,rpve_deepgm,${RPVE[1]}" >> ${TKNI_LOG}/log_QCANAT.csv
-  echo "${OPFX},NA,rpve_wm,${RPVE[2]}" >> ${TKNI_LOG}/log_QCANAT.csv
-  echo "${OPFX},NA,rpve_csf,${RPVE[3]}" >> ${TKNI_LOG}/log_QCANAT.csv
+  echo "${OPFX},NA,rpve_gm,${RPVE[0]}" >> ${CSV_LOG}
+  echo "${OPFX},NA,rpve_deepgm,${RPVE[1]}" >> ${CSV_LOG}
+  echo "${OPFX},NA,rpve_wm,${RPVE[2]}" >> ${CSV_LOG}
+  echo "${OPFX},NA,rpve_csf,${RPVE[3]}" >> ${CSV_LOG}
 fi
 
 if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi

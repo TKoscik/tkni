@@ -1,0 +1,114 @@
+#!/bin/bash -e
+#===============================================================================
+# DICOM Conversion
+# Author: Timothy R. Koscik, PhD
+# Date Created: 2023-08-10
+# Date Modified: 2023-08-24
+# CHANGE_LOG:	-convert into a function
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+FCN_NAME=${FCN_NAME%.*}
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Set default values ----------------------------------------------------------
+PI=
+PROJECT=
+DIR_PROJECT=
+DIR_SCRATCH=
+IDPFX=
+IDDIR=
+INPUT_DCM=
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --pi) PI="$2" ; shift 2 ;;
+    --project) PROJECT="$2" ; shift 2 ;;
+    --id) IDPFX="$2" ; shift 2 ;;
+    --dir-id) IDDIR="$2" ; shift 2 ;;
+    --input-dcm) INPUT_DCM="$2" ; shift 2 ;;
+    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help        display command help'
+  echo '  -v | --verbose     add verbose output to log file'
+  echo '  -n | --no-png      disable generating pngs of output'
+  echo '  --pi               folder name for PI, no underscores'
+  echo '                       default=evanderplas'
+  echo '  --project          project name, preferrable camel case'
+  echo '                       default=unitcall'
+  echo '  --pid              participant identifier'
+  echo '  --sid              session identifier'
+  echo '  --aid              assessment identifier'
+  echo '  --input-dcm        full path to DICOMs, may be directory or zip-file'
+  echo '  --dir-project      project directory'
+  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
+  echo '  --dir-scratch      directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+# set project defaults ---------------------------------------------------------
+if [[ -z ${PI} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] PI must be provided"
+  exit 1
+fi
+if [[ -z ${PROJECT} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] PROJECT must be provided"
+  exit 1
+fi
+if [[ -z ${DIR_PROJECT} ]]; then
+  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+fi
+if [[ -z ${DIR_SCRATCH} ]]; then
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+mkdir -p ${DIR_SCRATCH}

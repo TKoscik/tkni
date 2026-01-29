@@ -118,7 +118,7 @@ VAL_M=0
 for i in "${VOLUME[@]}"; do
   TIMG=${DIR_SCRATCH}/IMG.nii.gz
   TSQD=${DIR_SCRATCH}/IMGSQD.nii.gz
-  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -overwrite -prefix ${TIMG}
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${TIMG}
   niimath ${TIMG} -mul ${TIMG} ${TSQD}
   FGMED=($(3dROIstats -mask ${MASK} -quiet -median ${TSQD}))
   FGMED=${FGMED[-1]}

@@ -144,7 +144,7 @@ fi
 
 VAL_M=0
 for i in "${VOLUME[@]}"; do
-  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${DIR_SCRATCH}/IMG.nii.gz
   # get MEAN and SD of intensity values for GM and WM ----------------------------
   GMVAL=($(3dROIstats -mask ${MASK_GM} -quiet -sigma ${DIR_SCRATCH}/IMG.nii.gz))
   WMVAL=($(3dROIstats -mask ${MASK_WM} -quiet -sigma ${DIR_SCRATCH}/IMG.nii.gz))

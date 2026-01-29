@@ -108,7 +108,7 @@ fi
 
 if [[ -z ${MASK} ]]; then
   MASK=${DIR_SCRATCH}/MASK.nii.gz
-  3dcalc -a ${IMAGE}[0] -expr a -quiet -overwrite -prefix ${MASK}
+  3dcalc -a ${IMAGE}[0] -expr a -overwrite -prefix ${MASK}
   niimath ${MASK} -add 1 -bin ${MASK}
 fi
 N=($(3dROIstats -mask ${MASK} -quiet -nzsum ${MASK}))
@@ -117,7 +117,7 @@ unset OUT
 VAL_M=0
 for i in "${VOLUME[@]}"; do
   TIMG=${DIR_SCRATCH}/timg.nii.gz
-  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -prefix ${TIMG}
+  3dcalc -a ${IMAGE}[${i}] -expr a -prefix ${TIMG}
   niimath ${TIMG} -thr ${LO} -uthr ${HI} -binv ${TIMG} -odt char
   STATS=($(3dROIstats -mask ${MASK} -quiet -nzsum -prefix ${TIMG}))
   TVAL=$(echo "scale=6; ${STATS[-2]} / ${N}" | bc -l)

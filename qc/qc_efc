@@ -117,14 +117,14 @@ fi
 NV=$(niiInfo -i ${IMAGE} -f volumes)
 
 #Calculate scalar multiplier for normalizing data
-N=($(3dROIstats -mask ${FRAME} -quiet  -nzsum ${FRAME}))
+N=($(3dROIstats -mask ${FRAME} -quiet -nzsum ${FRAME}))
 N=${N[-1]}
 SCALE=$(echo "scale=6; ((${N} / sqrt(${N})) * (l(1 / sqrt(${N}))))" | bc -l)
 
 VAL_M=0
 for (( i=0; i<${NV}; i++ )); do
   TIMG=${DIR_SCRATCH}/TIMG.nii.gz
-  3dcalc -a ${IMAGE}[${i}] -quiet -overwrite -expr a -prefix ${TIMG}
+  3dcalc -a ${IMAGE}[${i}] -overwrite -expr a -prefix ${TIMG}
   niimath ${TIMG} -mas ${FRAME} -mul ${TIMG} ${DIR_SCRATCH}/BMAX.nii.gz
   BMAX=($(3dROIstats -mask ${FRAME} -quiet -nzsum ${DIR_SCRATCH}/BMAX.nii.gz))
   BMAX=$(echo "scale=6; sqrt(${BMAX[-1]})" | bc -l)

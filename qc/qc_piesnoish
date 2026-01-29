@@ -114,7 +114,7 @@ for i in "${VOLUME[@]}"; do
   TIMG=${DIR_SCRATCH}/timg.nii.gz
   DN=${DIR_SCRATCH}/denoise.nii.gz
   NZ=${DIR_SCRATCH}/noise.nii.gz
-  3dcalc -a ${IMAGE}[${i}] -expr a -quiet -prefix ${TIMG}
+  3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${TIMG}
   DenoiseImage -d 3 -n Rician -x ${MASK} -i ${TIMG} -o [${DN},${NZ}]
   STATS=($(3dROIstats -mask ${MASK} -quiet -sigma ${NZ}))
   TVAL=$(printf "%.6f" ${STATS[-2]})
