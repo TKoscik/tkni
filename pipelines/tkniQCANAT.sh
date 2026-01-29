@@ -273,13 +273,6 @@ mkdir -p ${DIR_SCRATCH}
 mkdir -p ${DIR_SAVE}
 
 # set output files and initialize with header as needed ----------------------
-HDR="participant_id"
-if [[ ${IDVARS[@]} == *"ses"* ]]; then HDR="${HDR},session-id"; fi
-if [[ ${#IDVARS[@]} -gt 2 ]]; then 
-  for (( i=2; i<${#IDVARS[@]}; i++ )); do
-    HDR="${HDR},${IDVARS[${i}]}"
-  done
-fi
 HDR="${HDR},dateCalculated,processingStage,imageType,\
 cjv,cnr,efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max,fwhm_x,fwhm_y,fwhm_z,\
 rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
