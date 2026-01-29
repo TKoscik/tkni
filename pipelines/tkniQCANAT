@@ -52,7 +52,7 @@ label-tissue:,value-gm:,value-wm:,value-deep:,value-csf:,\
 posterior-tissue:,vol-gm:,vol-wm:,vol-deep:,vol-csf:,\
 ref-native:,redo-frame,\
 dir-save:,dir-summary:,dir-scratch:,requires:,\
-help,verbose,force -n 'parse-options' -- "$@")
+help,verbose,force,reset-csv -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -107,7 +107,8 @@ NO_RAW="false"
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
 REQUIRES=""
-FORCE=false
+FORCE="false"
+RESET_CSV="false"
 
 # gather input options ---------------------------------------------------------
 while true; do
@@ -116,6 +117,7 @@ while true; do
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
     -r | --no-rmd) NO_RMD=true ; shift ;;
+    --reset-csv) RESET_CSV=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -181,6 +183,15 @@ fi
 # Start of Function
 #===============================================================================
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+if [[ ${RESET_CSV} == "true" ]]; then
+  echo -e "\n\n[${PIPE}${FLOW}] WARNING: --reset-csv create a new CSV data file."
+  echo -e "\tthe existing file will have _dep${TIMESTAMP} appended to the filename."
+  read -p "Continue with this action? (y/n)" RESPONSE
+  if [[ "${RESPONSE,,}" != "y" ]]; then
+    echo "[${PIPE}${FLOW}] ABORTING."
+    exit 1
+  fi
+fi
 
 # set project defaults ---------------------------------------------------------
 if [[ -z ${PI} ]]; then
@@ -214,7 +225,7 @@ fi
 # make ID String for output ------
 unset HDR IDSTR TV
 TV=(${IDPFX//_/ })
-for (( i=0; i<${#TVARS[@]}; i++ )); do
+for (( i=0; i<${#TV[@]}; i++ )); do
   TTV=(${TV[${i}]//-/ })
   HDR="${HDR},${TTV[0]}"
   IDSTR="${IDSTR},${TTV[1]}"
@@ -272,16 +283,19 @@ fi
 HDR="${HDR},dateCalculated,processingStage,imageType,\
 cjv,cnr,efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max,fwhm_x,fwhm_y,fwhm_z,\
 rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
-CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary.csv
-if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat_${TIMESTAMP}.csv
-if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
 
-if [[ "${NO_LOG}" == "false" ]]; then
-  CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
-  if [[ ! -f ${CSV_LOG} ]]; then
-    echo "pi,project,id,timestamp,stage,modality,volume,metric,value" > ${CSV_LOG}
-  fi
+CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
+CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
+CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
+if [[ ${RESET_CSV} == "true" ]]; then
+  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-anat_dep${TIMESTAMP}.csv
+  mv ${CSV_LOG} ${TKNI_LOG}/log_QCANAT_dep${TIMESTAMP}.csv
+fi
+if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
+if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
+if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
+  echo "pi,project,id,timestamp,stage,modality,volume,metric,value" > ${CSV_LOG}
 fi
 
 # Find images -------------------------------------------------------------------
