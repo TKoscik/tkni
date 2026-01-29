@@ -361,7 +361,8 @@ for (( i=0; i<${NIMG}; i++ )); do
 
   OSTR="${EFC[-1]},${FBER[-1]},${SNR_FRAME[-1]},${SNR_FG[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
 ${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,NA"
-  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB},${OSTR}" >> ${CSV_SUMMARY}
+  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB},${OSTR}" >> ${CSV_PX}
   
   if [[ "${NO_LOG}" == "false" ]]; then
     OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB}"
@@ -395,7 +396,8 @@ ISNAN=($(qc_isnan --image ${FA} --mask ${MASK_BRAIN}))
 ISDEGEN=($(qc_isoutrange --image ${FA} --mask ${MASK_BRAIN}))
 SPIKE=$(cat ${DIR_PROJECT}/derivatives/${PIPE}/dwi/preproc/qc/${IDPFX}_pctOutliers.txt)
 OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,${ISNAN[-1]},${ISDEGEN[-1]},${SPIKE}"
-echo "${IDSTR},${TIMESTAMP},NA,fa,NA,${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+echo "${IDSTR},${TIMESTAMP},NA,fa,NA,${OSTR}" >> ${CSV_SUMMARY}
+echo "${IDSTR},${TIMESTAMP},NA,fa,NA,${OSTR}" >> ${CSV_PX}
 if [[ "${NO_LOG}" == "false" ]]; then
   OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},NA,fa,NA"
   echo "${OPFX},pct,isnan,${ISNAN}" >> ${CSV_LOG}
@@ -404,6 +406,7 @@ if [[ "${NO_LOG}" == "false" ]]; then
 fi
 
 # set status file --------------------------------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
 touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
