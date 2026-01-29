@@ -47,7 +47,8 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
 dir-raw:,dir-clean:,dir-scalar:,dir-mask:,dir-label:,dir-xfm:,\
-mask-fg:,mask-brain:,mask-wm:,label-cc:,\
+mask-fg:,mask-brain:,mask-wm:,mask-cc:,\
+redo-frame,reset-csv,\
 dir-scratch:,requires:,\
 help,verbose,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -63,35 +64,24 @@ DIR_PROJECT=
 DIR_SCRATCH=
 IDPFX=
 IDDIR=
-IDVARS="sub,ses"
 
 DIR_RAW=
 DIR_CLEAN=
 DIR_SCALAR=
 DIR_MASK=
-DIR_LABEL=
 DIR_XFM=
 DIR_POST=
 
 MASK_FG=
 MASK_BRAIN=
 MASK_WM=
-LABEL_CC=
-VALUE_CC="251,252,253,254,255"
+MASK_CC=
 
 #METRICS="cjv,cnr,efc,fber,fwhm,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max"
 # disabling option to select metrics, will require rework of output generation to implement
 ADD_MEAN="true"
 VOLUME="all"
 REF_NATIVE=
-LAB_GM=2
-LAB_WM=4
-LAB_DEEP=3
-LAB_CSF=1
-VOL_GM=1
-VOL_WM=3
-VOL_DEEP=2
-VOL_CSF=4
 
 HELP="false"
 VERBOSE="false"
@@ -103,7 +93,9 @@ NO_RAW="false"
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
 REQUIRES=""
-FORCE=false
+FORCE="false"
+RESET_CSV="false"
+REDO_FRAME="false"
 
 # gather input options ---------------------------------------------------------
 while true; do
@@ -153,6 +145,15 @@ fi
 # Start of Function
 #===============================================================================
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+if [[ ${RESET_CSV} == "true" ]]; then
+  echo -e "\n\n[${PIPE}${FLOW}] WARNING: --reset-csv create a new CSV data file."
+  echo -e "\tthe existing file will have _dep${TIMESTAMP} appended to the filename."
+  read -p "Continue with this action? (y/n)" RESPONSE
+  if [[ "${RESPONSE,,}" != "y" ]]; then
+    echo "[${PIPE}${FLOW}] ABORTING."
+    exit 1
+  fi
+fi
 
 # set project defaults ---------------------------------------------------------
 if [[ -z ${PI} ]]; then
@@ -184,10 +185,16 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 # make ID String for output ------
-HDR=${IDVARS}
-IDVARS=(${IDVARS//,/ })
-IDSTR=""
-for i in "${IDVARS[@]}"; do IDSTR="${IDSTR},$(getField -i ${IDPFX} -f ${i})"; done
+unset HDR IDSTR TV
+TV=(${IDPFX//_/ })
+for (( i=0; i<${#TV[@]}; i++ )); do
+  TTV=(${TV[${i}]//-/ })
+  HDR="${HDR},${TTV[0]}"
+  IDSTR="${IDSTR},${TTV[1]}"
+done
+HDR=${HDR:1}
+HDR=${HDR//sub,/participant_id,}
+HDR=${HDR//ses,/session_id,}
 IDSTR=${IDSTR:1}
 
 ### PIPELINE
@@ -218,31 +225,32 @@ if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
 # set output files and initialize with header as needed ----------------------
-HDR="participant_id"
-if [[ ${IDVARS[@]} == *"ses"* ]]; then HDR="${HDR},session-id"; fi
-if [[ ${#IDVARS[@]} -gt 2 ]]; then 
-  for (( i=2; i<${#IDVARS[@]}; i++ )); do
-    HDR="${HDR},${IDVARS[${i}]}"
-  done
-fi
 HDR="${HDR},dateCalculated,processingStage,imageType,bvalue\
 efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,fwhm_x,fwhm_y,fwhm_z"
-CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_QC-dwi_summary.csv
-if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-dwi_${TIMESTAMP}.csv
-if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
 
-if [[ "${NO_LOG}" == "false" ]]; then
-  CSV_LOG=${TKNI_LOG}/log_QCDWI.csv
-  if [[ ! -f ${CSV_LOG} ]]; then
-    echo "pi,project,id,timestamp,stage,modality,bvalue,metric,value" > ${CSV_LOG}/
-  fi
+CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
+CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
+CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
+if [[ ${RESET_CSV} == "true" ]]; then
+  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-anat_dep${TIMESTAMP}.csv
+  mv ${CSV_LOG} ${TKNI_LOG}/log_QCANAT_dep${TIMESTAMP}.csv
+fi
+if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
+if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
+if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
+  echo "pi,project,id,timestamp,stage,modality,bvalue,metric,value" > ${CSV_LOG}/
 fi
 
 # Find images -------------------------------------------------------------------
+shopt -s nullglob
 IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*.nii.gz))
 IMGS_CLEAN=($(ls ${DIR_CLEAN}/${IDPFX}*.nii.gz))
+shopt -u nullglob
 
 # Copy to scratch (and push raw to native space) ---------------------------------
 if [[ -z ${REF_NATIVE} ]]; then
@@ -266,9 +274,9 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   eval ${XFMSTR}
 done
 
-for (( i=0; i<${#IMGS_NATIVE[@]}; i++ )); do
+for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
   TYPES+=("clean")
-  IMGS+=("${IMGS_NATIVE[${i}]}")
+  IMGS+=("${IMGS_CLEAN[${i}]}")
 done
 
 # find masks and labels ========================================================
@@ -301,8 +309,13 @@ MASK_BRAIN=${DIR_SCRATCH}/${IDPFX}_mask-brain.nii.gz
 if [[ -z ${MASK_CC} ]]; then
   MASK_CC=${DIR_MASK}/${IDPFX}_mask-cc.nii.gz
   if [[ ! -f ${MASK_CC} ]]; then
-    niimath ${DIR_LABEL}/MALF/${IDPFX}_label-wmparc+MALF.nii.gz \
-      -thr 251 -uthr 255 -bin ${MASK_CC} -odt char
+    if [[ -f ${DIR_LABEL}/MALF/${IDPFX}_label-wmparc+MALF.nii.gz ]]; then
+      niimath ${DIR_LABEL}/MALF/${IDPFX}_label-wmparc+MALF.nii.gz \
+        -thr 251 -uthr 255 -bin ${MASK_CC} -odt char
+    else
+      echo -e "[${PIPE}${FLOW}] ERROR: cannot automatically create CC mask."
+      exit 3
+    fi
   fi
 fi
 antsApplyTransforms -d 3 -n GenericLabel \
@@ -318,7 +331,7 @@ for (( i=0; i<${NIMG}; i++ )); do
   NV=$(niiInfo -i ${IMG} -f volumes)
   FRAME=${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz
 
-  # split into shells
+  # split into shells ------
   BNAME=$(getBidsBase -i ${IMGLS[${j}]})
   BVAL=(cat ${DIRRAW}/dwi/${BNAME}.bval)
   unset BLS
