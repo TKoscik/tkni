@@ -2,9 +2,9 @@
 
 #===============================================================================
 # PIPELINE:      tkni
-# WORKFLOW:      QCANAT
+# WORKFLOW:      QCFUNC
 # DESCRIPTION:   Generate a quality control report for a participant after
-#                processing pipelines are finished for anatomical images.
+#                processing pipelines are finished for functional images.
 # AUTHOR:        Timothy R. Koscik, PhD
 # DATE CREATED:  2026-01-27
 # README:        
@@ -45,12 +45,11 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
-id:,dir-id:,base-img:,base-mod:,\
-align-manual:,align-to:,\
-fg-clip:,ants-template:,\
-dir-scratch:,requires:,\
-help,verbose,force -n 'parse-options' -- "$@")
+OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
+dir-raw:,dir-clean:,dir-residual:,dir-regressor:,dir-mask:,dir-mean:,dir-xfm:,\
+mask-brain:,ref-native:,redo-frame,\
+dir-save:,dir-scratch:,requires:,\
+help,verbose,force,reset-csv -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
   exit 1
@@ -64,7 +63,6 @@ DIR_PROJECT=
 DIR_SCRATCH=
 IDPFX=
 IDDIR=
-IDVARS="sub,ses"
 
 DIR_RAW=
 DIR_CLEAN=
@@ -74,7 +72,6 @@ DIR_MASK=
 DIR_MEAN=
 DIR_XFM=
 
-MASK_FRAME
 MASK_BRAIN=
 
 VOLUME="all"
@@ -101,11 +98,23 @@ while true; do
     -r | --no-rmd) NO_RMD=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
+    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
+    --dir-raw) DIR_RAW="$2" ; shift 2 ;;
+    --dir-clean) DIR_CLEAN="$2" ; shift 2 ;;
+    --dir-residual) DIR_RESIDUAL="$2" ; shift 2 ;;
+    --dir-regressor) DIR_REGRESSOR="$2" ; shift 2 ;;
+    --dir-mask) DIR_MASK="$2" ; shift 2 ;;
+    --dir-mean) DIR_MEAN="$2" ; shift 2 ;;
+    --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
+    --mask-brain) MASK_BRAIN="$2" ; shift 2 ;;
+    --ref-native) REF_NATIVE="$2" ; shift 2 ;;
+    --redo-frame) REDO_FRAME="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --reset-csv) RESET_CSV="true" ; shift ;;
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
-    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -210,13 +219,6 @@ if [[ -z ${DIR_SUMMARY} ]]; then
 fi
 
 # set output files and initialize with header as needed ----------------------
-HDR="participant_id"
-if [[ ${IDVARS[@]} == *"ses"* ]]; then HDR="${HDR},session-id"; fi
-if [[ ${#IDVARS[@]} -gt 2 ]]; then 
-  for (( i=2; i<${#IDVARS[@]}; i++ )); do
-    HDR="${HDR},${IDVARS[${i}]}"
-  done
-fi
 HDR="${HDR},dateCalculated,processingStage,imageType,task,\
 efc,fber,snr_frame,snr_brain,snr_dietrich,fwhm_x,fwhm_y,fwhm_z"
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary.csv
@@ -287,7 +289,7 @@ for (( i=0; i<${NIMG}; i++ )); do
   IMG=${IMGS[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   TASK=${PFX//${IDPFX}}
-  MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
+  MASK_FRAME=${DIR_MASK}/${PFX}_proc-mean_mask-frame.nii.gz
   MASK_BRAIN=${DIR_MASK}/${PFX}_mask-brain.nii.gz
  
   unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D FWHM
