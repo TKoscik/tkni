@@ -47,7 +47,7 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
 dir-raw:,dir-clean:,dir-residual:,dir-regressor:,dir-mask:,dir-mean:,dir-xfm:,\
-mask-brain:,ref-native:,redo-frame,\
+mask-brain:,redo-frame,\
 dir-save:,dir-scratch:,requires:,\
 help,verbose,force,reset-csv -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -75,7 +75,6 @@ DIR_XFM=
 MASK_BRAIN=
 
 VOLUME="all"
-REF_NATIVE=
 
 HELP="false"
 VERBOSE="false"
@@ -96,6 +95,7 @@ while true; do
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
     -r | --no-rmd) NO_RMD=true ; shift ;;
+    --reset-csv) RESET_CSV=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -109,10 +109,8 @@ while true; do
     --dir-mean) DIR_MEAN="$2" ; shift 2 ;;
     --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
     --mask-brain) MASK_BRAIN="$2" ; shift 2 ;;
-    --ref-native) REF_NATIVE="$2" ; shift 2 ;;
     --redo-frame) REDO_FRAME="true" ; shift ;;
-    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
-    --reset-csv) RESET_CSV="true" ; shift ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -149,6 +147,15 @@ fi
 # Start of Function
 #===============================================================================
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+if [[ ${RESET_CSV} == "true" ]]; then
+  echo -e "\n\n[${PIPE}${FLOW}] WARNING: --reset-csv create a new CSV data file."
+  echo -e "\tthe existing file will have _dep${TIMESTAMP} appended to the filename."
+  read -p "Continue with this action? (y/n)" RESPONSE
+  if [[ "${RESPONSE,,}" != "y" ]]; then
+    echo "[${PIPE}${FLOW}] ABORTING."
+    exit 1
+  fi
+fi
 
 # set project defaults ---------------------------------------------------------
 if [[ -z ${PI} ]]; then
@@ -180,10 +187,16 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 # make ID String for output ------
-HDR=${IDVARS}
-IDVARS=(${IDVARS//,/ })
-IDSTR=""
-for i in "${IDVARS[@]}"; do IDSTR="${IDSTR},$(getField -i ${IDPFX} -f ${i})"; done
+unset HDR IDSTR TV
+TV=(${IDPFX//_/ })
+for (( i=0; i<${#TV[@]}; i++ )); do
+  TTV=(${TV[${i}]//-/ })
+  HDR="${HDR},${TTV[0]}"
+  IDSTR="${IDSTR},${TTV[1]}"
+done
+HDR=${HDR:1}
+HDR=${HDR//sub,/participant_id,}
+HDR=${HDR//ses,/session_id,}
 IDSTR=${IDSTR:1}
 
 ### PIPELINE
@@ -200,14 +213,12 @@ fi
 if [[ -z ${DIR_REGRESSOR} ]]; then
   DIR_REGRESSOR="${DIR_PROJECT}/derivatives/${PIPE}/func/regressor/${IDDIR}"
 fi
-
 if [[ -z ${DIR_MASK} ]]; then
   DIR_MASK=${DIR_PROJECT}/derivatives/${PIPE}/func/mask
 fi
 if [[ -z ${DIR_MEAN} ]]; then
   DIR_MEAN=${DIR_PROJECT}/derivatives/${PIPE}/func/mean
 fi
-
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
@@ -256,19 +267,16 @@ unset IMGS TYPES
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
-  #TASK=${PFX//${IDPFX}}
-
   TYPES+=("raw")
   IMGS+=("${DIR_SCRATCH}/${PFX}_bold.nii.gz")
-  
+  # push to native space for metric calculation with native space masks ------  
   REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
   XAFFINE=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-affine.mat
   XSYN=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-syn.nii.gz
-  antsApplyTransforms -d 3 -e 3-n Linear \
+  antsApplyTransforms -d 3 -e 3 -n Linear \
     -i ${IMG} -o ${DIR_SCRATCH}/${PFX}_bold.nii.gz -r ${REF} \
     -t identity -t ${XSYN} -t ${XAFFINE}
-  
-  # make frame masks
+  # make frame masks ------
   FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
   if [[ ! -f ${FRAME} ]]; then
     3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${FRAME}
