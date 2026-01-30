@@ -230,7 +230,7 @@ mkdir -p ${DIR_SAVE}
 
 # set output files and initialize with header as needed ----------------------
 HDR="${HDR},dateCalculated,processingStage,imageType,bvalue\
-efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,fwhm_x,fwhm_y,fwhm_z"
+efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,fwhm_x,fwhm_y,fwhm_z,piesno"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
 CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
@@ -361,11 +361,11 @@ for (( i=0; i<${NIMG}; i++ )); do
 
   OSTR="${EFC[-1]},${FBER[-1]},${SNR_FRAME[-1]},${SNR_FG[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
 ${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,NA"
-  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB},${OSTR}" >> ${CSV_SUMMARY}
-  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB},${OSTR}" >> ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${MOD},${TB},${OSTR}" >> ${CSV_SUMMARY}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${MOD},${TB},${OSTR}" >> ${CSV_PX}
   
   if [[ "${NO_LOG}" == "false" ]]; then
-    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${MOD},${TB}"
+    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${MOD},${TB}"
     for (( j=0; j<${NV}; j++ )); do
       echo "${OPFX},${j},efc,${EFC[${j}]}" >> ${CSV_LOG}
       echo "${OPFX},${j},fber,${FBER[${j}]}" >> ${CSV_LOG}
