@@ -119,7 +119,7 @@ for i in "${VOLUME[@]}"; do
   TIMG=${DIR_SCRATCH}/timg.nii.gz
   3dcalc -a ${IMAGE}[${i}] -expr a -prefix ${TIMG}
   niimath ${TIMG} -thr ${LO} -uthr ${HI} -binv ${TIMG} -odt char
-  STATS=($(3dROIstats -mask ${MASK} -quiet -nzsum -prefix ${TIMG}))
+  STATS=($(3dROIstats -mask ${MASK} -quiet -nzsum ${TIMG}))
   TVAL=$(echo "scale=6; ${STATS[-2]} / ${N}" | bc -l)
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
     VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)

@@ -281,7 +281,7 @@ CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
 CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
 CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
 if [[ ${RESET_CSV} == "true" ]]; then
-  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary_dep${TIMESTAMP}.csv
+  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary_dep${TIMESTAMP}.csv
   mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-anat_dep${TIMESTAMP}.csv
   mv ${CSV_LOG} ${TKNI_LOG}/log_QCANAT_dep${TIMESTAMP}.csv
 fi

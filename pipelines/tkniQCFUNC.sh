@@ -110,7 +110,7 @@ while true; do
     --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
     --mask-brain) MASK_BRAIN="$2" ; shift 2 ;;
     --redo-frame) REDO_FRAME="true" ; shift ;;
-    --dir-save) DIR_SAVE="$2" ; shift 2
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -237,18 +237,18 @@ HDR="${HDR},dateCalculated,processingStage,imageType,task,\
 efc,fber,snr_frame,snr_brain,snr_dietrich,ghostr_x,ghostr_y,ghostr_z,fwhm_x,fwhm_y,fwhm_z,\
 dvars_mean,dvars_sigma,fd_mean,fd_sigma,spike_pct"
 
-CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
-CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
+CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-func_summary.csv
+CSV_PX=${DIR_SAVE}/${IDPFX}_qc-func.csv
+CSV_LOG=${TKNI_LOG}/log_QCFUNC.csv
 if [[ ${RESET_CSV} == "true" ]]; then
-  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary_dep${TIMESTAMP}.csv
-  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-anat_dep${TIMESTAMP}.csv
-  mv ${CSV_LOG} ${TKNI_LOG}/log_QCANAT_dep${TIMESTAMP}.csv
+  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-func_summary_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-func_dep${TIMESTAMP}.csv
+  mv ${CSV_LOG} ${TKNI_LOG}/log_QCFUNC_dep${TIMESTAMP}.csv
 fi
 if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
 if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
 if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
-  echo "pi,project,id,timestamp,stage,task,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
+  echo "pi,project,id,timestamp,stage,task,volume,metric,value" > ${CSV_LOG}
 fi
 
 # Find images and regressors ------------------------------------------------------
@@ -260,6 +260,11 @@ RGRS_RMS=($(ls ${DIR_REGRESSOR}/${IDPFX}*displacement+RMS.1D))
 RGRS_FD=($(ls ${DIR_REGRESSOR}/${IDPFX}*displacement+framewise.1D))
 RGRS_SPIKE=($(ls ${DIR_REGRESSOR}/${IDPFX}*spike.1D))
 shopt -u nullglob
+
+if [[ ${#IMGS_RAW[@]} -eq 0 ]] && [[ ${#IMGS_CLEAN[@]} -eq 0 ]]; then
+  echo "[${PIPE}${FLOW}] WARNING: No BOLD images found, aborting."
+  exit 0
+fi
 
 # Copy to scratch (and push raw to native space) ---------------------------------
 #if [[ -z ${REF_IMG} ]]; then REF_IMG=${DIR_MEAN}/derivatives/${PIPE}/func/mask/; fi
@@ -313,9 +318,9 @@ for (( i=0; i<${NIMG}; i++ )); do
   fi
  
   unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D FWHM
-  EFC=($(qc_efc --image ${IMG} --frame ${FRAME} --add-mean))
+  EFC=($(qc_efc --image ${IMG} --frame ${MASK_FRAME} --add-mean))
   FBER=($(qc_fber --image ${IMG} --mask ${MASK_FG} --add-mean))
-  SNR_FRAME=($(qc_snr --image ${IMG} --mask ${FRAME} --add-mean))
+  SNR_FRAME=($(qc_snr --image ${IMG} --mask ${MASK_FRAME} --add-mean))
   SNR_BRAIN=($(qc_snr --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
   SNR_D=($(qc_snrd --image ${IMG} --frame ${FRAME} --fg ${MASK_BRAIN} --add-mean))
   GHOST_X=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane x --add-mean))
