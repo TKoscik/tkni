@@ -218,56 +218,64 @@ if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
 # set output files and initialize with header as needed ----------------------
 HDR="${HDR},dateCalculated,processingStage,imageType,task,\
-efc,fber,snr_frame,snr_brain,snr_dietrich,fwhm_x,fwhm_y,fwhm_z"
-CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary.csv
-if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat_${TIMESTAMP}.csv
-if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
+efc,fber,snr_frame,snr_brain,snr_dietrich,ghostr_x,ghostr_y,ghostr_z,fwhm_x,fwhm_y,fwhm_z,\
+dvars_mean,dvars_sigma,fd_mean,fd_sigma,spike_pct"
 
-if [[ "${NO_LOG}" == "false" ]]; then
-  if [[ ! -f ${TKNI_LOG}/log_QCANAT.csv ]]; then
-    echo "pi,project,id,timestamp,stage,task,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
-  fi
+CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
+CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
+CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
+if [[ ${RESET_CSV} == "true" ]]; then
+  mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_QC-anat_summary_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-anat_dep${TIMESTAMP}.csv
+  mv ${CSV_LOG} ${TKNI_LOG}/log_QCANAT_dep${TIMESTAMP}.csv
+fi
+if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
+if [[ ! -f ${CSV_PX} ]]; then echo ${HDR} > ${CSV_PX}; fi
+if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
+  echo "pi,project,id,timestamp,stage,task,volume,metric,value" > ${TKNI_LOG}/log_QCANAT.csv
 fi
 
 # Find images and regressors ------------------------------------------------------
+shopt -s nullglob
 IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*bold.nii.gz))
 IMGS_CLEAN=($(ls ${DIR_CLEAN}/${IDPFX}*bold.nii.gz))
 IMGS_RESIDUAL=($(ls ${DIR_RESIDUAL}/${IDPFX}*residual.nii.gz))
 RGRS_RMS=($(ls ${DIR_REGRESSOR}/${IDPFX}*displacement+RMS.1D))
 RGRS_FD=($(ls ${DIR_REGRESSOR}/${IDPFX}*displacement+framewise.1D))
 RGRS_SPIKE=($(ls ${DIR_REGRESSOR}/${IDPFX}*spike.1D))
+shopt -u nullglob
 
 # Copy to scratch (and push raw to native space) ---------------------------------
-if [[ -z ${REF_NATIVE} ]]; then
-  REF_NATIVE=${DIR_PROJECT}/derivatives/${PIPE}/func/mask/; fi
+#if [[ -z ${REF_IMG} ]]; then REF_IMG=${DIR_MEAN}/derivatives/${PIPE}/func/mask/; fi
 unset IMGS TYPES
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
-  TASK=${PFX//${IDPFX}}
+  #TASK=${PFX//${IDPFX}}
+
   TYPES+=("raw")
   IMGS+=("${DIR_SCRATCH}/${PFX}_bold.nii.gz")
+  
+  REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
+  XAFFINE=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-affine.mat
+  XSYN=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-syn.nii.gz
   antsApplyTransforms -d 3 -e 3-n Linear \
-    -i ${IMG} -o ${DIR_SCRATCH}/${PFX}_bold.nii.gz \
-    -r ${DIR_MEAN}/${IDPFX}_${TASK}_proc-mean_bold.nii.gz \
-    -t identity \
-    -t ${DIR_XFM}/${IDPFX}_${TASK}_mod-bold_from-raw_to-native_xfm-syn.nii.gz \
-    -t ${DIR_XFM}/${IDPFX}_${TASK}_mod-bold_from-raw_to-native_xfm-affine.mat
+    -i ${IMG} -o ${DIR_SCRATCH}/${PFX}_bold.nii.gz -r ${REF} \
+    -t identity -t ${XSYN} -t ${XAFFINE}
   
   # make frame masks
-  TFRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
-  if [[ ! -f ${TFRAME} ]]; then
-    3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${TFRAME}
-    niimath ${TFRAME} -mul 0 -add 1 ${TFRAME} -odt char
-    antsApplyTransforms -d 3 -n Linear \
-      -i ${TFRAME} -o ${TFRAME}.nii.gz \
-      -r ${DIR_MEAN}/${IDPFX}_${TASK}_proc-mean_bold.nii.gz \
-      -t identity \
-      -t ${DIR_XFM}/${IDPFX}_${TASK}_mod-bold_from-raw_to-native_xfm-syn.nii.gz \
-      -t ${DIR_XFM}/${IDPFX}_${TASK}_mod-bold_from-raw_to-native_xfm-affine.mat
+  FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
+  if [[ ! -f ${FRAME} ]]; then
+    3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${FRAME}
+    niimath ${FRAME} -mul 0 -add 1 ${FRAME} -odt char
+    antsApplyTransforms -d 3 -n GenericLabel \
+      -i ${FRAME} -o ${FRAME} -r ${REF} \
+      -t identity -t ${XSYN} -t ${XAFFINE}
   fi
 done
 
@@ -280,17 +288,21 @@ for (( i=0; i<${#IMGS_RESIDUAL[@]}; i++ )); do
   IMGS+=("${IMGS_RESIDUAL[${i}]}")
 done
 
-# find masks and labels ========================================================
-#if [[ -z ${MASK_BRAIN} ]]; then MASK_BRAIN=${DIR_MASK}/${IDPFX}_mask-brain.nii.gz; fi
-
 # CALCULATE METRICS ===============================================================
 NIMG=${#IMGS[@]}
 for (( i=0; i<${NIMG}; i++ )); do
   IMG=${IMGS[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   TASK=${PFX//${IDPFX}}
-  MASK_FRAME=${DIR_MASK}/${PFX}_proc-mean_mask-frame.nii.gz
-  MASK_BRAIN=${DIR_MASK}/${PFX}_mask-brain.nii.gz
+  
+  MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
+  shopt -s nullglob
+  MASK_BRAIN=($(ls ${DIR_MASK}/${PFX}*mask-brain.nii.gz))
+  shopt -u nullglob
+  if [[ ${#MASK_BRAIN[@]} -eq 0 ]]; then
+    echo "mask: not found ${DIR_MASK}/${PFX}_mask-brain.nii.gz"
+    exit 4
+  fi
  
   unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D FWHM
   EFC=($(qc_efc --image ${IMG} --frame ${FRAME} --add-mean))
@@ -298,20 +310,26 @@ for (( i=0; i<${NIMG}; i++ )); do
   SNR_FRAME=($(qc_snr --image ${IMG} --mask ${FRAME} --add-mean))
   SNR_BRAIN=($(qc_snr --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
   SNR_D=($(qc_snrd --image ${IMG} --frame ${FRAME} --fg ${MASK_BRAIN} --add-mean))
+  GHOST_X=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane x --add-mean))
+  GHOST_Y=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane y --add-mean))
+  GHOST_Z=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane z --add-mean))
   FWHM=($(qc_fwhm --image ${IMG} --mask ${MASK_BRAIN}))
   
   OSTR="${EFC[-1]},${FBER[-1]},${SNR_FRAME[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
-${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA,NA"
-  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${TASK},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+${GHOST_X[-1]},${GHOST_Y[-1]},${GHOST_Z[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA,NA"
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
   
   if [[ "${NO_LOG}" == "false" ]]; then
-    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${TASK}"
+    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${TASK}"
     for (( j=0; j<${NV}; j++ )); do
       echo "${OPFX},${j},efc,${EFC[${j}]}" >> ${CSV_LOG}
       echo "${OPFX},${j},fber,${FBER[${j}]}" >> ${CSV_LOG}
       echo "${OPFX},${j},snr_frame,${SNR_FRAME[${j}]}" >> ${CSV_LOG}
       echo "${OPFX},${j},snr_brain,${SNR_BRAIN[${j}]}" >> ${CSV_LOG}
       echo "${OPFX},${j},snr_dietrich,${SNR_D[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},ghost_x,${GHOST_X[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},ghost_y,${GHOST_Y[${j}]}" >> ${CSV_LOG}
+      echo "${OPFX},${j},ghost_z,${GHOST_Z[${j}]}" >> ${CSV_LOG}
     done
     echo "${OPFX},NA,fwhm_x,${FWHM[0]}" >> ${CSV_LOG}
     echo "${OPFX},NA,fwhm_y,${FWHM[1]}" >> ${CSV_LOG}
@@ -321,6 +339,9 @@ ${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA,NA"
     echo "${OPFX},mean,snr_frame,${SNR_FRAME[-1]}" >> ${CSV_LOG}
     echo "${OPFX},mean,snr_brain,${SNR_BRAIN[-1]}" >> ${CSV_LOG}
     echo "${OPFX},mean,snr_dietrich,${SNR_D[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,ghost_x,${GHOST_X[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,ghost_y,${GHOST_Y[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,ghost_z,${GHOST_Z[-1]}" >> ${CSV_LOG}
   fi
 done
 
@@ -336,12 +357,12 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   RFD_STATS=($(3dBrickStat -mean -stdev ${RFD}))
   RSPIKE_STATS=($(3dBrickStat -sum -count ${RSPIKE}))
   SPIKE_PCT=$(echo "scale=${PRECISION}; ${RSPIKE_STATS[-2]} / ${RSPIKE_STATS[-1]}" | bc -l)
-  OSTR="NA,NA,NA,NA,NA,NA,NA,NA,\
+  OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,\
 ${RMS_STATS[-2]},${RMS_STATS[-1]},${RFD_STATS[-2]},${RFD_STATS[-1]},${SPIKE_PCT}"
-  echo "${IDSTR},${TIMESTAMP},${TYPE[${i}]},${TASK},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
 
   if [[ "${NO_LOG}" == "false" ]]; then
-    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPE[${i}]},${TASK}"
+    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${TASK}"
     echo "${OPFX},NA,dvars_mean,${RMS_STATS[-2]}" >> ${CSV_LOG}
     echo "${OPFX},NA,dvars_sigma,${RMS_STATS[-1]}" >> ${CSV_LOG}
     echo "${OPFX},NA,fd_mean,${RFD_STATS[-2]}" >> ${CSV_LOG}
@@ -351,6 +372,7 @@ ${RMS_STATS[-2]},${RMS_STATS[-1]},${RFD_STATS[-2]},${RFD_STATS[-1]},${SPIKE_PCT}
 done
 
 # set status file --------------------------------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
 touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
