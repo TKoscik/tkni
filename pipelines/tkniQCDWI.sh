@@ -92,6 +92,7 @@ NO_RAW="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
+FLOW=${FCN_NAME//\.sh}
 REQUIRES=""
 FORCE="false"
 RESET_CSV="false"
@@ -242,8 +243,9 @@ mkdir -p ${DIR_SAVE}
 
 # set output files and initialize with header as needed ----------------------
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>initialize CSV output files"; fi
-HDR="${HDR},dateCalculated,processingStage,imageType,bvalue\
-efc,fber,snr_frame,snr_fg,snr_brain,snr_cc,snr_dietrich,fwhm_x,fwhm_y,fwhm_z,piesno"
+HDR="${HDR},dateCalculated,processingStage,imageType,bvalue,\
+efc,fber,snr_frame,snr_fg,snr_brain,snr_cc,snr_dietrich,fwhm_x,fwhm_y,fwhm_z,piesno,\
+is_nan,is_degen,spike_slice"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary.csv
 CSV_PX=${DIR_SAVE}/${IDPFX}_qc-dwi.csv
@@ -261,10 +263,8 @@ fi
 
 # Find images -------------------------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>locate DWI images for QC metrics"; fi
-shopt -s nullglob
-IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*dwi.nii.gz))
-IMGS_CLEAN=($(ls ${DIR_CLEAN}/${IDPFX}*dwi.nii.gz))
-shopt -u nullglob
+IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*dwi.nii.gz" 2>/dev/null))
+IMGS_CLEAN=($(find ${DIR_CLEAN} -name "${IDPFX}*dwi.nii.gz" 2>/dev/null))
 
 if [[ ${#IMGS_RAW[@]} -eq 0 ]] && [[ ${#IMGS_CLEAN[@]} -eq 0 ]]; then
   echo "[${PIPE}${FLOW}] WARNING: No DWI images were found, aborting."
@@ -347,6 +347,7 @@ MASK_CC=${DIR_SCRATCH}/${IDPFX}_mask-cc.nii.gz
 # CALCULATE METRICS ===============================================================
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>calculate metrics"; fi
 NIMG=${#IMGS[@]}
+
 for (( i=0; i<${NIMG}; i++ )); do
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>image ${i} of ${NIMG}"; fi
   IMG=${IMGS[${i}]}
@@ -362,22 +363,33 @@ for (( i=0; i<${NIMG}; i++ )); do
   if [[ ${TDIR} == ${DIR_SCRATCH} ]]; then TDIR=${DIR_RAW}; fi
   BVAL=($(cat ${TDIR}/${BNAME}.bval))
   unset BLS
+  BLS=${BVAL[0]}
   for (( j=0; j<${#BVAL[@]}; j++ )); do
-    TB=$(printf "%.0f" ${BVAL[${j}]})
-    if [[ " ${BLS[*]} " != " ${TB} " ]]; then BLS+=(${TB}); fi
-    shopt -s nullglob
-    TLS=($(ls ${DIR_SCRATCH}/DWI_B${TB}_*.nii.gz))
-    shopt -u nullglob
+    TB=($(printf "%.0f" ${BVAL[${j}]}))
+    NOMATCH="true"
+    for (( k=0; k<${#BLS[@]}; k++ )); do
+      if [[ ${TB} -eq ${BLS[${k}]} ]]; then NOMATCH="false"; break; fi
+    done
+    if [[ ${NOMATCH} == "true" ]]; then BLS+=(${TB}); fi
+    TLS=($(find ${DIR_SCRATCH} -name "DWI_B${TB}_*.nii.gz" 2>/dev/null))
+    echo "3dcalc -a ${IMG}[${j}] -expr a -overwrite \
+      -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz"
     3dcalc -a ${IMG}[${j}] -expr a -overwrite \
       -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz
+  done
+
+  # concatenate shells
+  for (( j=0; j<${#BLS[@]}; j++ )); do
+    TB=${BLS[${j}]}
+    3dTcat -overwrite -prefix ${DIR_SCRATCH}/DWI_B${TB}.nii.gz \
+      $(ls ${DIR_SCRATCH}/DWI_B${TB}_*.nii.gz)
+    rm ${DIR_SCRATCH}/DWI_B${TB}_*.nii.gz
   done
 
   # loop over shells for metrics
   for (( j=0; j<${#BLS[@]}; j++ )); do
     TB=${BLS[${j}]}
     if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>>>>analyzing bvalue ${TB}"; fi
-    3dTcat -overwrite -prefix ${DIR_SCRATCH}/DWI_B${TB}.nii.gz \
-      $(ls ${DIR_SCRATCH}/DWI_B${TB}_*.nii.gz)
     TIMG=${DIR_SCRATCH}/DWI_B${TB}.nii.gz
 
     unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_CC SNR_D PIESNO
