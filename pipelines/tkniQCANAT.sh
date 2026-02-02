@@ -275,7 +275,7 @@ mkdir -p ${DIR_SAVE}
 # set output files and initialize with header as needed ----------------------
 HDR="${HDR},dateCalculated,processingStage,imageType,\
 cjv,cnr,efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max,fwhm_x,fwhm_y,fwhm_z,\
-rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
+piesno,mean,sigma,median,mad,skew,kurtosis,p05,p95,rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
 CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
@@ -291,14 +291,13 @@ if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
   echo "pi,project,id,timestamp,stage,modality,volume,metric,value" > ${CSV_LOG}
 fi
 
-# Find images -------------------------------------------------------------------
-shopt -s nullglob
-IMGS_RAW=($(ls ${DIR_RAW}/${IDPFX}*.nii.gz))
-IMGS_NATIVE=($(ls ${DIR_NATIVE}/${IDPFX}*.nii.gz))
+# Find images ----fwhm_x	fwhm_y	fwhm_z	piesno	mean	sigma	median	mad	skew	kurtosis	p05	p95	rpve_gm	rpve_deepgm	rpve_wm	rpve_csf
+---------------------------------------------------------------
+IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*.nii.gz" 2>/dev/null))
+IMGS_NATIVE=($(find ${DIR_NATIVE} -name "${IDPFX}*.nii.gz" 2>/dev/null))
 for (( i=0; i<${#DIR_ADD[@]}; i++ )); do
-  IMGS_NATIVE+=($(ls ${DIR_ADD[${i}]}/${IDPFX}*.nii.gz))
+  IMGS_NATIVE+=($(find ${DIR_ADD[${i}]} -name "${IDPFX}*.nii.gz" 2>/dev/null))
 done
-shopt -u nullglob
 
 # Copy to scratch (and push raw to native space) ---------------------------------
 if [[ -z ${REF_NATIVE} ]]; then REF_NATIVE=${DIR_NATIVE}/${IDPFX}_T1w.nii.gz; fi
