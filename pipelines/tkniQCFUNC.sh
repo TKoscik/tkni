@@ -319,7 +319,7 @@ for (( i=0; i<${NIMG}; i++ )); do
  
   unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D FWHM
   EFC=($(qc_efc --image ${IMG} --frame ${MASK_FRAME} --add-mean))
-  FBER=($(qc_fber --image ${IMG} --mask ${MASK_FG} --add-mean))
+  FBER=($(qc_fber --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
   SNR_FRAME=($(qc_snr --image ${IMG} --mask ${MASK_FRAME} --add-mean))
   SNR_BRAIN=($(qc_snr --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
   SNR_D=($(qc_snrd --image ${IMG} --frame ${FRAME} --fg ${MASK_BRAIN} --add-mean))
