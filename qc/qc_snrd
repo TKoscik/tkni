@@ -141,7 +141,7 @@ if [[ ${VOLUME} == "all" ]]; then
 else
   VOLUME=(${VOLUME//,/ })
 fi
-
+NV=${#VOLUME[@]}
 VAL_M=0
 CONST=$(echo "scale=6; sqrt(2 / (4 - 3.14159))" | bc -l)
 for i in "${VOLUME[@]}"; do
@@ -157,7 +157,7 @@ for i in "${VOLUME[@]}"; do
     TVAL=$(echo "scale=6; ${FG_VALS[-1]} / (${CONST} * ${BG_VALS[-1]})" | bc -l)
   fi
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
-    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+    VAL_M=$(echo "scale=6; ${VAL_M} + (${TVAL} / ${NV})" | bc -l)
   fi
   VAL+=($(printf "%.*f" ${PRECISION} ${TVAL}))
 done

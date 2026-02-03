@@ -119,7 +119,7 @@ esac
 c3d ${MASK} -wrap ${WRAP} ${GHOST}
 CopyImageHeaderInformation ${MASK} ${GHOST} 1 1 1
 niimath ${GHOST} -sub ${MASK} -thr 1 -bin ${GHOST}
-niimath ${MASK} -add ${GHOST} -binv ${NONGHOST}
+niimath ${MASK} -add ${GHOST} -binv ${NONGHOST} -odt char
 
 NV=$(niiInfo -i ${IMAGE} -f volumes)
 if [[ ${VOLUME} == "all" ]]; then
@@ -127,6 +127,7 @@ if [[ ${VOLUME} == "all" ]]; then
 else
   VOLUME=(${VOLUME//,/ })
 fi
+NV=${#VOLUME[@]}
 
 VAL_M=0
 for i in "${VOLUME[@]}"; do
@@ -137,7 +138,7 @@ for i in "${VOLUME[@]}"; do
   NG=($(3dROIstats -mask ${NONGHOST} -quiet ${TIMG}))
   TVAL=$(echo "scale=6; (${G[-1]} -${NG[-1]}) / ${S[-1]}" | bc -l)
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
-    VAL_M=$(echo "scale=6; (${TVAL} + ${VAL_M}) / ${#VOLUME[@]}" | bc -l)
+    VAL_M=$(echo "scale=6; ${VAL_M} + (${TVAL} / ${NV})" | bc -l)
   fi
   VAL+=($(printf "%.*f" ${PRECISION} ${TVAL}))
 done
