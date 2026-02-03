@@ -266,35 +266,42 @@ if [[ ${#IMGS_RAW[@]} -eq 0 ]] && [[ ${#IMGS_CLEAN[@]} -eq 0 ]]; then
 fi
 
 # Copy to scratch (and push raw to native space) ---------------------------------
+## resample to clean space, and convert to INT16 (short) for faster processing
 #if [[ -z ${REF_IMG} ]]; then REF_IMG=${DIR_MEAN}/derivatives/${PIPE}/func/mask/; fi
 unset IMGS TYPES
+mkdir -p ${DIR_SCRATCH}/raw
+mkdir -p ${DIR_SCRATCH}/clean
+mkdir -p ${DIR_SCRATCH}/residual
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   TYPES+=("raw")
-  IMGS+=("${DIR_SCRATCH}/${PFX}_bold.nii.gz")
+  IMGS+=("${DIR_SCRATCH}/raw/${PFX}_bold.nii.gz")
   # push to native space for metric calculation with native space masks ------
   REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
   XAFFINE=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-affine.mat
   XSYN=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-syn.nii.gz
-  antsApplyTransforms -d 3 -e 3 -n Linear \
-    -i ${IMG} -o ${DIR_SCRATCH}/${PFX}_bold.nii.gz -r ${REF} \
+  antsApplyTransforms -d 3 -e 3 -n Linear -u short \
+    -i ${IMG} -o ${DIR_SCRATCH}/raw/${PFX}_bold.nii.gz -r ${REF} \
     -t identity -t ${XSYN} -t ${XAFFINE}
   # make frame masks ------
   FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
   if [[ ! -f ${FRAME} ]]; then
     3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${FRAME}
     niimath ${FRAME} -mul 0 -add 1 ${FRAME} -odt char
-    antsApplyTransforms -d 3 -n GenericLabel \
+    antsApplyTransforms -d 3 -n GenericLabel -u char \
       -i ${FRAME} -o ${FRAME} -r ${REF} \
       -t identity -t ${XSYN} -t ${XAFFINE}
   fi
 done
 for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
-  TYPES+=("clean")
-  IMGS+=("${IMGS_CLEAN[${i}]}")
   IMG=${IMGS_CLEAN[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
+  TYPES+=("clean")
+  IMGS+=("${DIR_SCRATCH}/clean/${PFX}_bold.nii.gz")
+  REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
+  antsApplyTransforms -d 3 -e 3 -n Linear -u short \
+    -i ${IMG} -o ${DIR_SCRATCH}/clean/${PFX}_bold.nii.gz -r ${REF}
   MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
   if [[ ! -f ${MASK_FRAME} ]]; then
     TASK=$(getField -i ${IMG} -f task)
@@ -302,12 +309,15 @@ for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
   fi
 done
 for (( i=0; i<${#IMGS_RESIDUAL[@]}; i++ )); do
-  TYPES+=("residual")
-  IMGS+=("${IMGS_RESIDUAL[${i}]}")
   # check for combined frame mask
   IMG=${IMGS_RESIDUAL[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
+  TYPES+=("residual")
+  IMGS+=("${DIR_SCRATCH}/residual/${PFX}_bold.nii.gz")
+  REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
+  antsApplyTransforms -d 3 -e 3 -n Linear -u short \
+    -i ${IMG} -o ${DIR_SCRATCH}/residual/${PFX}_residual.nii.gz -r ${REF}
   if [[ ! -f ${MASK_FRAME} ]]; then
     TASK=$(getField -i ${IMG} -f task)
     AverageImages 3 ${MASK_FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
@@ -328,7 +338,7 @@ for (( i=0; i<${NIMG}; i++ )); do
     exit 4
   fi
 
-  unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D FWHM
+  unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D GHOST_X GHOST_Y GHOST_Z FWHM
   EFC=($(qc_efc --image ${IMG} --frame ${MASK_FRAME} --add-mean))
   FBER=($(qc_fber --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
   SNR_FRAME=($(qc_snr --image ${IMG} --mask ${MASK_FRAME} --add-mean))
@@ -341,7 +351,8 @@ for (( i=0; i<${NIMG}; i++ )); do
 
   OSTR="${EFC[-1]},${FBER[-1]},${SNR_FRAME[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
 ${GHOST_X[-1]},${GHOST_Y[-1]},${GHOST_Z[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA,NA"
-  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_SUMMARY}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_PX}
 
   if [[ "${NO_LOG}" == "false" ]]; then
     OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${TASK}"
@@ -383,7 +394,8 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   SPIKE_PCT=$(echo "scale=4; ${RSPIKE_STATS[-2]} / ${RSPIKE_STATS[-1]}" | bc -l)
   OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,\
 ${RMS_STATS[-2]},${RMS_STATS[-1]},${RFD_STATS[-2]},${RFD_STATS[-1]},${SPIKE_PCT}"
-  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" | tee -a ${CSV_PROJECT} ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_SUMMARY}
+  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_PX}
 
   if [[ "${NO_LOG}" == "false" ]]; then
     OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${TASK}"
