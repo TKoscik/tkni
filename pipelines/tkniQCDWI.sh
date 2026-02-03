@@ -366,16 +366,15 @@ for (( i=0; i<${NIMG}; i++ )); do
   BLS=${BVAL[0]}
   for (( j=0; j<${#BVAL[@]}; j++ )); do
     TB=($(printf "%.0f" ${BVAL[${j}]}))
-    NOMATCH="true"
+    MATCH="true"
     for (( k=0; k<${#BLS[@]}; k++ )); do
-      if [[ ${TB} -eq ${BLS[${k}]} ]]; then NOMATCH="false"; break; fi
+      if [[ ${TB} -eq ${BLS[${k}]} ]]; then MATCH="false"; break; fi
     done
-    if [[ ${NOMATCH} == "true" ]]; then BLS+=(${TB}); fi
+    if [[ ${MATCH} == "true" ]]; then BLS+=(${TB}); fi
     TLS=($(find ${DIR_SCRATCH} -name "DWI_B${TB}_*.nii.gz" 2>/dev/null))
     echo "3dcalc -a ${IMG}[${j}] -expr a -overwrite \
       -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz"
-    3dcalc -a ${IMG}[${j}] -expr a -overwrite \
-      -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz
+    3dcalc -a ${IMG}[${j}] -expr a -overwrite -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz
   done
 
   # concatenate shells
@@ -434,7 +433,7 @@ ${SNR_CC[-1]},${SNR_D[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,
       echo "${OPFX},mean,piesno,${PIESNO[-1]}" >> ${CSV_LOG}
       if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>>>>QC logged"; fi
     fi
-  rm ${DIR_SCRATCH}/DWI_B*
+    rm ${DIR_SCRATCH}/DWI_B${TB}.nii.gz
   done
 done
 
@@ -442,8 +441,11 @@ FA=${DIR_SCALAR}/${IDPFX}_space-native_scalar-fa.nii.gz
 if [[ -f ${FA} ]]; then
   unset ISNAN ISDEGEN SPIKE
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>processing FA metrics and spikes"; fi
-  ISNAN=($(qc_isnan --image ${FA} --mask ${MASK_BRAIN}))
-  ISDEGEN=($(qc_outrange --image ${FA} --mask ${MASK_BRAIN}))
+  # push brain mask to FA spacing
+  antsApplyTransforms -d 3 -n GenericLabel \
+    -i ${MASK_BRAIN} -o ${DIR_SCRATCH}/MASK_BRAIN.nii.gz -r ${FA}
+  ISNAN=($(qc_isnan --image ${FA} --mask ${DIR_SCRATCH}/MASK_BRAIN.nii.gz))
+  ISDEGEN=($(qc_outrange --image ${FA} --mask ${DIR_SCRATCH}/MASK_BRAIN.nii.gz))
   SPIKE=$(cat ${DIR_PROJECT}/derivatives/${PIPE}/dwi/preproc/qc/${IDPFX}_pctOutliers.txt)
   OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,${ISNAN[-1]},${ISDEGEN[-1]},${SPIKE}"
   echo "${IDSTR},${TIMESTAMP},NA,fa,NA,${OSTR}" >> ${CSV_SUMMARY}
