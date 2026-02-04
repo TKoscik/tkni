@@ -39,7 +39,7 @@ trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvl --long image:,mask:,plane:,\
-volume:,add-mean,precision:,\
+mask-ghost:,mask-nonghost:,volume:,add-mean,precision:,\
 dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
@@ -53,6 +53,8 @@ IMAGE=
 MASK=
 PLANE="y"
 VOLUME="all"
+MASK_GHOST=
+MASK_NONGHOST=
 ADD_MEAN="false"
 PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
@@ -68,6 +70,8 @@ while true; do
     --mask) MASK="$2" ; shift 2 ;;
     --plane) PLANE="$2" ; shift 2 ;;
     --volume) VOLUME="$2" ; shift 2 ;;
+    --mask-ghost) GHOST="$2" ; shift 2 ;;
+    --mask-nonghost) NONGHOST="$2" ; shift 2 ;;
     --add-mean) ADD_MEAN="true" ; shift 2 ;;
     --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -107,19 +111,21 @@ fi
 mkdir -p ${DIR_SCRATCH}
 
 # create ghosting masks --------------------------------------------------------
-IMGDIMS=($(niiInfo -i ${IMAGE} -f size))
-GHOST=${DIR_SCRATCH}/ghost.nii.gz
-NONGHOST=${DIR_SCRATCH}/nonghost.nii.gz
-case ${PLANE,,} in
-  x) WRAP="$((${IMGDIMS[0]} / 2))x0x0" ;;
-  y) WRAP="0x$((${IMGDIMS[1]} / 2))x0" ;;
-  z) WRAP="0x0x$((${IMGDIMS[2]} / 2))" ;;
-  *) echo "Plane ${PLANE} not recognized" ;;
-esac
-c3d ${MASK} -wrap ${WRAP} ${GHOST}
-CopyImageHeaderInformation ${MASK} ${GHOST} 1 1 1
-niimath ${GHOST} -sub ${MASK} -thr 1 -bin ${GHOST}
-niimath ${MASK} -add ${GHOST} -binv ${NONGHOST} -odt char
+if [[ -z ${MASK_GHOST} ]]; then
+  GHOST=${DIR_SCRATCH}/ghost.nii.gz
+  NONGHOST=${DIR_SCRATCH}/nonghost.nii.gz
+  case ${PLANE,,} in
+    x) circleShift --image ${MASK} --plane "x" --shift "N/2" \
+                   --filename ghost --dir-save ${DIR_SCRATCH} ;;
+    y) circleShift --image ${MASK} --plane "y" --shift "N/2" \
+                   --filename ghost --dir-save ${DIR_SCRATCH} ;;
+    z) circleShift --image ${MASK} --plane "z" --shift "N/2" \
+                   --filename ghost --dir-save ${DIR_SCRATCH} ;;
+    *) echo "Plane ${PLANE} not recognized" ;;
+  esac
+  niimath ${MASK} -binv -mul ${GHOST} -bin ${GHOST} -odt char
+  niimath ${MASK} -add ${GHOST} -binv ${NONGHOST} -odt char
+fi
 
 NV=$(niiInfo -i ${IMAGE} -f volumes)
 if [[ ${VOLUME} == "all" ]]; then
@@ -133,9 +139,9 @@ VAL_M=0
 for i in "${VOLUME[@]}"; do
   TIMG=${DIR_SCRATCH}/IMG.nii.gz
   3dcalc -a ${IMAGE}[${i}] -expr a -overwrite -prefix ${TIMG}
-  S=($(3dROIstats -mask ${MASK} -quiet ${TIMG}))
-  G=($(3dROIstats -mask ${GHOST} -quiet ${TIMG}))
-  NG=($(3dROIstats -mask ${NONGHOST} -quiet ${TIMG}))
+  S=($(3dROIstats -mask ${MASK} ${TIMG}))
+  G=($(3dROIstats -mask ${GHOST} ${TIMG}))
+  NG=($(3dROIstats -mask ${NONGHOST} ${TIMG}))
   TVAL=$(echo "scale=6; (${G[-1]} -${NG[-1]}) / ${S[-1]}" | bc -l)
   if [[ ${ADD_MEAN} == "true" ]] && [[ ${NV} -gt 1 ]]; then
     VAL_M=$(echo "scale=6; ${VAL_M} + (${TVAL} / ${NV})" | bc -l)

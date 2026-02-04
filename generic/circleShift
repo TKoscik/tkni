@@ -1,0 +1,81 @@
+#!/bin/bash -e
+#===============================================================================
+# Function to circle shift values in a nifti file.
+# Authors: Timothy R. Koscik, PhD
+# Date: 2021-01-28
+#===============================================================================
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hi:f: --long image:,volume:,plane:,shift:,\
+filename:,dir-save:,dir-scratch:,help -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+IMAGE=
+VOLUME=1
+PLANE="y"
+SHIFT="N/2"
+FILENAME=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/tkni_circleshift_$(date +%Y%m%dT%H%M%S%N)
+HELP=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -i | --image) IMAGE="$2" ; shift 2 ;;
+    --volume) VOLUME="$2" ; shift 2 ;;
+    --plane) PLANE="$2" ; shift 2 ;;
+    --shift) SHIFT="$2" ; shift 2 ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help              display command help'
+  echo '  -i | --image <value>     nii or nii.gz file'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+
+if [[ -z ${FILENAME} ]]; then
+  FILENAME=$(modField -i $(basename ${IMAGE}) -a -f proc -v circleShift)
+  FILENAME=${FILENAME//\.nii}
+  FILENAME=${FILENAME//\.gz}
+fi
+
+if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
+
+FEXT=(${IMAGE//\./ })
+if [[ ${FEXT[-1]} == "gz" ]]; then
+  mkdir -p ${DIR_SCRATCH}
+  gunzip -k -c ${IMAGE} > ${DIR_SCRATCH}/IMAGE.nii
+  IMAGE=${DIR_SCRATCH}/IMAGE.nii
+fi
+
+if [[ "${SHIFT}" == "N/2" ]]; then
+  IMGDIMS=($(niiInfo -i ${IMAGE} -f size))
+  if [[ ${PLANE,,} == "x" ]]; then SHIFT=$((${IMGDIMS[0]} / 2)); fi
+  if [[ ${PLANE,,} == "y" ]]; then SHIFT=$((${IMGDIMS[1]} / 2)); fi
+  if [[ ${PLANE,,} == "z" ]]; then SHIFT=$((${IMGDIMS[2]} / 2)); fi
+fi
+
+Rscript ${TKNIPATH}/R/circleShift.R ${IMAGE} ${VOLUME} ${PLANE} ${SHIFT} ${DIR_SAVE}/${FILENAME}.nii
+gzip ${DIR_SAVE}/${FILENAME}.nii
