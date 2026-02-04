@@ -82,6 +82,7 @@ NO_PNG="false"
 NO_RMD="false"
 NO_SUMMARY="false"
 NO_RAW="false"
+NO_LOG="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
@@ -224,7 +225,7 @@ if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
 if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/qc
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/func/qc
 fi
 if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
@@ -234,7 +235,7 @@ mkdir -p ${DIR_SCRATCH}
 mkdir -p ${DIR_SAVE}
 
 # set output files and initialize with header as needed ----------------------
-HDR="${HDR},dateCalculated,processingStage,imageType,task,\
+HDR="${HDR},dateCalculated,processingStage,task,\
 efc,fber,snr_frame,snr_brain,snr_dietrich,ghostr_x,ghostr_y,ghostr_z,fwhm_x,fwhm_y,fwhm_z,\
 dvars_mean,dvars_sigma,fd_mean,fd_sigma,spike_pct"
 
@@ -256,9 +257,9 @@ fi
 IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
 IMGS_CLEAN=($(find ${DIR_CLEAN} -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
 IMGS_RESIDUAL=($(find ${DIR_RESIDUAL} -name "${IDPFX}*residual.nii.gz" 2>/dev/null))
-RGRS_RMS=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+RMS.1D" 2>/dev/null))
-RGRS_FD=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+framewise.1D" 2>/dev/null))
-RGRS_SPIKE=($(find ${DIR_REGRESSOR} -name "${IDPFX}*spike.1D" 2>/dev/null))
+#RGRS_RMS=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+RMS.1D" 2>/dev/null))
+#RGRS_FD=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+framewise.1D" 2>/dev/null))
+#RGRS_SPIKE=($(find ${DIR_REGRESSOR} -name "${IDPFX}*spike.1D" 2>/dev/null))
 
 if [[ ${#IMGS_RAW[@]} -eq 0 ]] && [[ ${#IMGS_CLEAN[@]} -eq 0 ]]; then
   echo "[${PIPE}${FLOW}] WARNING: No BOLD images found, aborting."
@@ -337,20 +338,66 @@ for (( i=0; i<${NIMG}; i++ )); do
     echo "mask: not found ${DIR_MASK}/${PFX}_mask-brain.nii.gz"
     exit 4
   fi
+  # premake ghosting masks *****
+  XGHOST=${DIR_SCRATCH}/ghost_x.nii.gz
+  YGHOST=${DIR_SCRATCH}/ghost_y.nii.gz
+  ZGHOST=${DIR_SCRATCH}/ghost_z.nii.gz
+  XNONGHOST=${DIR_SCRATCH}/nonghost_x.nii.gz
+  YNONGHOST=${DIR_SCRATCH}/nonghost_y.nii.gz
+  ZNONGHOST=${DIR_SCRATCH}/nonghost_z.nii.gz
+  circleShift --image ${MASK_BRAIN} --plane "x" --shift "N/2" \
+    --filename ghost_x --dir-save ${DIR_SCRATCH}
+  circleShift --image ${MASK_BRAIN} --plane "y" --shift "N/2" \
+    --filename ghost_y --dir-save ${DIR_SCRATCH}
+  circleShift --image ${MASK_BRAIN} --plane "z" --shift "N/2" \
+    --filename ghost_z --dir-save ${DIR_SCRATCH}
+  niimath ${MASK_BRAIN} -binv -mul ${XGHOST} -bin ${XGHOST} -odt char
+  niimath ${MASK_BRAIN} -binv -mul ${YGHOST} -bin ${YGHOST} -odt char
+  niimath ${MASK_BRAIN} -binv -mul ${ZGHOST} -bin ${ZGHOST} -odt char
+  niimath ${MASK_BRAIN} -add ${XGHOST} -binv ${XNONGHOST} -odt char
+  niimath ${MASK_BRAIN} -add ${YGHOST} -binv ${YNONGHOST} -odt char
+  niimath ${MASK_BRAIN} -add ${ZGHOST} -binv ${ZNONGHOST} -odt char
 
+  # run as individual volumes to avoid having to resplit file for every volume and qc metric separately
+  NV=$(niiInfo -i ${IMG} -f volumes)
   unset EFC FBER SNR_FRAME SNR_FG SNR_BRAIN SNR_D GHOST_X GHOST_Y GHOST_Z FWHM
-  EFC=($(qc_efc --image ${IMG} --frame ${MASK_FRAME} --add-mean))
-  FBER=($(qc_fber --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
-  SNR_FRAME=($(qc_snr --image ${IMG} --mask ${MASK_FRAME} --add-mean))
-  SNR_BRAIN=($(qc_snr --image ${IMG} --mask ${MASK_BRAIN} --add-mean))
-  SNR_D=($(qc_snrd --image ${IMG} --frame ${FRAME} --fg ${MASK_BRAIN} --add-mean))
-  GHOST_X=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane x --add-mean))
-  GHOST_Y=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane y --add-mean))
-  GHOST_Z=($(qc_ghostr --image ${IMG} --mask ${MASK_BRAIN} --plane z --add-mean))
+  MEFC=0
+  MFBER=0
+  MSNR_FRAME=0
+  MSNR_BRAIN=0
+  MSNR_D=0
+  MGHOST_X=0
+  MGHOST_Y=0
+  MGHOST_Z=0
+  for (( j=0; j<${NV}; j++ )); do
+    TIMG=${DIR_SCRATCH}/timg.nii.gz
+    3dcalc -a ${IMG}[${j}] -expr a -overwrite -short -prefix ${TIMG}
+
+    EFC+=($(qc_efc --image ${TIMG} --frame ${MASK_FRAME}))
+    FBER+=($(qc_fber --image ${TIMG} --mask ${MASK_BRAIN}))
+    SNR_FRAME+=($(qc_snr --image ${TIMG} --mask ${MASK_FRAME}))
+    SNR_BRAIN+=($(qc_snr --image ${TIMG} --mask ${MASK_BRAIN}))
+    SNR_D+=($(qc_snrd --image ${TIMG} --frame ${FRAME} --fg ${MASK_BRAIN} --add-mean))
+    GHOST_X+=($(qc_ghostr --image ${TIMG} --mask ${MASK_BRAIN} \
+      --mask-ghost ${XGHOST} --mask-nonghost ${XNONGHOST}))
+    GHOST_Y+=($(qc_ghostr --image ${TIMG} --mask ${MASK_BRAIN} \
+      --mask-ghost ${YGHOST} --mask-nonghost ${YNONGHOST}))
+    GHOST_Z+=($(qc_ghostr --image ${TIMG} --mask ${MASK_BRAIN} \
+      --mask-ghost ${ZGHOST} --mask-nonghost ${ZNONGHOST}))
+
+    MEFC=$(echo "scale=6; ${MEFC} + (${EFC[-1]} / ${NV})" | bc -l)
+    MFBER=$(echo "scale=6; ${MFBER} + (${FBER[-1]} / ${NV})" | bc -l)
+    MSNR_FRAME=$(echo "scale=6; ${MSNR_FRAME} + (${SNR_FRAME[-1]} / ${NV})" | bc -l)
+    MSNR_BRAIN=$(echo "scale=6; ${MSNR_BRAIN} + (${SNR_BRAIN[-1]} / ${NV})" | bc -l)
+    MSNR_D=$(echo "scale=6; ${MSNR_D} + (${SNR_D[-1]} / ${NV})" | bc -l)
+    MGHOST_X=$(echo "scale=6; ${MGHOST_X} + (${GHOST_X[-1]} / ${NV})" | bc -l)
+    MGHOST_Y=$(echo "scale=6; ${MGHOST_Y} + (${GHOST_Y[-1]} / ${NV})" | bc -l)
+    MGHOST_Z=$(echo "scale=6; ${MGHOST_Z} + (${GHOST_Z[-1]} / ${NV})" | bc -l)
+  done
   FWHM=($(qc_fwhm --image ${IMG} --mask ${MASK_BRAIN}))
 
-  OSTR="${EFC[-1]},${FBER[-1]},${SNR_FRAME[-1]},${SNR_BRAIN[-1]},${SNR_D[-1]},\
-${GHOST_X[-1]},${GHOST_Y[-1]},${GHOST_Z[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA,NA"
+  OSTR="${MEFC},${MFBER},${MSNR_FRAME},${MSNR_BRAIN},${MSNR_D},\
+${MGHOST_X},${MGHOST_Y},${MGHOST_Z},${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA,NA"
   echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_SUMMARY}
   echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_PX}
 
@@ -369,14 +416,14 @@ ${GHOST_X[-1]},${GHOST_Y[-1]},${GHOST_Z[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},NA
     echo "${OPFX},NA,fwhm_x,${FWHM[0]}" >> ${CSV_LOG}
     echo "${OPFX},NA,fwhm_y,${FWHM[1]}" >> ${CSV_LOG}
     echo "${OPFX},NA,fwhm_z,${FWHM[2]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,efc,${EFC[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,fber,${FBER[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,snr_frame,${SNR_FRAME[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,snr_brain,${SNR_BRAIN[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,snr_dietrich,${SNR_D[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,ghost_x,${GHOST_X[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,ghost_y,${GHOST_Y[-1]}" >> ${CSV_LOG}
-    echo "${OPFX},mean,ghost_z,${GHOST_Z[-1]}" >> ${CSV_LOG}
+    echo "${OPFX},mean,efc,${MEFC}" >> ${CSV_LOG}
+    echo "${OPFX},mean,fber,${MFBER}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_frame,${MSNR_FRAME}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_brain,${MSNR_BRAIN}" >> ${CSV_LOG}
+    echo "${OPFX},mean,snr_dietrich,${MSNR_D}" >> ${CSV_LOG}
+    echo "${OPFX},mean,ghost_x,${MGHOST_X}" >> ${CSV_LOG}
+    echo "${OPFX},mean,ghost_y,${MGHOST_Y}" >> ${CSV_LOG}
+    echo "${OPFX},mean,ghost_z,${MGHOST_Z}" >> ${CSV_LOG}
   fi
 done
 

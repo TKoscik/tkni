@@ -31,7 +31,7 @@ done
 if [[ "${HELP}" == "true" ]]; then
   echo ''
   echo '------------------------------------------------------------------------'
-  echo "Iowa Neuroimage Processing Core: ${FCN_NAME}"
+  echo "TKNI: ${FCN_NAME}"
   echo '------------------------------------------------------------------------'
   echo '  -h | --help              display command help'
   echo '  -i | --image <value>     nii or nii.gz file'

@@ -77,8 +77,6 @@ MASK_BRAIN=
 MASK_WM=
 MASK_CC=
 
-#METRICS="cjv,cnr,efc,fber,fwhm,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max"
-# disabling option to select metrics, will require rework of output generation to implement
 ADD_MEAN="true"
 VOLUME="all"
 REF_NATIVE=
@@ -89,6 +87,7 @@ NO_PNG="false"
 NO_RMD="false"
 NO_SUMMARY="false"
 NO_RAW="false"
+NO_LOG="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
@@ -272,31 +271,43 @@ if [[ ${#IMGS_RAW[@]} -eq 0 ]] && [[ ${#IMGS_CLEAN[@]} -eq 0 ]]; then
 fi
 
 # Copy to scratch (and push raw to native space) ---------------------------------
+## convert to native spacing and short (INT16)
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>push raw images to native space"; fi
 if [[ -z ${REF_NATIVE} ]]; then
  REF_NATIVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz
 fi
-unset IMGS TYPES
+mkdir -p ${DIR_SCRATCH}/raw
+mkdir -p ${DIR_SCRATCH}/clean
+unset IMGS TYPES BVALS
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
   NV=$(niiInfo -i ${IMG} -f volumes)
   TYPES+=("raw")
-  IMGS+=("${DIR_SCRATCH}/${PFX}_${MOD}.nii.gz")
-  
-  XFMFCN="antsApplyTransforms -d 3 -n Linear"
+  IMGS+=("${DIR_SCRATCH}/raw/${PFX}_${MOD}.nii.gz")
+  BVALS+=("${DIR_RAW}/${PFX}_${MOD}.bval")
+  XFMFCN="antsApplyTransforms -d 3 -n Linear -u short"
   if [[ ${NV} -gt 1 ]]; then XFMFCN="${XFMFCN} -e 3"; fi
-  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/${PFX}_${MOD}.nii.gz -r ${REF_NATIVE}"
+  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/raw/${PFX}_${MOD}.nii.gz -r ${REF_NATIVE}"
   XFMFCN="${XFMFCN} -t identity"
-  XFMFCN="${XFMFCN} -t [${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat,1]"
-  XFMFCN="${XFMFCN} -t ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn+inverse.nii.gz"
+  XFMFCN="${XFMFCN} -t ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn.nii.gz"
+  XFMFCN="${XFMFCN} -t ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat"
   eval ${XFMFCN}
 done
 
 for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
+  IMG=${IMGS_CLEAN[${i}]}
+  PFX=$(getBidsBase -i ${IMG} -s)
+  MOD=$(getField -i ${IMG} -f modality)
+  NV=$(niiInfo -i ${IMG} -f volumes)
   TYPES+=("clean")
-  IMGS+=("${IMGS_CLEAN[${i}]}")
+  IMGS+=("${DIR_SCRATCH}/clean/${PFX}_${MOD}.nii.gz")
+  BVALS+=("${DIR_CLEAN}/${PFX}_${MOD}.bval")
+  XFMFCN="antsApplyTransforms -d 3 -n Linear -u short"
+  if [[ ${NV} -gt 1 ]]; then XFMFCN="${XFMFCN} -e 3"; fi
+  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/clean/${PFX}_${MOD}.nii.gz -r ${REF_NATIVE}"
+  eval ${XFMFCN}
 done
 
 # find masks and labels ========================================================
@@ -309,22 +320,22 @@ if [[ ! -f ${MASK_FRAME} ]]; then
   # consider moving frame mask creation to DPREP, create from B0
   3dcalc -a ${IMGS_RAW[0]}[0] -expr a -overwrite -prefix ${MASK_FRAME}
   niimath ${MASK_FRAME} -mul 0 -add 1 ${MASK_FRAME} -odt char
-  antsApplyTransforms -d 3 -n Linear \
+  antsApplyTransforms -d 3 -n Linear -u char \
     -i ${MASK_FRAME} -o ${MASK_FRAME} -r ${REF_NATIVE} \
     -t identity \
-    -t [${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat,1] \
-    -t ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn+inverse.nii.gz
+    -t ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn.nii.gz \
+    -t ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat
 fi
 
 ## push anatomical masks to dwi space
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>push anatomical masks to dwi spacing"; fi
 if [[ -z ${MASK_FG} ]]; then MASK_FG=${DIR_MASK}/${IDPFX}_mask-fg.nii.gz; fi
-antsApplyTransforms -d 3 -n GenericLabel \
+antsApplyTransforms -d 3 -n GenericLabel -u char \
   -i ${MASK_FG} -o ${DIR_SCRATCH}/${IDPFX}_mask-fg.nii.gz -r ${REF_NATIVE}
 MASK_FG=${DIR_SCRATCH}/${IDPFX}_mask-fg.nii.gz
 
 if [[ -z ${MASK_BRAIN} ]]; then MASK_BRAIN=${DIR_MASK}/${IDPFX}_mask-brain.nii.gz; fi
-antsApplyTransforms -d 3 -n GenericLabel \
+antsApplyTransforms -d 3 -n GenericLabel -u char \
   -i ${MASK_BRAIN} -o ${DIR_SCRATCH}/${IDPFX}_mask-brain.nii.gz -r ${REF_NATIVE}
 MASK_BRAIN=${DIR_SCRATCH}/${IDPFX}_mask-brain.nii.gz
 
@@ -340,28 +351,25 @@ if [[ -z ${MASK_CC} ]]; then
     fi
   fi
 fi
-antsApplyTransforms -d 3 -n GenericLabel \
+antsApplyTransforms -d 3 -n GenericLabel -u char \
   -i ${MASK_CC} -o ${DIR_SCRATCH}/${IDPFX}_mask-cc.nii.gz -r ${REF_NATIVE}
 MASK_CC=${DIR_SCRATCH}/${IDPFX}_mask-cc.nii.gz
 
 # CALCULATE METRICS ===============================================================
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>calculate metrics"; fi
 NIMG=${#IMGS[@]}
-
 for (( i=0; i<${NIMG}; i++ )); do
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>image ${i} of ${NIMG}"; fi
   IMG=${IMGS[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
   NV=$(niiInfo -i ${IMG} -f volumes)
+  BVAL=($(cat ${BVALS[${i}]}))
   FRAME=${DIR_MASK}/${IDPFX}_mod-${MOD}_mask-frame.nii.gz
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>processing: ${IMG}"; fi
+
   # split into shells ------
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>>>>splitting by bvalues"; fi
-  BNAME=$(getBidsBase -i ${IMG})
-  TDIR=$(dirname ${IMG})
-  if [[ ${TDIR} == ${DIR_SCRATCH} ]]; then TDIR=${DIR_RAW}; fi
-  BVAL=($(cat ${TDIR}/${BNAME}.bval))
   unset BLS
   BLS=${BVAL[0]}
   for (( j=0; j<${#BVAL[@]}; j++ )); do
@@ -372,12 +380,10 @@ for (( i=0; i<${NIMG}; i++ )); do
     done
     if [[ ${MATCH} == "true" ]]; then BLS+=(${TB}); fi
     TLS=($(find ${DIR_SCRATCH} -name "DWI_B${TB}_*.nii.gz" 2>/dev/null))
-    echo "3dcalc -a ${IMG}[${j}] -expr a -overwrite \
-      -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz"
-    3dcalc -a ${IMG}[${j}] -expr a -overwrite -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz
+    3dcalc -a ${IMG}[${j}] -expr a -short -overwrite -prefix ${DIR_SCRATCH}/DWI_B${TB}_${#TLS[@]}.nii.gz
   done
 
-  # concatenate shells
+  # concatenate shells ------
   for (( j=0; j<${#BLS[@]}; j++ )); do
     TB=${BLS[${j}]}
     3dTcat -overwrite -prefix ${DIR_SCRATCH}/DWI_B${TB}.nii.gz \
@@ -410,15 +416,15 @@ ${SNR_CC[-1]},${SNR_D[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,
   
     if [[ "${NO_LOG}" == "false" ]]; then
       OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${MOD},${TB}"
-      for (( j=0; j<${NV}; j++ )); do
-        echo "${OPFX},${j},efc,${EFC[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},fber,${FBER[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},snr_frame,${SNR_FRAME[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},snr_fg,${SNR_FG[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},snr_brain,${SNR_BRAIN[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},snr_cc,${SNR_BRAIN[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},snr_dietrich,${SNR_D[${j}]}" >> ${CSV_LOG}
-        echo "${OPFX},${j},piesno,${PIESNO[${j}]}" >> ${CSV_LOG}
+      for (( k=0; k<${NV}; k++ )); do
+        echo "${OPFX},${k},efc,${EFC[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},fber,${FBER[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},snr_frame,${SNR_FRAME[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},snr_fg,${SNR_FG[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},snr_brain,${SNR_BRAIN[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},snr_cc,${SNR_BRAIN[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},snr_dietrich,${SNR_D[${k}]}" >> ${CSV_LOG}
+        echo "${OPFX},${k},piesno,${PIESNO[${k}]}" >> ${CSV_LOG}
       done
       echo "${OPFX},NA,fwhm_x,${FWHM[0]}" >> ${CSV_LOG}
       echo "${OPFX},NA,fwhm_y,${FWHM[1]}" >> ${CSV_LOG}
