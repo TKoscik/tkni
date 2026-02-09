@@ -46,6 +46,14 @@ if [[ "${HELP}" == "true" ]]; then
   echo '------------------------------------------------------------------------'
   echo '  -h | --help              display command help'
   echo '  -i | --image <value>     nii or nii.gz file'
+  echo '  --volume                 which sub-volume to process'
+  echo '  --plane                  which plane to shift. x, [y], z'
+  echo '  --shift                  shift amount, in number of voxels'
+  echo '                           default="N/2", to shift by Nyquist frequency'
+  echo '                           all other inputs must be an integer.'
+  echo '  --filename               filename for output file without extension'
+  echo '  --dir-save               directory to save data'
+  echo '  --dir-scratch            directory for intermediate files'
   echo ''
   NO_LOG=true
   exit 0
@@ -66,7 +74,7 @@ if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
 FEXT=(${IMAGE//\./ })
 if [[ ${FEXT[-1]} == "gz" ]]; then
   mkdir -p ${DIR_SCRATCH}
-  gunzip -k -c ${IMAGE} > ${DIR_SCRATCH}/IMAGE.nii
+  gunzip -k -f -c ${IMAGE} > ${DIR_SCRATCH}/IMAGE.nii
   IMAGE=${DIR_SCRATCH}/IMAGE.nii
 fi
 
@@ -78,4 +86,7 @@ if [[ "${SHIFT}" == "N/2" ]]; then
 fi
 
 Rscript ${TKNIPATH}/R/circleShift.R ${IMAGE} ${VOLUME} ${PLANE} ${SHIFT} ${DIR_SAVE}/${FILENAME}.nii
-gzip ${DIR_SAVE}/${FILENAME}.nii
+gzip -f ${DIR_SAVE}/${FILENAME}.nii
+
+rm ${DIR_SCRATCH}/*
+rmdir ${DIR_SCRATCH}
