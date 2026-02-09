@@ -274,19 +274,29 @@ mkdir -p ${DIR_SCRATCH}/raw
 mkdir -p ${DIR_SCRATCH}/clean
 mkdir -p ${DIR_SCRATCH}/residual
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
+  ## identify inputs ------
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
-  TYPES+=("raw")
-  IMGS+=("${DIR_SCRATCH}/raw/${PFX}_bold.nii.gz")
-  # push to native space for metric calculation with native space masks ------
   REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
+  BRAIN=${DIR_MASK}/${PFX}_mod-bold_mask-brain.nii.gz
+  FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
   XAFFINE=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-affine.mat
   XSYN=${DIR_XFM}/${PFX}_mod-bold_from-raw_to-native_xfm-syn.nii.gz
+
+  TIMG=${DIR_SCRATCH}/raw/${PFX}_bold.nii.gz
+  TBRAIN=${DIR_SCRATCH}/raw/${PFX}_mask-brain.nii.gz
+  TFRAME=${DIR_SCRATCH}/raw/${PFX}_mask-frame.nii.gz
+
+  # push to native space for metric calculation with native space masks ------
+  cp ${IMG} ${TIMG}
   antsApplyTransforms -d 3 -e 3 -n Linear -u short \
-    -i ${IMG} -o ${DIR_SCRATCH}/raw/${PFX}_bold.nii.gz -r ${REF} \
-    -t identity -t ${XSYN} -t ${XAFFINE}
+    -i ${TIMG} -o ${TIMG} -r ${REF} -t identity -t ${XSYN} -t ${XAFFINE}
+
+  # copy brain mask ------
+  if [[ ! -f ${BRAIN} ]]; then mri_synthstrip -i ${REF} -m ${BRAIN}; fi
+  cp ${BRAIN} ${TBRAIN}
+
   # make frame masks ------
-  FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
   if [[ ! -f ${FRAME} ]]; then
     3dcalc -a ${IMG}[0] -expr a -overwrite -prefix ${FRAME}
     niimath ${FRAME} -mul 0 -add 1 ${FRAME} -odt char
@@ -294,35 +304,84 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
       -i ${FRAME} -o ${FRAME} -r ${REF} \
       -t identity -t ${XSYN} -t ${XAFFINE}
   fi
+  cp ${FRAME} ${TFRAME}
+
+  TYPES+=("raw")
+  IMGS+=("${TIMG}")
 done
+
 for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
   IMG=${IMGS_CLEAN[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
-  TYPES+=("clean")
-  IMGS+=("${DIR_SCRATCH}/clean/${PFX}_bold.nii.gz")
   REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
-  antsApplyTransforms -d 3 -e 3 -n Linear -u short \
-    -i ${IMG} -o ${DIR_SCRATCH}/clean/${PFX}_bold.nii.gz -r ${REF}
-  MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
-  if [[ ! -f ${MASK_FRAME} ]]; then
+  BRAIN=${DIR_MASK}/${PFX}_mod-bold_mask-brain.nii.gz
+  FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
+
+  TIMG=${DIR_SCRATCH}/clean/${PFX}_bold.nii.gz
+  TBRAIN=${DIR_SCRATCH}/clean/${PFX}_mask-brain.nii.gz
+  TFRAME=${DIR_SCRATCH}/clean/${PFX}_mask-frame.nii.gz
+
+  # convert to INT16 for speed ------
+  cp ${IMG} ${TIMG}
+  antsApplyTransforms -d 3 -e 3 -n Linear -u short -i ${TIMG} -o ${TIMG} -r ${REF}
+
+  # copy brain mask ------
+  if [[ ! -f ${BRAIN} ]]; then
     TASK=$(getField -i ${IMG} -f task)
-    AverageImages 3 ${MASK_FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
+    if [[ -f ${DIR_MASK}/${IDPFX}_task-${TASK}_mask-brain.nii.gz ]]; then
+      BRAIN=${DIR_MASK}/${IDPFX}_task-${TASK}_mask-brain.nii.gz
+    else
+      mri_synthstrip -i ${TIMG} -m ${BRAIN}
+    fi
   fi
+  cp ${BRAIN} ${TBRAIN}
+
+  # make frame masks ------
+  if [[ ! -f ${FRAME} ]]; then
+    TASK=$(getField -i ${IMG} -f task)
+    AverageImages 3 ${FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
+  fi
+  cp ${FRAME} ${TFRAME}
+
+  IMGS+=("${TIMG}")
+  TYPES+=("clean")
 done
+
 for (( i=0; i<${#IMGS_RESIDUAL[@]}; i++ )); do
-  # check for combined frame mask
   IMG=${IMGS_RESIDUAL[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
-  MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
-  TYPES+=("residual")
-  IMGS+=("${DIR_SCRATCH}/residual/${PFX}_bold.nii.gz")
   REF=${DIR_MEAN}/${PFX}_proc-mean_bold.nii.gz
-  antsApplyTransforms -d 3 -e 3 -n Linear -u short \
-    -i ${IMG} -o ${DIR_SCRATCH}/residual/${PFX}_residual.nii.gz -r ${REF}
-  if [[ ! -f ${MASK_FRAME} ]]; then
+  BRAIN=${DIR_MASK}/${PFX}_mod-bold_mask-brain.nii.gz
+  FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
+
+  TIMG=${DIR_SCRATCH}/residual/${PFX}_residual.nii.gz
+  TBRAIN=${DIR_SCRATCH}/residual/${PFX}_mask-brain.nii.gz
+  TFRAME=${DIR_SCRATCH}/residual/${PFX}_mask-frame.nii.gz
+
+  # convert to INT16 for speed ------
+  cp ${IMG} ${TIMG}
+  antsApplyTransforms -d 3 -e 3 -n Linear -u short -i ${TIMG} -o ${TIMG} -r ${REF}
+
+  # copy brain mask ------
+  if [[ ! -f ${BRAIN} ]]; then
     TASK=$(getField -i ${IMG} -f task)
-    AverageImages 3 ${MASK_FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
+    if [[ -f ${DIR_MASK}/${IDPFX}_task-${TASK}_mask-brain.nii.gz ]]; then
+      BRAIN=${DIR_MASK}/${IDPFX}_task-${TASK}_mask-brain.nii.gz
+    else
+      mri_synthstrip -i ${TIMG} -m ${BRAIN}
+    fi
   fi
+  cp ${BRAIN} ${TBRAIN}
+
+  # make frame masks ------
+  if [[ ! -f ${FRAME} ]]; then
+    TASK=$(getField -i ${IMG} -f task)
+    AverageImages 3 ${FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
+  fi
+  cp ${FRAME} ${TFRAME}
+
+  IMGS+=("${TIMG}")
+  TYPES+=("residual")
 done
 
 # CALCULATE METRICS ===============================================================
@@ -331,13 +390,11 @@ for (( i=0; i<${NIMG}; i++ )); do
   IMG=${IMGS[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   TASK=${PFX//${IDPFX}}
-  
-  MASK_FRAME=${DIR_MASK}/${PFX}_mask-frame.nii.gz
-  MASK_BRAIN=($(find ${DIR_MASK} -name "${PFX}*mask-brain.nii.gz" 2>/dev/null))
-  if [[ ${#MASK_BRAIN[@]} -eq 0 ]]; then
-    echo "mask: not found ${DIR_MASK}/${PFX}_mask-brain.nii.gz"
-    exit 4
-  fi
+  TYPE=${TYPES[${i}]}
+
+  MASK_FRAME=${DIR_SCRATCH}/${TYPE}/${PFX}_mask-frame.nii.gz
+  MASK_BRAIN=${DIR_SCRATCH}/${TYPE}/${PFX}_mask-brain.nii.gz
+
   # premake ghosting masks *****
   XGHOST=${DIR_SCRATCH}/ghost_x.nii.gz
   YGHOST=${DIR_SCRATCH}/ghost_y.nii.gz
@@ -379,11 +436,11 @@ for (( i=0; i<${NIMG}; i++ )); do
     SNR_BRAIN+=($(qc_snr --image ${TIMG} --mask ${MASK_BRAIN}))
     SNR_D+=($(qc_snrd --image ${TIMG} --frame ${FRAME} --fg ${MASK_BRAIN} --add-mean))
     GHOST_X+=($(qc_ghostr --image ${TIMG} --mask ${MASK_BRAIN} \
-      --mask-ghost ${XGHOST} --mask-nonghost ${XNONGHOST}))
+      --ghost ${XGHOST} --nonghost ${XNONGHOST}))
     GHOST_Y+=($(qc_ghostr --image ${TIMG} --mask ${MASK_BRAIN} \
-      --mask-ghost ${YGHOST} --mask-nonghost ${YNONGHOST}))
+      --ghost ${YGHOST} --nonghost ${YNONGHOST}))
     GHOST_Z+=($(qc_ghostr --image ${TIMG} --mask ${MASK_BRAIN} \
-      --mask-ghost ${ZGHOST} --mask-nonghost ${ZNONGHOST}))
+      --ghost ${ZGHOST} --nonghost ${ZNONGHOST}))
 
     MEFC=$(echo "scale=6; ${MEFC} + (${EFC[-1]} / ${NV})" | bc -l)
     MFBER=$(echo "scale=6; ${MFBER} + (${FBER[-1]} / ${NV})" | bc -l)
@@ -425,6 +482,8 @@ ${MGHOST_X},${MGHOST_Y},${MGHOST_Z},${FWHM[0]},${FWHM[1]},${FWHM[2]},NA,NA,NA,NA
     echo "${OPFX},mean,ghost_y,${MGHOST_Y}" >> ${CSV_LOG}
     echo "${OPFX},mean,ghost_z,${MGHOST_Z}" >> ${CSV_LOG}
   fi
+  rm ${DIR_SCRATCH}/ghost*.nii.gz
+  rm ${DIR_SCRATCH}/nonghost*.nii.gz
 done
 
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
@@ -441,11 +500,11 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   SPIKE_PCT=$(echo "scale=4; ${RSPIKE_STATS[-2]} / ${RSPIKE_STATS[-1]}" | bc -l)
   OSTR="NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,\
 ${RMS_STATS[-2]},${RMS_STATS[-1]},${RFD_STATS[-2]},${RFD_STATS[-1]},${SPIKE_PCT}"
-  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_SUMMARY}
-  echo "${IDSTR},${TIMESTAMP},${TYPES[${i}]},${TASK},${OSTR}" >> ${CSV_PX}
+  echo "${IDSTR},${TIMESTAMP},NA,${TASK},${OSTR}" >> ${CSV_SUMMARY}
+  echo "${IDSTR},${TIMESTAMP},NA,${TASK},${OSTR}" >> ${CSV_PX}
 
   if [[ "${NO_LOG}" == "false" ]]; then
-    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},${TYPES[${i}]},${TASK}"
+    OPFX="${PI},${PROJECT},${IDPFX},${TIMESTAMP},NA,${TASK}"
     echo "${OPFX},NA,dvars_mean,${RMS_STATS[-2]}" >> ${CSV_LOG}
     echo "${OPFX},NA,dvars_sigma,${RMS_STATS[-1]}" >> ${CSV_LOG}
     echo "${OPFX},NA,fd_mean,${RFD_STATS[-2]}" >> ${CSV_LOG}
@@ -453,6 +512,15 @@ ${RMS_STATS[-2]},${RMS_STATS[-1]},${RFD_STATS[-2]},${RFD_STATS[-1]},${SPIKE_PCT}
     echo "${OPFX},NA,spike_pct,${SPIKE_PCT}" >> ${CSV_LOG}
   fi
 done
+
+# clean up workspace (egress functions seems to struggle with subdirectories)
+#rm ${DIR_SCRATCH}/raw/*
+#rm ${DIR_SCRATCH}/clean/*
+#rm ${DIR_SCRATCH}/residual/*
+#rmdir ${DIR_SCRATCH}/raw
+#rmdir ${DIR_SCRATCH}/clean
+#rmdir ${DIR_SCRATCH}/residual
+#rmdir ${DIR_SCRATCH}
 
 # set status file --------------------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi

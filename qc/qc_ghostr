@@ -39,7 +39,7 @@ trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvl --long image:,mask:,plane:,\
-mask-ghost:,mask-nonghost:,volume:,add-mean,precision:,\
+ghost:,nonghost:,volume:,add-mean,precision:,\
 dir-scratch:,\
 help,verbose,no-log -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then
@@ -53,8 +53,8 @@ IMAGE=
 MASK=
 PLANE="y"
 VOLUME="all"
-MASK_GHOST=
-MASK_NONGHOST=
+GHOST=
+NONGHOST=
 ADD_MEAN="false"
 PRECISION=4
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
@@ -70,8 +70,8 @@ while true; do
     --mask) MASK="$2" ; shift 2 ;;
     --plane) PLANE="$2" ; shift 2 ;;
     --volume) VOLUME="$2" ; shift 2 ;;
-    --mask-ghost) GHOST="$2" ; shift 2 ;;
-    --mask-nonghost) NONGHOST="$2" ; shift 2 ;;
+    --ghost) GHOST="$2" ; shift 2 ;;
+    --nonghost) NONGHOST="$2" ; shift 2 ;;
     --add-mean) ADD_MEAN="true" ; shift 2 ;;
     --precision) PRECISION="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -111,7 +111,7 @@ fi
 mkdir -p ${DIR_SCRATCH}
 
 # create ghosting masks --------------------------------------------------------
-if [[ -z ${MASK_GHOST} ]]; then
+if [[ -z ${GHOST} ]]; then
   GHOST=${DIR_SCRATCH}/ghost.nii.gz
   NONGHOST=${DIR_SCRATCH}/nonghost.nii.gz
   case ${PLANE,,} in

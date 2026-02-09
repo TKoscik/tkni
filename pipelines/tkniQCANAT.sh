@@ -289,23 +289,23 @@ if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
 fi
 
 # Find images ------------------------------------------------------------------
-IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*.nii.gz" 2>/dev/null))
-IMGS_NATIVE=($(find ${DIR_NATIVE} -name "${IDPFX}*.nii.gz" 2>/dev/null))
+IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*.nii.gz" -maxdepth 1 2>/dev/null))
+IMGS_NATIVE=($(find ${DIR_NATIVE} -name "${IDPFX}*.nii.gz" -maxdepth 1 2>/dev/null))
 for (( i=0; i<${#DIR_ADD[@]}; i++ )); do
-  IMGS_NATIVE+=($(find ${DIR_ADD[${i}]} -name "${IDPFX}*.nii.gz" 2>/dev/null))
+  IMGS_NATIVE+=($(find ${DIR_ADD[${i}]} -name "${IDPFX}*.nii.gz" -maxdepth 1 2>/dev/null))
 done
 
 # Copy to scratch (and push raw to native space) --------------------------------
 if [[ -z ${REF_NATIVE} ]]; then REF_NATIVE=${DIR_NATIVE}/${IDPFX}_T1w.nii.gz; fi
 unset IMGS TYPES
+mkdir -p ${DIR_SCRATCH}/raw
 for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   IMG=${IMGS_RAW[${i}]}
   PFX=$(getBidsBase -i ${IMG} -s)
   MOD=$(getField -i ${IMG} -f modality)
   if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
-  TYPES+=("raw")
-  IMGS+=("${DIR_SCRATCH}/$(basename ${IMG})")
+
   if [[ -f ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
     XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
   else
@@ -314,15 +314,21 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   fi
   XFMFCN="antsApplyTransforms -d 3 -n Linear"
   if [[ ${NV} -gt 1 ]]; then XFMFCN="${XFMFCN} -e 3"; fi
-  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/$(basename ${IMG}) -r ${REF_NATIVE}"
+  XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/raw/$(basename ${IMG}) -r ${REF_NATIVE}"
   XFMFCN="${XFMFCN} -t identity ${XFMSTR}"
 #  echo -e "\n\n${XFMFCN}\n\n"
   eval ${XFMFCN}
+
+  TYPES+=("raw")
+  IMGS+=("${DIR_SCRATCH}/raw/$(basename ${IMG})")
 done
 
+mkdir -p ${DIR_SCRATCH}/clean
 for (( i=0; i<${#IMGS_NATIVE[@]}; i++ )); do
   TYPES+=("clean")
-  IMGS+=("${IMGS_NATIVE[${i}]}")
+  TIMG=${DIR_SCRATCH}/clean/$(basename ${IMGS_NATIVE[${i}]})
+  cp ${IMGS_NATIVE[${i}]} ${TIMG}
+  IMGS+=("${TIMG}")
 done
 
 # find masks and labels ========================================================
@@ -375,7 +381,7 @@ for (( i=0; i<${NIMG}; i++ )); do
   MOD=$(getField -i ${IMG} -f modality)
   if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
-  
+  echo -e "\n\n\n\n${IMG}\n\n\n\n"
   FMOD=${MOD}
   if [[ ${MOD} == "PD" ]] \
   || [[ ${MOD} == "T1map" ]] \
@@ -502,9 +508,8 @@ if [[ "${NO_LOG}" == "false" ]]; then
   echo "${OPFX},NA,rpve_csf,${RPVE[3]}" >> ${CSV_LOG}
 fi
 
-if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
-
 # set status file --------------------------------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
 touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
