@@ -295,6 +295,7 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   # copy brain mask ------
   if [[ ! -f ${BRAIN} ]]; then mri_synthstrip -i ${REF} -m ${BRAIN}; fi
   cp ${BRAIN} ${TBRAIN}
+  niimath ${TBRAIN} -bin ${TBRAIN} -odt char
 
   # make frame masks ------
   if [[ ! -f ${FRAME} ]]; then
@@ -305,6 +306,7 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
       -t identity -t ${XSYN} -t ${XAFFINE}
   fi
   cp ${FRAME} ${TFRAME}
+  niimath ${TFRAME} -bin ${TFRAME} -odt char
 
   TYPES+=("raw")
   IMGS+=("${TIMG}")
@@ -335,6 +337,7 @@ for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
     fi
   fi
   cp ${BRAIN} ${TBRAIN}
+  niimath ${TBRAIN} -bin ${TBRAIN} -odt char
 
   # make frame masks ------
   if [[ ! -f ${FRAME} ]]; then
@@ -342,6 +345,7 @@ for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
     AverageImages 3 ${FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
   fi
   cp ${FRAME} ${TFRAME}
+  niimath ${TFRAME} -bin ${TFRAME} -odt char
 
   IMGS+=("${TIMG}")
   TYPES+=("clean")
@@ -372,6 +376,7 @@ for (( i=0; i<${#IMGS_RESIDUAL[@]}; i++ )); do
     fi
   fi
   cp ${BRAIN} ${TBRAIN}
+  niimath ${TBRAIN} -bin ${TBRAIN} -odt char
 
   # make frame masks ------
   if [[ ! -f ${FRAME} ]]; then
@@ -379,6 +384,7 @@ for (( i=0; i<${#IMGS_RESIDUAL[@]}; i++ )); do
     AverageImages 3 ${FRAME} 0 ${DIR_MASK}/${IDPFX}*task-${TASK}*mask-frame.nii.gz
   fi
   cp ${FRAME} ${TFRAME}
+  niimath ${TFRAME} -bin ${TFRAME} -odt char
 
   IMGS+=("${TIMG}")
   TYPES+=("residual")
