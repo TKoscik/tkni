@@ -204,6 +204,19 @@ fi
 # Convert DICOMS ---------------------------------------------------------------
 dicomConvert --input ${INPUT_DCM} --depth 10 --dir-save ${DIR_SCRATCH}
 
+# handle slab acquisitions -----------------------------------------------------
+# ***** TEMPORARY FIX
+FLS=($(ls ${DIR_SCRATCH}/*.nii.gz))
+for (( i=0; i<${#FLS[@]}; i++ )); do
+  if [[ "${FLS[${i}]}" == *"gre_swi_200um"* ]]; then
+    3drefit -ydel 0.2 ${FLS[${i}]}
+    3dcalc -a ${FLS[${i}]}[0] -expr a -prefix ${DIR_SCRATCH}/tmp1.nii.gz
+    3dcalc -a ${FLS[${i}]}[1] -expr a -prefix ${DIR_SCRATCH}/tmp2.nii.gz
+    c3d ${DIR_SCRATCH}/tmp2.nii.gz ${DIR_SCRATCH}/tmp1.nii.gz -tile y -o ${FLS[${i}]}
+    rm ${DIR_SCRATCH}/tmp*.nii.gz
+  fi
+done
+
 # Reorient images if requested -------------------------------------------------
 if [[ ${REORIENT} != "false" ]]; then
   FLS=($(ls ${DIR_SCRATCH}/*.nii.gz))

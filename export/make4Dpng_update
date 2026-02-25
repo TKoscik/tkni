@@ -365,7 +365,9 @@ if [[ ${VOLUMES} == "0:-1" ]]; then
   VLS=($(eval echo {0..${NV}..1}))
 elif [[ ${VOLUMES} =~ ^[0-9]+:[0-9]+:[0-9]+$ ]]; then
   TV=(${VOLUMES//:/ })
-  if [[ ${TV[2]} -eq -1 ]]; then TV[2]=${FG_VOLS}; fi
+  if [[ ${TV[2]} -eq -1 ]]; then TV[2]=$(( ${FG_VOLS} - 1 )); fi
+  if [[ ${TV[2]} -eq ${FG_VOLS} ]]; then TV[2]=$(( ${FG_VOLS} - 1 )); fi
+  VOLUMES="${TV[0]}:${TV[1]}:${TV[2]}}"
   VLS=($(eval echo {${TV[0]}..${TV[2]}..${TV[1]}}))
   NV=${#VLS[@]}
 else
@@ -376,14 +378,18 @@ else
     if [[ ${TV[${i}]} =~ ^[0-9]+:[0-9]+:[0-9]+$ ]]; then
       TTV=${TV[${i}]}
       TTV=(${TTV//:/ })
-      if [[ ${TTV[2]} -eq -1 ]]; then TTV[2]=${FG_VOLS}; fi
+      if [[ ${TTV[2]} -eq -1 ]]; then TTV[2]=$(( ${FG_VOLS} - 1 )); fi
+      if [[ ${TV[2]} -eq ${FG_VOLS} ]]; then TV[2]=$(( ${FG_VOLS} - 1 )); fi
+      VOLUMES="${TV[0]}:${TV[1]}:${TV[2]}}"
       TTV=($(eval echo {${TTV[0]}..${TTV[2]}..${TTV[1]}}))
       NV=$((${NV} + ${#TTV[@]}))
       VLS=(${VLS[@]} ${TTV[@]})
     elif [[ ${TV[${i}]} == *":"* ]]; then
       TTV=${TV[${i}]}
       TTV=(${TTV//:/ })
-      if [[ ${TTV[2]} -eq -1 ]]; then TTV[2]=${FG_VOLS}; fi
+      if [[ ${TTV[2]} -eq -1 ]]; then TTV[2]=$(( ${FG_VOLS} - 1 )); fi
+      if [[ ${TV[2]} -eq ${FG_VOLS} ]]; then TV[2]=$(( ${FG_VOLS} - 1 )); fi
+      VOLUMES="${TV[0]}:${TV[1]}:${TV[2]}}"
       TTV=($(eval echo {${TTV[0]}..${TTV[1]}..1}))
       NV=$((${NV} + ${#TTV[@]}))
       VLS=(${VLS[@]} ${TTV[@]})
@@ -646,7 +652,7 @@ for (( i=0; i<${#FG[@]}; i++ )); do
     HI=($(3dBrickStat -slow -max ${DIR_SCRATCH}/tmp.nii.gz ))
   fi
   #### NEED TO ACCOUNT FOR MASKS SOMEHOW
-  echo "*****$LO $HI"
+  #echo "*****$LO $HI"
   ## generate color bar
   if [[ "${VERBOSE,,}" == "true" ]]; then echo ">>> generate BG color bar"; fi
   ## parse color input ---------------------------------------------------------
@@ -686,6 +692,12 @@ for (( i=0; i<${#FG[@]}; i++ )); do
   #THI=${TTHRESH[1]}
   #if [[ ${TLO} == "0%" ]]; then TLO="-inf"; fi
   #if [[ ${TLO} == "100%" ]]; then TLO="inf"; fi
+  echo "c4d ${FG[${i}]} \
+    -clip ${LO} ${HI} \
+    -stretch ${LO} ${HI} 0 255 -type uchar \
+    -slice w "${VOLUMES}" \
+    -foreach -slice ${PLANE} ${SLICE} -endfor \
+    -oo ${DIR_SCRATCH}/FG${i}_%0d.png"
   c4d ${FG[${i}]} \
     -clip ${LO} ${HI} \
     -stretch ${LO} ${HI} 0 255 -type uchar \
