@@ -387,9 +387,11 @@ IMG_NATIVE=${DIR_ANAT}/native/${IDPFX}_${BASE_MOD}.nii.gz
 MASK_FRAME=${DIR_PREP}/${IDPFX}_mask-frame.nii.gz
 MASK_FG=${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-fg+AUTO.nii.gz
 MASK_BRAIN=${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+SYNTH.nii.gz
+cp ${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain+SYNTH.nii.gz \
+  ${DIR_ANAT}/mask/${FLOW}/${IDPFX}_mask-brain.nii.gz
 
-EFC_RAW=($(qc_efc --image ${IMG_NOPROC} --framemask ${MASK_FRAME}))
-EFC_NTV=($(qc_efc --image ${IMG_NATIVE} --framemask ${MASK_FRAME}))
+EFC_RAW=($(qc_efc --image ${IMG_NOPROC} --frame ${MASK_FRAME}))
+EFC_NTV=($(qc_efc --image ${IMG_NATIVE} --frame ${MASK_FRAME}))
 FBER_RAW=($(qc_fber --image ${IMG_NOPROC} --mask ${MASK_FG}))
 FBER_NTV=($(qc_fber --image ${IMG_NATIVE} --mask ${MASK_FG}))
 SNR_RAW_FR=($(qc_snr --image ${IMG_NOPROC} --mask ${MASK_FRAME}))
