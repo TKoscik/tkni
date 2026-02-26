@@ -70,9 +70,9 @@ MOD="T1w"
 MASK_DIL=2
 
 ATLAS_NAME="HCPYAX"
-ATLAS_REF="${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_T1w.nii.gz"
-ATLAS_MASK="${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_mask-brain.nii.gz"
-ATLAS_EX="${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_ex-1_T1w.nii.gz,${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_ex-2_T1w.nii.gz,${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_ex-3_T1w.nii.gz,${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_ex-4_T1w.nii.gz,${TKNI_TEMPLATE}/adult/HCPYAX/HCPYAX_700um_ex-5_T1w.nii.gz"
+ATLAS_REF="${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_T1w.nii.gz"
+ATLAS_MASK="${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_mask-brain.nii.gz"
+ATLAS_EX="${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_ex-1_T1w.nii.gz,${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_ex-2_T1w.nii.gz,${TKNI_TEMPLATE}HCPYAX/HCPYAX_700um_ex-3_T1w.nii.gz,${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_ex-4_T1w.nii.gz,${TKNI_TEMPLATE}/HCPYAX/HCPYAX_700um_ex-5_T1w.nii.gz"
 ATLAS_LABEL="DKT,wmparc,hcpmmp1,cerebellum"
 #MALF_LABELS="a2009s,DKTatlas,aparc,wmparc,hcpmmp1,cerebellum,hippocampus,subcortical"
 # NOTE: MALF Labels must be in the same folder and differ form exemplar filenames by replacing the modality (e.g., T1w) with label-LABELNAME.nii.gz
