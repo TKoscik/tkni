@@ -436,7 +436,7 @@ if [[ ${MASK_DIL} -gt 0 ]]; then
   ImageMath 3 ${TMP_NII}/mask-brain_MD.nii.gz MD ${MASK_BRAIN} ${MASK_DIL}
   MASK_BRAIN=${TMP_NII}/mask-brain_MD.nii.gz
 fi
-fslmaths ${IMAGE_ANAT} -mas ${MASK_BRAIN} ${TMP_NII}/T1_roi-brain.nii.gz
+niimath ${IMAGE_ANAT} -mas ${MASK_BRAIN} ${TMP_NII}/T1_roi-brain.nii.gz
 FIXED=${TMP_NII}/T1_roi-brain.nii.gz
 
 ## coregister to anatomical T1w
