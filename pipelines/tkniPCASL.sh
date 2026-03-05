@@ -381,14 +381,23 @@ if [[ ${NO_NORM,,} == "false" ]]; then
 fi
 
 # gather missing OPTS from JSON -------------------------------------------
+if [[ $(jq 'has("PostLabelDelay")' < ${ASL_JSON}) == "true" ]]; then
+  JSON_DELAY="PostLabelDelay"
+elif [[ $(jq 'has("PostLabelingDelay")' < ${ASL_JSON}) == "true" ]]; then
+  JSON_DELAY="PostLabelingDelay"
+else
+  echo "ERROR [${PIPE}${FLOW}]: PostLabelDelay OR PostLabelingDelay field not found, aborting."
+ exit 6
+fi
+
 if [[ -z ${OPT_DURATION} ]]; then
   TR=($(jq ".RepetitionTime" < ${ASL_JSON} | tr -d '[],\n'))
-  TD=($(jq ".PostLabelDelay" < ${ASL_JSON} | tr -d '[],\n'))
+  TD=($(jq ".${JSON_DELAY}" < ${ASL_JSON} | tr -d '[],\n'))
   OPT_DURATION=$(echo "scale=4; ${TR} - ${TD}" | bc -l)
 fi
 
 if [[ -z ${OPT_DELAY} ]]; then
-  OPT_DELAY=($(jq ".PostLabelDelay" < ${ASL_JSON} | tr -d '[],\n'))
+  OPT_DELAY=($(jq ".${JSON_DELAY}" < ${ASL_JSON} | tr -d '[],\n'))
 fi
 
 # set directories --------------------------------------------------------------

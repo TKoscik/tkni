@@ -302,3 +302,16 @@ done
 sudo apt install cifs-utils
 sudo apt install openssh-server
 sudo apt install imagemagick
+
+# Setup python virtual environments for various functions
+mkdir -p /usr/local/tkni/pyenv
+cd /usr/local/tkni/pyenv
+python -m venv amicoVENV
+source ./amicoVENV/bin/activate
+pip install dmri-amico
+
+mkdir -p /usr/local/tkni/pyenv
+cd /usr/local/tkni/pyenv
+python3 -m venv clusteringVENV
+source clusteringVENV/bin/activate
+pip install "numpy<2" matplotlib nibabel scikit-image
