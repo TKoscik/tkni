@@ -139,6 +139,7 @@ if [[ "${HELP}" == "true" ]]; then
   echo '  --id               file prefix, usually participant identifier string'
   echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
   echo '  --dir-id           sub-directory corresponding to subject in BIDS'
+  echo 'WTF'
   echo '  --dir-scratch      directory for temporary workspace'
   echo ''
   NO_LOG=true
@@ -254,9 +255,12 @@ if [[ "${NO_LOG}" == "false" ]] && [[ ! -f ${CSV_LOG} ]]; then
 fi
 
 # Find images and regressors ------------------------------------------------------
-IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
-IMGS_CLEAN=($(find ${DIR_CLEAN} -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
-IMGS_RESIDUAL=($(find ${DIR_RESIDUAL} -name "${IDPFX}*residual.nii.gz" 2>/dev/null))
+IMGS_RAW=($(find ${DIR_RAW} -maxdepth 1 -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
+echo -e "/n/nRAW/n${IMGS_RAW[@]}"
+IMGS_CLEAN=($(find ${DIR_CLEAN} -maxdepth 1 -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
+echo -e "/n/nCLEAN/n${IMGS_CLEAN[@]}"
+IMGS_RESIDUAL=($(find ${DIR_RESIDUAL} -maxdepth 1 -name "${IDPFX}*residual.nii.gz" 2>/dev/null))
+echo -e "/n/nRESIDUAL/n${IMGS_RESIDUal[@]}"
 #RGRS_RMS=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+RMS.1D" 2>/dev/null))
 #RGRS_FD=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+framewise.1D" 2>/dev/null))
 #RGRS_SPIKE=($(find ${DIR_REGRESSOR} -name "${IDPFX}*spike.1D" 2>/dev/null))
