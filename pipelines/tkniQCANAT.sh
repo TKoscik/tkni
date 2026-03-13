@@ -308,15 +308,21 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
 
   if [[ -f ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
     XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
-  else
+  elif [[ -f "${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz" ]]; then
     XFMSTR="-t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz"
     XFMSTR="${XFMSTR} -t ${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-affine.mat"
+  elif [[ -f "${DIR_XFM}/${IDPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-syn.nii.gz" ]]; then
+    XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-syn.nii.gz"
+    XFMSTR="${XFMSTR} -t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-affine.mat"
+  else
+    echo "ERROR [${PIPE}${FLOW}]: expected transform files not found, aborting"
+    exit 3
   fi
   XFMFCN="antsApplyTransforms -d 3 -n Linear"
   if [[ ${NV} -gt 1 ]]; then XFMFCN="${XFMFCN} -e 3"; fi
   XFMFCN="${XFMFCN} -i ${IMG} -o ${DIR_SCRATCH}/raw/$(basename ${IMG}) -r ${REF_NATIVE}"
   XFMFCN="${XFMFCN} -t identity ${XFMSTR}"
-#  echo -e "\n\n${XFMFCN}\n\n"
+  echo -e "\n\n${XFMFCN}\n\n"
   eval ${XFMFCN}
 
   TYPES+=("raw")
@@ -354,7 +360,7 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
     XFMFCN="antsApplyTransforms -d 3 -n Linear"
     XFMFCN="${XFMFCN} -i ${TFRAME} -o ${TFRAME}.nii.gz -r ${REF_NATIVE}"
     XFMFCN="${XFMFCN} -t identity ${XFMSTR}"
-#    echo -e "\n\n${XFMFCN}\n\n"
+    echo -e "\n\n${XFMFCN}\n\n"
     eval ${XFMFCN}
   fi
 done

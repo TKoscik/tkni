@@ -253,10 +253,11 @@ if [[ "${ZERO_VALUE}" != "false" ]]; then
       ZERO_VALUE=${LO}
     else
       if [[ -n ${MASK} ]]; then
-        ZERO_VALUE=($(fslstats ${IMGRS} -k ${MASK} -P 0))
+        TZERO=($(3dBrickStat -mask ${MASK} -slow -min ${IMAGE}))
       else
-        ZERO_VALUE=($(fslstats ${IMGRS} -P 0))
+        TZERO=($(3dBrickStat -slow -min ${IMAGE}))
       fi
+      ZERO_VALUE=${TZERO[0]}
     fi
   fi
   if [[ "${VERBOSE}" == "true" ]]; then

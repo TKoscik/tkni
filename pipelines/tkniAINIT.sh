@@ -400,10 +400,10 @@ SNR_NTV_FG=($(qc_snr --image ${IMG_NATIVE} --mask ${MASK_FG}))
 SNR_NTV_BR=($(qc_snr --image ${IMG_NATIVE} --mask ${MASK_BRAIN}))
 SNRD_RAW=($(qc_snrd --image ${IMG_NOPROC} --fg ${MASK_FG}))
 SNRD_NTV=($(qc_snrd --image ${IMG_NATIVE} --fg ${MASK_FG}))
-D_RAW_FG=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NOPROC} -m ${MASK_FG}))
-D_RAW_BR=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NOPROC} -m ${MASK_BRAIN}))
-D_NTV_FG=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NATIVE} -m ${MASK_FG}))
-D_NTV_BR=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NATIVE} -m ${MASK_BRAIN}))
+D_RAW_FG=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NOPROC} -m ${MASK_FG} -s ${TKNI_SCRATCH}))
+D_RAW_BR=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NOPROC} -m ${MASK_BRAIN} -s ${TKNI_SCRATCH}))
+D_NTV_FG=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NATIVE} -m ${MASK_FG} -s ${TKNI_SCRATCH}))
+D_NTV_BR=($(Rscript ${TKNIPATH}/R/qc_descriptives.R -i ${IMG_NATIVE} -m ${MASK_BRAIN} -s ${TKNI_SCRATCH}))
 if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> QC Metrics"; fi
 
 # generate HTML QC report ------------------------------------------------------

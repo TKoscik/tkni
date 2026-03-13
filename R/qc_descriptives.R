@@ -12,7 +12,7 @@ for (i in seq(1,length(args))) {
     vol <- as.numeric(args[i+1])
   } else if (args[i] %in% c("m", "mask", "-m")) {
     mask <- args[i+1]
-  } else if (args[i] %in% c("scratch", "dir.scratch", "-dir.scratch")) {
+  } else if (args[i] %in% c("-s", "scratch", "dir.scratch", "-dir.scratch")) {
     dir.scratch <- args[i+1]
   }
 }
