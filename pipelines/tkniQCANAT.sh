@@ -383,7 +383,7 @@ for (( i=0; i<${NIMG}; i++ )); do
   NV=$(niiInfo -i ${IMG} -f volumes)
   echo -e "\n\n\n\n${IMG}\n\n\n\n"
   FMOD=${MOD}
-  if [[ ${MOD} == "PD" ]] \
+  if [[ ${MOD} == "PDmap" ]] \
   || [[ ${MOD} == "T1map" ]] \
   || [[ ${MOD} == "T2map" ]]; then
     FMOD="QALAS"

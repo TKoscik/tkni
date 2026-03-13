@@ -262,12 +262,31 @@ fi
 
 # Find images -------------------------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>locate DWI images for QC metrics"; fi
-IMGS_RAW=($(find ${DIR_RAW} -name "${IDPFX}*dwi.nii.gz" 2>/dev/null))
+IMGS_RAW=($(find ${DIR_RAW} -maxdepth 1 -name "${IDPFX}*dwi.nii.gz" 2>/dev/null))
 IMGS_CLEAN=($(find ${DIR_CLEAN} -name "${IDPFX}*dwi.nii.gz" 2>/dev/null))
 
 if [[ ${#IMGS_RAW[@]} -eq 0 ]] && [[ ${#IMGS_CLEAN[@]} -eq 0 ]]; then
   echo "[${PIPE}${FLOW}] WARNING: No DWI images were found, aborting."
   exit 0
+fi
+
+if [[ ${VERBOSE} == "true" ]]; then
+  echo ">>>RAW IMAGES";
+  for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
+    IMG=${IMGS_RAW[${i}]}
+    PFX=$(getBidsBase -i ${IMG})
+    NV=$(niiInfo -i ${IMG} -f volumes)
+    echo -e "\t\tPrefix: ${PFX}"
+    echo -e "\t\t# Volumes: ${NV}"
+  done
+  echo ">>>CLEAN IMAGES";
+  for (( i=0; i<${#IMGS_CLEAN[@]}; i++ )); do
+    IMG=${IMGS_CLEAN[${i}]}
+    PFX=$(getBidsBase -i ${IMG})
+    NV=$(niiInfo -i ${IMG} -f volumes)
+    echo -e "\t\tPrefix: ${PFX}"
+    echo -e "\t\t# Volumes: ${NV}"
+  done
 fi
 
 # Copy to scratch (and push raw to native space) ---------------------------------
