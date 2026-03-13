@@ -304,14 +304,15 @@ sudo apt install openssh-server
 sudo apt install imagemagick
 
 # Setup python virtual environments for various functions
-mkdir -p /usr/local/tkni/pyenv
-cd /usr/local/tkni/pyenv
+mkdir -p /usr/local/tkni/pyvenv
+cd /usr/local/tkni/pyvenv
 python -m venv amicoVENV
 source ./amicoVENV/bin/activate
 pip install dmri-amico
 
-mkdir -p /usr/local/tkni/pyenv
-cd /usr/local/tkni/pyenv
+mkdir -p /usr/local/tkni/pyvenv
+cd /usr/local/tkni/pyvenv
 python3 -m venv clusteringVENV
 source clusteringVENV/bin/activate
+pip install -r /usr/local/tkni/dev/python/requirements_clusteringVENV.txt
 pip install "numpy<2" matplotlib nibabel scikit-image
