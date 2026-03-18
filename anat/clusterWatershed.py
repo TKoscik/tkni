@@ -55,11 +55,26 @@ def run_watershed(input_path, datum, output_path, mask_path=None):
     print(f"Done! Found {len(sorted_labels)} clusters. Total time: {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="NIFTI Watershed: Datum + Sorted")
-    parser.add_argument("-i", "--input", required=True)
-    parser.add_argument("-d", "--datum", type=float, default=2.0)
-    parser.add_argument("-k", "--mask", help="Optional mask")
-    parser.add_argument("-o", "--output", required=True)
-
+    parser = argparse.ArgumentParser(
+        description="""
+TKNI Watershed Segmentation
+--------------------------------------------------------------------------------
+This tool performs watershed segmentation on NIfTI distance maps (EDT).
+It identifies seed points (basins) based on a distance threshold,
+propagates labels, and re-ranks the resulting clusters by volume
+(Label 1 = Largest Cluster).
+        """,
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument("-i", "--input", required=True,
+                        help="Input NIfTI distance map (e.g., Euclidean Distance Transform).")
+    parser.add_argument("-d", "--datum", type=float, default=1.0,
+                        help="Distance threshold for seed extraction (default: 1.0).\n"
+                             "Increasing this value results in fewer, larger seeds.")
+    parser.add_argument("-k", "--mask",
+                        help="Optional binary mask NIfTI to restrict the watershed growth.\n"
+                             "If omitted, the script uses all voxels > 0 in the input.")
+    parser.add_argument("-o", "--output", required=True,
+                        help="Output path for the sorted label NIfTI volume.")
     args = parser.parse_args()
     run_watershed(args.input, args.datum, args.output, args.mask)

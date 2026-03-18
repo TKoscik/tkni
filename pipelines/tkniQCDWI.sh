@@ -463,6 +463,13 @@ ${SNR_CC[-1]},${SNR_D[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,
 done
 
 FA=${DIR_SCALAR}/${IDPFX}_space-native_scalar-fa.nii.gz
+if [[ ! -f ${FA} ]]; then
+  FA_ORIG=${DIR_PROJECT}/derivatives/${PIPE}/dwi/scalar/${IDPFX}_scalar-fa.nii.gz
+  if [[ -f ${FA_ORIG} ]]; then
+    antsApplyTransforms -d 3 -n Linear -i ${FA_ORIG} -o ${FA} -r ${REF_NATIVE}
+  fi
+fi
+
 if [[ -f ${FA} ]]; then
   unset ISNAN ISDEGEN SPIKE
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>processing FA metrics and spikes"; fi

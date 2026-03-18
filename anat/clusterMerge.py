@@ -26,14 +26,17 @@ def get_cluster_stats(image_array, label_array):
             continue
         m = prop.mean_intensity
         s = np.std(pixels)
-        if s < 1e-7:
+        if s < 1e-4:
             sk = 0.0
             kurt = 0.0
             cv = 0.0
         else:
-            sk = skew(pixels)
-            kurt = kurtosis(pixels)
-            cv = s / (abs(m) + 1e-8)
+             if np.allclose(pixels, m, atol=1e-4):
+                 sk, kurt, cv = 0.0, 0.0, 0.0
+             else:
+                 sk = skew(pixels)
+                 kurt = kurtosis(pixels)
+                 cv = s / (abs(m) + 1e-8)
         stats_map[l_id] = np.array([m, s, sk, kurt, cv])
     return stats_map
 
@@ -148,6 +151,7 @@ def merge_clusters(nii_image, nii_mask, nii_label, threshold, connectivity, clip
         weight_func=lambda g, s, d, n: _weight_stats(g, s, d, n, feature_weights),
     )
 
+    print("")
     print("-> Relabeling and saving")
     final_label, _, _ = relabel_sequential(new_label.astype(np.int32))
     nib.save(nib.Nifti1Image(final_label.astype(np.int32), image.affine), nii_out)

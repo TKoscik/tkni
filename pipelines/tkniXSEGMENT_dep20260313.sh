@@ -68,12 +68,12 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hkvnr --long pi:,project:,dir-project:,\
+OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
 id:,dir-id:,id-field:,\
 image:,mask:,\
 no-anisosmooth,aniso-conductance:,aniso-iter:,\
 dog_g1:,dog_k:,\
-datum:,no-merge,merge-threshold:,merge-weights:,\
+altitude:,datum:,no-merge,pdf-overlap:,\
 dir-save:,dir-scratch:,requires:,\
 keep,help,verbose,no-png,no-rmd,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -100,10 +100,12 @@ SMOOTH_ITER=20
 DOG_G1=0
 DOG_K=1.6
 
-DATUM=1.0
+ALTITUDE="2vox"
+DATUM="1vox"
+CONNECTIVITY=6
+
 NO_MERGE="false"
-MERGE_THRESHOLD=1.25
-MERGE_WEIGHTS="1,2,1.5,1,1"
+PDF_OVERLAP=0.85
 
 DIR_SAVE=
 DIR_SCRATCH=
@@ -125,7 +127,6 @@ while true; do
     -v | --verbose) VERBOSE="true" ; shift ;;
     -n | --no-png) NO_PNG="true" ; shift ;;
     -r | --no-rmd) NO_PNG="true" ; shift ;;
-    -k | --keep) KEEP="true" ; shift ;;
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --pi) PI="$2" ; shift 2 ;;
@@ -141,10 +142,10 @@ while true; do
     --aniso-iter) SMOOTH_ITER="$2" ; shift 2 ;;
     --dog_g1) DOG_G1="$2" ; shift 2 ;;
     --dog_k) DOG_K="$2" ; shift 2 ;;
+    --altitude) ALTITUDE="$2" ; shift 2 ;;
     --datum) DATUM="$2" ; shift 2 ;;
     --no-merge) NO_MERGE="true" ; shift ;;
-    --merge-threshold) MERGE_THRESHOLD="$2" ; shift 2 ;;
-    --merge-weights) MERGE_WEIGHTS="$2" ; shift 2 ;;
+    --pdf-overlap) PDF_OVERLAP="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -372,27 +373,55 @@ for (( i=0; i<${NIMG}; i++ )); do
     -dog ${DOG_G1} ${DOG_G2} -mas ${MSK} \
     ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz
 
-  # (3) Calculate the Signed Distance Transform --------------------------------
+  # (6) Calculate the Signed Distance Transform --------------------------------
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>calculating signed distance transform"; fi
   c3d ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz -sdt \
     -o ${DIR_SCRATCH}/${PFX}_distance.nii.gz
 
-  # (4) Watershed Clustering ---------------------------------------------------
-  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>watershed clustering"; fi
-  clusterWatershed.py --input ${DIR_SCRATCH}/${PFX}_distance.nii.gz \
-    --mask ${MSK} \
-    --output ${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz \
-    --datum ${DATUM}
+  # Identify extrema in distance -----------------------------------------------
+  # Find local maxima, and convert to numbered labels
+  3dExtrema -prefix ${DIR_SCRATCH}/${PFX}_maxima.nii.gz \
+    -mask_file ${MSK} \
+    -sep_dist 0 \
+    -maxima -partial -closure -volume -average \
+    pid-ARO24001_ses-20250325_acq-161x161x400um_distance.nii
+  c3d ${DIR_SCRATCH}/${PFX}_maxima.nii.gz -binarize -comp -o ${DIR_SCRATCH}/${PFX}_maxima.nii.gz
 
-  # (5) Merge clusters ---------------------------------------------------------
-  ## using a regional adjacency graph based approach with hierarchical merging
-  ## with weighted centrality moments as cluster merging criteria
+  # Unzip files for processing with nifti.io in R ------------------------------
+  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>unzipping files for R processing"; fi
+  gunzip ${DIR_SCRATCH}/${PFX}_maxima.nii.gz
+  gunzip ${DIR_SCRATCH}/${PFX}_distance.nii.gz
+  gunzip ${IMG}; gunzip ${MSK}
+
+  # Flood Watersheds -----------------------------------------------------------
+  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>flooding watersheds"; fi
+  Rscript ${TKNIPATH}/R/floodWatershed.R \
+    "extrema" "${DIR_SCRATCH}/${PFX}_maxima.nii" \
+    "value" "${DIR_SCRATCH}/${PFX}_distance.nii" \
+    "mask" "${DIR_SCRATCH}/${PFX}_mask-brain.nii" \
+    "datum" 0 "connectivity" "18" \
+    "dir-save" "${DIR_SCRATCH}" \
+    "filename" "${PFX}_label-xsegment.nii"
+  ## (7) Watershed Clustering ---------------------------------------------------
+  #Rscript ${TKNIPATH}/R/clusterWatershed.R \
+  #  "distance" "${DIR_SCRATCH}/${PFX}_distance.nii" \
+  #  "mask" "${DIR_SCRATCH}/${PFX}_mask-brain.nii" \
+  #  "connectivity" "${CONNECTIVITY}" \
+  #  "altitude" "${ALTITUDE}" \
+  #  "datum" "${DATUM}" \
+  #  "dir-save" "${DIR_SCRATCH}" \
+  #  "filename" "${PFX}_label-xsegment.nii"
+
+  # (8) Merge clusters, touching neighbors with significantly ------------------
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>merging based on PDF overlap"; fi
-  clusterMerge.py --image ${IMG} --mask ${MSK} \
-    --label ${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz \
-    --output ${DIR_SCRATCH}/${PFX}_label-watershedMerged.nii.gz \
-    --threshold ${MERGE_THRESHOLD} \
-    --weights ${MERGE_WEIGHTS//,/ }
+  if [[ ${NO_MERGE} == "false" ]]; then
+    Rscript ${TKNIPATH}/R/clusterPDFmerge_gemini.R \
+      "intensity" "${DIR_SCRATCH}/${PFX}_swi.nii" \
+      "segmentation" "${DIR_SCRATCH}/${PFX}_label-xsegment.nii" \
+      "overlap" "${PDF_OVERLAP}" \
+      "dir-save" "${DIR_SCRATCH}" \
+      "filename" "${PFX}_label-xsegment+merge.nii"
+  fi
 
   # generate HTML QC report ------------------------------------------------------
   if [[ "${NO_RMD}" == "false" ]]; then
@@ -420,8 +449,8 @@ for (( i=0; i<${NIMG}; i++ )); do
     echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
 
     if [[ ${NO_MERGE} == "false" ]]; then
-      echo '#### Merged Segmentation' >> ${RMD}
-      TIMG=${DIR_SCRATCH}/${PFX}_label-watershedMerge.nii.gz
+      echo '#### PDF Merged Segmentation' >> ${RMD}
+      TIMG=${DIR_SCRATCH}/${PFX}_label-watershed+merge.nii.gz
       BNAME=$(basename ${TIMG})
       FNAME=${TIMG//\.nii\.gz}
       make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
@@ -432,14 +461,12 @@ for (( i=0; i<${NIMG}; i++ )); do
 
     echo '#### Processing Steps {.tabset}' >> ${RMD}
     echo '##### Click to View ->' >> ${RMD}
-    if [[ ${NO_SMOOTH} == "false" ]]; then
-      echo '##### Anisotropic Smoothing' >> ${RMD}
-      TIMG=${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz
-      BNAME=$(basename ${TIMG})
-      FNAME=${TIMG//\.nii\.gz}
-      make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-      echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
-    fi
+    echo '##### Anisotropic Smoothing' >> ${RMD}
+    TIMG=${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz
+    BNAME=$(basename ${TIMG})
+    FNAME=${TIMG//\.nii\.gz}
+    make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
+    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
 
     echo '##### Difference of Gaussians' >> ${RMD}
     TIMG=${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz
@@ -456,16 +483,6 @@ for (( i=0; i<${NIMG}; i++ )); do
     echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
   fi
 done
-
-# Save output ------------------------------------------------------------------
-mkdir -p ${DIR_SAVE}
-if [[ ${KEEP} == "true" ]]; then
-  mv ${DIR_SCRATCH}/*_anisoSmooth.* ${DIR_SAVE}/
-  mv ${DIR_SCRATCH}/*_diffGauss.* ${DIR_SAVE}/
-  mv ${DIR_SCRATCH}/*_distance.* ${DIR_SAVE}/
-fi
-mv ${DIR_SCRATCH}/*_label-watershed.* ${DIR_SAVE}/
-mv ${DIR_SCRATCH}/*_label-watershedMerged.* ${DIR_SAVE}/
 
 if [[ "${NO_RMD}" == "false" ]]; then
   ## knit RMD

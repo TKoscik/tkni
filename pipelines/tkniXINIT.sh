@@ -49,6 +49,7 @@ trap egress EXIT
 OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
 id:,dir-id:,id-field:,\
 image:,mod:,redo-mask,uhr-thresh:,\
+slab-plane:,slab-metric:,slab-order:,slab-smooth:,\
 debias-resample:,debias-bspline:,debias-shrink:,debias-convergence:,debias-histmatch:\
 denoise-model:,denoise-shrink:,denoise-patch:,denoise-radius:,\
 softmask-kernel:,\
@@ -72,6 +73,10 @@ IMAGE=
 MOD="swi"
 REDO_MASK="false"
 UHR_THRESH=0.1
+SLAB_PLANE="z"
+SLAB_METRIC="median"
+SLAB_ORDER=3
+SLAB_SMOOTH=1
 N4_RESAMPLE=1
 N4_BSPLINE="[85,3]"
 N4_SHRINK=4
@@ -116,6 +121,10 @@ while true; do
     --redo-mask) REDO_MASK="true" ; shift ;;
     --uhr-thresh) UHR_THRESH="$2" ; shift 2 ;;
     --threads) threads="$2" ; shift 2 ;;
+    --slab-plane) SLAB_PLANE="$2" ; shift 2 ;;
+    --slab-metric) SLAB_METRIC="$2" ; shift 2 ;;
+    --slab-order) SLAB_ORDER="$2" ; shift 2 ;;
+    --slab-smooth) SLAB_SMOOTH="$2" ; shift 2 ;;
     --debias-resample) N4_RESAMPLE="$2" ; shift 2 ;;
     --debias-bspline) N4_BSPLINE="$2" ; shift 2 ;;
     --debias-shrink) N4_SHRINK="$2" ; shift 2 ;;
@@ -153,7 +162,8 @@ if [[ "${HELP}" == "true" ]]; then
   echo ''
   echo 'Procedure: '
   echo '(1) nnUNet Brain Mask'
-  echo '(2) Debias'
+  echo '(2A) Slab Boundary Artefact - 1D Debias'
+  echo '(2B) Debias'
   echo '(3) Denoise'
   echo '(4) Rescale Intensity'
   echo ''
@@ -323,6 +333,23 @@ for (( i=0; i<${NIMG}; i++ )); do
   fi
   echo ">>>>>>Brain Extraction Complete"
 
+  ## 1D Slab Debias ------------------------------------------------------------
+  echo 1
+  JSON=${IMAGE[${i}]//.nii.gz/.json}
+  echo $JSON
+  SLICE_SPACING=$(jq -r '.SpacingBetweenSlices // 0' ${JSON})
+  echo "SLICE SPACING: ${SLICE_SPACING}"
+  SLICE_THICKNESS=$(jq -r '.SliceThickness // 0' ${JSON})
+  echo "SLICE THICKNESS: ${SLICE_THICKNESS}"
+  IS_MULTISLAB=$(echo "${SLICE_SPACING} > (${SLICE_THICKNESS} * 2)" | bc -l)
+  echo "IS MULTISLAB: ${IS_MULTISLAB}"
+  if [[ "${IS_MULTISLAB}" -eq 1 ]]; then
+    echo ">>>>>>Multislab acquisition identified"
+    slabDebias.py --input ${IMG} --mask ${MASK} --output ${IMG} \
+      --order ${SLAB_ORDER} --smoothness ${SLAB_SMOOTH}
+    echo ">>>>>>1D Slab Debiased"
+  fi
+
   ## Debias --------------------------------------------------------------------
   N4BiasFieldCorrection -d 3 -i ${IMG} -x ${MASK} -o ${IMG} \
     -r ${N4_RESAMPLE} \
@@ -439,6 +466,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '#### Coronal' >> ${RMD}
       echo '![Coronal Clean]('${CLN_COR}')' >> ${RMD}
       echo '' >> ${RMD}
+    --slab-plane) SLAB_="$2" ; shift 2 ;;
     echo '#### Sagittal' >> ${RMD}
       echo '![Sagittal Clean]('${CLN_SAG}')' >> ${RMD}
       echo '' >> ${RMD}
