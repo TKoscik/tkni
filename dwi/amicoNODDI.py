@@ -1,5 +1,4 @@
 #!/usr/local/tkni/pyvenv/amicoVENV/bin/python
-
 import argparse
 import amico
 import numpy as np

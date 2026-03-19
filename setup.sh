@@ -310,6 +310,9 @@ python -m venv amicoVENV
 source ./amicoVENV/bin/activate
 pip install dmri-amico
 
+## alternative with conda
+
+
 mkdir -p /usr/local/tkni/pyvenv
 cd /usr/local/tkni/pyvenv
 python3 -m venv clusteringVENV

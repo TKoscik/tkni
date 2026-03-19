@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
 import argparse
 import nibabel as nib
@@ -40,12 +41,6 @@ def get_cluster_stats(image_array, label_array):
         stats_map[l_id] = np.array([m, s, sk, kurt, cv])
     return stats_map
 
-#def _weight_stats(g, src, dst, n, weights):
-#    """Weight function applying custom importance to specific stats."""
-#    # Apply weights to the difference vector before calculating Euclidean norm
-#    diff = (g.nodes[dst]['fingerprint'] - g.nodes[n]['fingerprint']) * weights
-#    return {'weight': np.linalg.norm(diff)}
-
 def _weight_stats(g, src, dst, n, weights):
     """Calculates the distance between the NEW node (dst) and neighbor (n)."""
     # Defensive programming: If fingerprint is missing, return a huge distance
@@ -80,34 +75,6 @@ def _merge_stats(g, src, dst):
 
     g.nodes[dst]['fingerprint'] = (f_src * count_src + f_dst * count_dst) / total
     g.nodes[dst]['pixel count'] = total
-
-#merge_count = 0
-#def _merge_stats(graph, src, dst):
-#    """
-#    REQUIRED: Updates the fingerprint of the newly merged node (weighted average).
-#    Without this, the 'fingerprint' attribute is lost after the first merge.
-#    """
-#    # counter to give a sense of duration
-#    global merge_count
-#    merge_count += 1
-#    if merge_count % 100 == 0:
-#        print(f"-> Merged: {merge_count} | # Clusters: {graph.number_of_nodes()}", end='\r')
-#
-#    count_src = graph.nodes[src].get('pixel count', 1)
-#    count_dst = graph.nodes[dst].get('pixel count', 1)
-#    total = count_src + count_dst
-#
-#    # Update Mean Color (Standard RAG behavior)
-#    graph.nodes[dst]['mean color'] = (
-#        (graph.nodes[src]['mean color'] * count_src +
-#         graph.nodes[dst]['mean color'] * count_dst) / total
-#    )
-#    # Update Fingerprint (Crucial for your weight function)
-#    graph.nodes[dst]['fingerprint'] = (
-#        (graph.nodes[src]['fingerprint'] * count_src +
-#         graph.nodes[dst]['fingerprint'] * count_dst) / total
-#    )
-#    graph.nodes[dst]['pixel count'] = total
 
 def merge_clusters(nii_image, nii_mask, nii_label, threshold, connectivity, clip_lo, clip_hi, nii_out, feature_weights):
     print("-> Loading NIfTI volumes")
