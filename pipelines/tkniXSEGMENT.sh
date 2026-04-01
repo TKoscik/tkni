@@ -100,7 +100,7 @@ SMOOTH_ITER=20
 DOG_G1=0
 DOG_K=1.6
 
-DATUM=1.0
+DATUM=
 NO_MERGE="false"
 MERGE_THRESHOLD=1.25
 MERGE_WEIGHTS="1,2,1.5,1,1"
@@ -288,6 +288,9 @@ fi
 if [[ -z ${DIR_SAVE} ]]; then
   DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/label/xsegment
 fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> Saving to: ${DIR_SAVE}"
+fi
 
 # Locate Inputs ----------------------------------------------------------------
 if [[ -z ${IMAGE} ]]; then
@@ -351,38 +354,68 @@ for (( i=0; i<${NIMG}; i++ )); do
   cp ${IMAGE[${i}]} ${IMG}
   cp ${MASK[${i}]} ${MSK}
 
+  if [[ "${NO_RMD}" == "false" ]] || [[ "${NO_PNG}" == "false" ]]; then
+    DIM=($(niiInfo -i ${IMG} -f "voxels"))
+    if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
+    if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
+    if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
+    if [[ -z ${PLANE} ]]; then PLANE="z"; fi
+    LAYOUT="9:${PLANE};9:${PLANE};9:${PLANE}"
+    make3Dpng --bg ${IMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}"
+  fi
+
   # (1) Anisotropic Smooth -----------------------------------------------------
   if [[ ${NO_SMOOTH} == "false" ]]; then
     if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>anisotropic smoothing"; fi
     c3d ${IMG} \
       -ad ${SMOOTH_CONDUCTANCE} ${SMOOTH_ITER} \
       -o ${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz
+    if [[ "${NO_RMD}" == "false" ]] || [[ "${NO_PNG}" == "false" ]]; then
+      make3Dpng --bg ${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz --layout "${LAYOUT}"
+    fi
   fi
 
   # (2) Calculate Difference of Gaussians --------------------------------------
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>calculating difference of gaussians"; fi
   if [[ ${DOG_G1} -eq 0 ]]; then
     TSZ=($(niiInfo -i ${IMG} -f space))
-    SZ=${TSZ[1]}
+    SZ=${TSZ[0]}
+    if [[ $(echo "${SZ} > ${TSZ[1]}" | bc) -eq 1 ]]; then SZ=${TSZ[1]}; fi
     if [[ $(echo "${SZ} > ${TSZ[2]}" | bc) -eq 1 ]]; then SZ=${TSZ[2]}; fi
-    if [[ $(echo "${SZ} > ${TSZ[3]}" | bc) -eq 1 ]]; then SZ=${TSZ[3]}; fi
     DOG_G2=$(echo "scale=6; ${SZ} * ${DOG_K}" | bc -l)
   fi
   niimath ${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz \
     -dog ${DOG_G1} ${DOG_G2} -mas ${MSK} \
     ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz
+  if [[ "${NO_RMD}" == "false" ]] || [[ "${NO_PNG}" == "false" ]]; then
+    make3Dpng --bg ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz --layout "${LAYOUT}"
+  fi
 
   # (3) Calculate the Signed Distance Transform --------------------------------
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>calculating signed distance transform"; fi
   c3d ${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz -sdt \
     -o ${DIR_SCRATCH}/${PFX}_distance.nii.gz
+  if [[ "${NO_RMD}" == "false" ]] || [[ "${NO_PNG}" == "false" ]]; then
+    make3Dpng --bg ${DIR_SCRATCH}/${PFX}_distance.nii.gz --bg-mask ${MSK} --layout "${LAYOUT}"
+  fi
 
   # (4) Watershed Clustering ---------------------------------------------------
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>>>watershed clustering"; fi
-  clusterWatershed.py --input ${DIR_SCRATCH}/${PFX}_distance.nii.gz \
-    --mask ${MSK} \
-    --output ${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz \
-    --datum ${DATUM}
+  watershedFCN="clusterWatershed.py"
+  watershedFCN="${watershedFCN} --input ${DIR_SCRATCH}/${PFX}_distance.nii.gz"
+  watershedFCN="${watershedFCN} --mask ${MSK}"
+  watershedFCN="${watershedFCN} --output ${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz"
+  if [[ -n ${DATUM} ]]; then
+    watershedFCN="${watershedFCN} --datum ${DATUM}"
+  fi
+  echo ${watershedFCN}
+  eval ${watershedFCN}
+  if [[ "${NO_RMD}" == "false" ]] || [[ "${NO_PNG}" == "false" ]]; then
+    make3Dpng --bg ${IMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
+      --fg ${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz \
+      --fg-mask ${MSK} --fg-color "timbow" --fg-cbar "false" --fg-alpha 50 \
+      --dir-save ${DIR_SCRATCH} --filename ${PFX}_label-watershed
+  fi
 
   # (5) Merge clusters ---------------------------------------------------------
   ## using a regional adjacency graph based approach with hierarchical merging
@@ -393,92 +426,68 @@ for (( i=0; i<${NIMG}; i++ )); do
     --output ${DIR_SCRATCH}/${PFX}_label-watershedMerged.nii.gz \
     --threshold ${MERGE_THRESHOLD} \
     --weights ${MERGE_WEIGHTS//,/ }
+  if [[ "${NO_RMD}" == "false" ]] || [[ "${NO_PNG}" == "false" ]]; then
+    make3Dpng --bg ${IMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
+      --fg ${DIR_SCRATCH}/${PFX}_label-watershedMerged.nii.gz \
+      --fg-mask ${MSK} --fg-color "timbow" --fg-cbar "false" --fg-alpha 50 \
+      --dir-save ${DIR_SCRATCH} --filename ${PFX}_label-watershedMerged
+  fi
 
   # generate HTML QC report ------------------------------------------------------
   if [[ "${NO_RMD}" == "false" ]]; then
-    DIM=($(niiInfo -i ${IMG} -f "voxels"))
-    if [[ ${DIM[0]} -lt ${DIM[1]} ]] && [[ ${DIM[0]} -lt ${DIM[2]} ]]; then PLANE="x"; fi
-    if [[ ${DIM[1]} -lt ${DIM[0]} ]] && [[ ${DIM[1]} -lt ${DIM[2]} ]]; then PLANE="y"; fi
-    if [[ ${DIM[2]} -lt ${DIM[0]} ]] && [[ ${DIM[2]} -lt ${DIM[1]} ]]; then PLANE="z"; fi
-    if [[ -z ${PLANE} ]]; then PLANE="z"; fi
-    LAYOUT="9:${PLANE};9:${PLANE};9:${PLANE}"
-
-    echo '### *${PFX}_swi.nii.gz*' >> ${RMD}
+    echo "### *${PFX}_swi.nii.gz*" >> ${RMD}
     echo '#### Cleaned Native Anatomical Image' >> ${RMD}
     BNAME=$(basename ${IMG})
     FNAME=${IMG//\.nii\.gz}
-    make3Dpng --bg ${IMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}"
     echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
-
     echo '#### Watershed Segmentation' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_label-watershed.nii.gz
-    BNAME=$(basename ${TIMG})
-    FNAME=${TIMG//\.nii\.gz}
-    make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
-      --fg ${TIMG} --fg-color "timbow:random" --fg-cbar "false" --fg-alpha 50 \
-      --dir.save ${DIR_SCRATCH} --filename ${FNAME}
-    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
-
+    echo -e "![Watershed Clusters](${DIR_SCRATCH}/${PFX}_label-watershed.png)\n" >> ${RMD}
     if [[ ${NO_MERGE} == "false" ]]; then
       echo '#### Merged Segmentation' >> ${RMD}
-      TIMG=${DIR_SCRATCH}/${PFX}_label-watershedMerge.nii.gz
-      BNAME=$(basename ${TIMG})
-      FNAME=${TIMG//\.nii\.gz}
-      make3Dpng --bg ${BIMG} --bg-threshold "2.5,97.5" --layout "${LAYOUT}" \
-        --fg ${TIMG} --fg-color "timbow:random" --fg-cbar "false" --fg-alpha 50 \
-        --dir.save ${DIR_SCRATCH} --filename ${FNAME}
-      echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
+      echo -e "![Merged Clusters](${DIR_SCRATCH}/${PFX}_label-watershedMerged.png)\n" >> ${RMD}
     fi
-
     echo '#### Processing Steps {.tabset}' >> ${RMD}
     echo '##### Click to View ->' >> ${RMD}
     if [[ ${NO_SMOOTH} == "false" ]]; then
       echo '##### Anisotropic Smoothing' >> ${RMD}
-      TIMG=${DIR_SCRATCH}/${PFX}_anisoSmooth.nii.gz
-      BNAME=$(basename ${TIMG})
-      FNAME=${TIMG//\.nii\.gz}
-      make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-      echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
+      echo -e "![Anisotropic Smoothed](${DIR_SCRATCH}/${PFX}_anisoSmooth.png)\n" >> ${RMD}
     fi
-
     echo '##### Difference of Gaussians' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_diffGauss.nii.gz
-    BNAME=$(basename ${TIMG})
-    FNAME=${TIMG//\.nii\.gz}
-    make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
-
+    echo -e "![Difference of Gaussians](${DIR_SCRATCH}/${PFX}_diffGauss.png)\n" >> ${RMD}
     echo '##### Signed Distance Transform' >> ${RMD}
-    TIMG=${DIR_SCRATCH}/${PFX}_distance.nii.gz
-    BNAME=$(basename ${TIMG})
-    FNAME=${TIMG//\.nii\.gz}
-    make3Dpng --bg ${TIMG} --layout "${LAYOUT}"
-    echo -e '!['${BNAME}']('${FNAME}'.png)\n' >> ${RMD}
+    echo -e "![Distance Transform](${DIR_SCRATCH}/${PFX}_distance.png)\n" >> ${RMD}
   fi
+  echo ">>>>> DONE PROCESSING: ${PFX}_swi.nii.gz"
 done
 
-# Save output ------------------------------------------------------------------
-mkdir -p ${DIR_SAVE}
-if [[ ${KEEP} == "true" ]]; then
-  mv ${DIR_SCRATCH}/*_anisoSmooth.* ${DIR_SAVE}/
-  mv ${DIR_SCRATCH}/*_diffGauss.* ${DIR_SAVE}/
-  mv ${DIR_SCRATCH}/*_distance.* ${DIR_SAVE}/
-fi
-mv ${DIR_SCRATCH}/*_label-watershed.* ${DIR_SAVE}/
-mv ${DIR_SCRATCH}/*_label-watershedMerged.* ${DIR_SAVE}/
-
+echo ">>>>> DONE Processing, knitting RMD"
+## knit RMD
 if [[ "${NO_RMD}" == "false" ]]; then
-  ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
   mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
   mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
 fi
 
+# Save output ------------------------------------------------------------------
+echo ">>>>> EXPORTING Results"
+mkdir -p ${DIR_SAVE}
+if [[ ${KEEP} == "true" ]]; then
+  echo ">>>>> EXPORTING Intermediates"
+  mv ${DIR_SCRATCH}/*_anisoSmooth.* ${DIR_SAVE}/
+  mv ${DIR_SCRATCH}/*_diffGauss.* ${DIR_SAVE}/
+  mv ${DIR_SCRATCH}/*_distance.* ${DIR_SAVE}/
+fi
+echo ">>>>>> EXPORTING labels"
+mv ${DIR_SCRATCH}/*_label-watershed.* ${DIR_SAVE}/
+mv ${DIR_SCRATCH}/*_label-watershedMerged.* ${DIR_SAVE}/
+
 # set status file --------------------------------------------------------------
+echo ">>>>>> UPDATING Processing Status"
 mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
 touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function
 #===============================================================================
+echo -e ">>>>>> EXITING\n\n\n"
 exit 0

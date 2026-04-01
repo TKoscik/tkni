@@ -319,3 +319,9 @@ python3 -m venv clusteringVENV
 source clusteringVENV/bin/activate
 pip install -r /usr/local/tkni/dev/python/requirements_clusteringVENV.txt
 pip install "numpy<2" matplotlib nibabel scikit-image
+
+
+####
+conda create --name tkni_venv python=3.10
+conda activate tkni_venv
+pip install -r /usr/local/tkni/dev/python/requirements.txt

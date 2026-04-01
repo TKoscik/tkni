@@ -450,6 +450,7 @@ if [[ -n ${BG_MASK} ]]; then
     cp ${BG_MASK} ${DIR_SCRATCH}/BG_MASK_ORIG.nii.gz
   fi
   BG_MASK=${DIR_SCRATCH}/BG_MASK_ORIG.nii.gz
+  niimath ${BG} -mas ${BG_MASK} ${BG}
 fi
 
 if [[ -n ${FG} ]]; then
