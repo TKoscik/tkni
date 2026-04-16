@@ -90,10 +90,11 @@ for (( i=1; i<=${N}; i++ )); then
   CHK_DONE="${DIR_PROJECT}/status/tkni/DONE_tkni_${IDPFX}.txt"
   if [[ ! -f ${CHK_DONE} ]] || [[ ${FORCE} == "true" ]]; then
     # run AINIT
+    ## find base modality
     JOB_AINIT=$(sbatch --parsable \
                        --job-name=${PI}_${PROJECT}_${IDPFX}_tkniAINIT \
                        ${TKNIPIPES}/tkniAINIT.slurm \
-                       ${PI} ${PROJECT} ${DIR_PROJECT} ${IDPFX})
+                       ${PI} ${PROJECT} ${DIR_PROJECT} ${IDPFX} ${BMOD})
     sbatch
     # run AMOD
     # run FSSYNTH
