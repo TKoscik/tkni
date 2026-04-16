@@ -305,7 +305,7 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   MOD=$(getField -i ${IMG} -f modality)
   if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
-
+echo $MOD
   if [[ -f ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
     XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
   elif [[ -f "${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz" ]]; then
