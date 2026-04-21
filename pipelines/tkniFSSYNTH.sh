@@ -144,11 +144,17 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -204,44 +210,43 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # set up directories -----------------------------------------------------------
-DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
+#DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
 if [[ -z ${DIR_FS} ]]; then
   DIR_FS=${DIR_PROJECT}/derivatives/${FSPIPE}
 fi
-mkdir -p ${DIR_FS}
-if [[ ! -d ${DIR_FS}/fsaverage ]]; then
-  cp -r ${FREESURFER_HOME}/subjects/fsaverage ${DIR_FS}/
-fi
-#if [[ -z ${DIR_TKNI} ]]; then
-#  DIR_TKNI=${DIR_PROJECT}/derivatives/tkni
+#if [[ ! -d ${DIR_FS}/fsaverage ]]; then
+#  cp -r ${FREESURFER_HOME}/subjects/fsaverage ${DIR_FS}/
 #fi
-DIR_PREP=${DIR_PIPE}/prep/${IDDIR}/${FCN_NAME}
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PIPE}
-fi
-mkdir -p ${DIR_PREP}
+##if [[ -z ${DIR_TKNI} ]]; then
+##  DIR_TKNI=${DIR_PROJECT}/derivatives/tkni
+##fi
+#DIR_PREP=${DIR_PIPE}/prep/${IDDIR}/${FCN_NAME}
+#if [[ -z ${DIR_SAVE} ]]; then
+#  DIR_SAVE=${DIR_PIPE}
+#fi
+#mkdir -p ${DIR_PREP}
 mkdir -p ${DIR_SCRATCH}
+cp -r ${FREESURFER_HOME}/subjects/fsaverage ${DIR_SCRATCH}/
 
 # parse image inputs -----------------------------------------------------------
 if [[ -z ${IMAGE} ]]; then
-  IMAGE=${DIR_PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
+  IMAGE=${DIR_PROJECT}/${PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
 fi
+cp ${IMAGE} ${DIR_SCRATCH}/
+IMAGE=${DIR_SCRATCH}/${PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
 
 # Recon-all-clinical -----------------------------------------------------------
-recon-all-clinical.sh ${IMAGE} ${IDPFX} ${NTHREADS} ${DIR_FS}
-
-if [[ ${VERBOSE} == "true" ]]; then
-  echo -e ">>>>> RECON-ALL Clinical COMPLETE"
-fi
+recon-all-clinical.sh ${IMAGE} ${IDPFX} ${NTHREADS} ${DIR_SCRATCH}
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> RECON-ALL Clinical COMPLETE"; fi
 
 # convert native_synth ---------------------------------------------------------
-mri_convert ${DIR_FS}/${IDPFX}/mri/synthSR.raw.mgz \
-  ${DIR_PREP}/${IDPFX}_synthT1w.nii.gz
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/synthSR.raw.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
 antsApplyTransforms -d 3 -n BSpline[3] -t identity -r ${IMAGE} \
-  -i ${DIR_PREP}/${IDPFX}_synthT1w.nii.gz \
-  -o ${DIR_PREP}/${IDPFX}_synthT1w.nii.gz
+  -i ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
 if [[ "${NO_PNG}" == "false" ]]; then
-  make3Dpng --bg ${DIR_PREP}/${IDPFX}_synthT1w.nii.gz --bg-threshold "2.5,97.5"
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz --bg-threshold "2.5,97.5"
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Converted to Native space NIFTI"
@@ -253,8 +258,8 @@ for j in {0..1}; do
   TH=${HEMI[${j}]}
   for (( i=0; i<${#LABELS[@]}; i ++ )); do
     LAB=(${LABELS[${i}]//+/ })
-    STATS=${DIR_FS}/${IDPFX}/stats/${TH}.${LAB}.stats
-    CSV=${DIR_FS}/${IDPFX}/stats/${TH}.${LAB}.csv
+    STATS=${DIR_SCRATCH}/${IDPFX}/stats/${TH}.${LAB}.stats
+    CSV=${DIR_SCRATCH}/${IDPFX}/stats/${TH}.${LAB}.csv
     if [[ -f ${STATS} ]]; then
       cp ${STATS} ${CSV}
       sed -i '1,/^# ColHeaders StructName NumVert SurfArea GrayVol ThickAvg ThickStd MeanCurv GausCurv FoldInd CurvInd$/d' ${CSV}
@@ -268,24 +273,24 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Extract GM Ribbon ------------------------------------------------------------
-mri_convert ${DIR_FS}/${IDPFX}/mri/ribbon.mgz ${DIR_PREP}/tmp.nii.gz
-niimath ${DIR_PREP}/tmp.nii.gz -thr 3 -uthr 3 -bin \
-  ${DIR_PREP}/${IDPFX}_label-ribbon.nii.gz -odt char
-niimath ${DIR_PREP}/tmp.nii.gz -thr 42 -uthr 42 -bin -mul 2 \
-  -add ${DIR_PREP}/${IDPFX}_label-ribbon.nii.gz \
-  ${DIR_PREP}/${IDPFX}_label-ribbon.nii.gz -odt char
-rm ${DIR_PREP}/tmp.nii.gz
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/ribbon.mgz ${DIR_SCRATCH}/tmp.nii.gz
+niimath ${DIR_SCRATCH}/tmp.nii.gz -thr 3 -uthr 3 -bin \
+  ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz -odt char
+niimath ${DIR_SCRATCH}/tmp.nii.gz -thr 42 -uthr 42 -bin -mul 2 \
+  -add ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz \
+  ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz -odt char
+rm ${DIR_SCRATCH}/tmp.nii.gz
 antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
-  -i ${DIR_PREP}/${IDPFX}_label-ribbon.nii.gz \
-  -o ${DIR_PREP}/${IDPFX}_label-ribbon.nii.gz
+  -i ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz
 if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
   TLAYOUT="3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x"
   make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
-    --fg ${DIR_PREP}/${IDPFX}_label-ribbon.nii.gz \
+    --fg ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz \
     --fg-color "timbow:hue=#FF0000:lum=50,50,cyc=1/6" \
     --layout ${TLAYOUT} \
     --filename ${IDPFX}_label-ribbon \
-    --dir-save ${DIR_PREP}
+    --dir-save ${DIR_SCRATCH}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> GM ribbon extracted to NIFTI"
@@ -298,20 +303,20 @@ for (( i=0; i<${#LABELS[@]}; i ++ )); do
   if [[ ${LAB} == *"DKT"* ]]; then FSLAB="aparc.DKTatlas+aseg"; fi
   if [[ ${LAB} == *"aparc"* ]]; then FSLAB="aparc+aseg"; fi
   if [[ ${LAB} == *"wmparc"* ]]; then FSLAB="wmparc"; fi
-  mri_convert ${DIR_FS}/${IDPFX}/mri/${FSLAB}.mgz \
-    ${DIR_PREP}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz
+  mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/${FSLAB}.mgz \
+    ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz
   antsApplyTransforms -d 3 -n MultiLabel \
-    -i ${DIR_PREP}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
-    -o ${DIR_PREP}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
+    -i ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
+    -o ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
     -r ${IMAGE} \
     -t identity
   if [[ "${NO_PNG}" == "false" ]]; then
     make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
-      --fg ${DIR_PREP}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
+      --fg ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
       --fg-color "timbow:random" \
       --fg-cbar "false" --fg-alpha 50 \
       --layout "7:x;7:x;7:y;7:y;7:z;7:z" \
-      --filename ${IDPFX}_label-${LAB}+${FSPIPE} --dir-save ${DIR_PREP}
+      --filename ${IDPFX}_label-${LAB}+${FSPIPE} --dir-save ${DIR_SCRATCH}
   fi
 done
 if [[ ${VERBOSE} == "true" ]]; then
@@ -319,71 +324,58 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # create masks -----------------------------------------------------------------
-niimath ${DIR_PREP}/${IDPFX}_label-wmparc+${FSPIPE}.nii.gz \
+niimath ${DIR_SCRATCH}/${IDPFX}_label-wmparc+${FSPIPE}.nii.gz \
   -thr 24 -uthr 24 -binv \
-  -mul ${DIR_PREP}/${IDPFX}_label-wmparc+${FSPIPE}.nii.gz -bin \
-  ${DIR_PREP}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz
+  -mul ${DIR_SCRATCH}/${IDPFX}_label-wmparc+${FSPIPE}.nii.gz -bin \
+  ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz
 if [[ "${NO_PNG}" == "false" ]]; then
   TLAYOUT="3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x"
   make3Dpng --bg ${IMAGE} \
-    --fg ${DIR_PREP}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz \
+    --fg ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz \
     --fg-color "timbow:random" --fg-alpha 50 --fg-cbar "false" \
     --layout ${TLAYOUT} \
     --filename ${IDPFX}_mask-brain+${FSPIPE} \
-    --dir-save ${DIR_PREP}
+    --dir-save ${DIR_SCRATCH}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> brain masks generated"
 fi
 
 # create surface ---------------------------------------------------------------
-mri_tessellate ${DIR_PREP}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz 1 ${DIR_PREP}/${IDPFX}_tmp
-mris_convert ${DIR_PREP}/${IDPFX}_tmp ${DIR_PREP}/${IDPFX}_surface-brain+${FSPIPE}.stl
-rm ${DIR_PREP}/${IDPFX}_tmp
+mri_tessellate ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz 1 ${DIR_SCRATCH}/${IDPFX}_tmp
+mris_convert ${DIR_SCRATCH}/${IDPFX}_tmp ${DIR_SCRATCH}/${IDPFX}_surface-brain+${FSPIPE}.stl
+rm ${DIR_SCRATCH}/${IDPFX}_tmp
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> surface tessalation completed for 3D printing"
 fi
 
 # create surface renderings ----------------------------------------------------
 if [[ "${NO_PNG}" == "false" ]]; then
-  makeSURFpng --dir-fs ${DIR_FS} --dir-id ${IDPFX} --surface pial --dir-save ${DIR_PREP}
-  makeSURFpng --dir-fs ${DIR_FS} --dir-id ${IDPFX} --surface white --dir-save ${DIR_PREP}
+  makeSURFpng --dir-fs ${DIR_SCRATCH} --dir-id ${IDPFX} --surface pial --dir-save ${DIR_SCRATCH}
+  makeSURFpng --dir-fs ${DIR_SCRATCH} --dir-id ${IDPFX} --surface white --dir-save ${DIR_SCRATCH}
   for (( i=0; i<${#LABELS[@]}; i ++ )); do
     LAB=(${LABELS[${i}]//+/ })
-    if [[ -f "${DIR_FS}/${IDPFX}/label/lh.${LAB}.annot" ]]; then
-      makeSURFpng --dir-fs ${DIR_FS} --dir-id ${IDPFX} \
-        --surface pial --label ${LAB} --dir-save ${DIR_PREP}
+    if [[ -f "${DIR_SCRATCH}/${IDPFX}/label/lh.${LAB}.annot" ]]; then
+      makeSURFpng --dir-fs ${DIR_SCRATCH} --dir-id ${IDPFX} \
+        --surface pial --label ${LAB} --dir-save ${DIR_SCRATCH}
     fi
   done
-  makeSURFpng --dir-fs ${DIR_FS} --dir-id ${IDPFX} --surface inflated --overlay thickness \
-    --dir-save ${DIR_PREP}
-  makeSURFpng --dir-fs ${DIR_FS} --dir-id ${IDPFX} --surface inflated --overlay area \
-    --dir-save ${DIR_PREP}
-  makeSURFpng --dir-fs ${DIR_FS} --dir-id ${IDPFX} \
+  makeSURFpng --dir-fs ${DIR_SCRATCH} --dir-id ${IDPFX} --surface inflated --overlay thickness \
+    --dir-save ${DIR_SCRATCH}
+  makeSURFpng --dir-fs ${DIR_SCRATCH} --dir-id ${IDPFX} --surface inflated --overlay area \
+    --dir-save ${DIR_SCRATCH}
+  makeSURFpng --dir-fs ${DIR_SCRATCH} --dir-id ${IDPFX} \
     --surface inflated --overlay curv --over-color colorwheel \
-    --dir-save ${DIR_PREP}
+    --dir-save ${DIR_SCRATCH}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> surfaces rendered for QC"
 fi
 
-# Save output to appropriate locations -----------------------------------------
-mkdir -p ${DIR_SAVE}/anat/native/${FSPIPE}
-mkdir -p ${DIR_SAVE}/anat/label/${FSPIPE}
-mkdir -p ${DIR_SAVE}/anat/mask/${FSPIPE}
-mkdir -p ${DIR_SAVE}/anat/surface
-mv ${DIR_PREP}/${IDPFX}_synthT1w.nii.gz ${DIR_SAVE}/anat/native/${FSPIPE}/
-mv ${DIR_PREP}/${IDPFX}_label*.nii.gz ${DIR_SAVE}/anat/label/${FSPIPE}/
-mv ${DIR_PREP}/${IDPFX}_mask*.nii.gz ${DIR_SAVE}/anat/mask/${FSPIPE}/
-mv ${DIR_PREP}/${IDPFX}_surface-brain+${FSPIPE}.stl ${DIR_SAVE}/anat/surface/
-if [[ ${VERBOSE} == "true" ]]; then
-  echo -e ">>>>> output moved to BIDS-esque locations"
-fi
-
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
-  RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
+  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}
+  RMD=${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
   HEMI=("lh" "rh")
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
@@ -416,42 +408,41 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   echo '### Anatomical Images {.tabset}' >> ${RMD}
   echo '#### Input' >> ${RMD}
-  TNII=${IMAGE}
-  TPNG=${IMAGE//\.nii\.gz}.png
-  if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
-
+    TNII=${IMAGE}
+    TPNG=${IMAGE//\.nii\.gz}.png
+    if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
+    echo '![Input Anatomical]('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
   echo '#### Synthetic' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native/fsSynth/${IDPFX}_synthT1w.nii.gz
-  TPNG=${DIR_PREP}/${IDPFX}_synthT1w.png
-  if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+    TNII=${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
+    TPNG=${DIR_SCRATCH}/${IDPFX}_synthT1w.png
+    if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
+    echo '![Synthetic T1w]('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
 
   echo '### Surface Reconstruction {.tabset}' >> ${RMD}
   echo '#### Pial' >> ${RMD}
-  TPNG=${DIR_PREP}/${IDPFX}_surface-pial.png
-  echo '![Pial Surface]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_surface-pial.png
+    echo '![Pial Surface]('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
   echo '#### White Matter' >> ${RMD}
-  TPNG=${DIR_PREP}/${IDPFX}_surface-white.png
-  echo '![WM Surface]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_surface-white.png
+    echo '![WM Surface]('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
 
   echo '### Surface Outcomes {.tabset}' >> ${RMD}
   OUTLS=("thickness" "area" "curv")
   for k in {0..2}; do
     OUT=${OUTLS[${k}]}
     echo '#### '${OUT^} >> ${RMD}
-    TPNG=${DIR_PREP}/${IDPFX}_surface-inflated_overlay-${OUT}.png
+    TPNG=${DIR_SCRATCH}/${IDPFX}_surface-inflated_overlay-${OUT}.png
     echo '!['${OUT^}']('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
     for (( i=0; i<${#LABELS[@]}; i ++ )); do
       LAB=(${LABELS[${i}]//+/ })
       for j in {0..1}; do
         TH=${HEMI[${j}]}
-        CSV="${DIR_FS}/${IDPFX}/stats/${TH}.${LAB}.csv"
+        CSV="${DIR_SCRATCH}/${IDPFX}/stats/${TH}.${LAB}.csv"
         if [[ -f ${CSV} ]]; then
           FNAME="${IDPFX}_hemi-${TH}_label-${LAB}_${OUT}"
           echo '```{r}' >> ${RMD}
@@ -467,39 +458,51 @@ if [[ "${NO_RMD}" == "false" ]]; then
       done
     done
   done
-
   echo '### Cortical Labels {.tabset}' >> ${RMD}
   for (( i=0; i<${#LABELS[@]}; i ++ )); do
     LAB=(${LABELS[${i}]//+/ })
-    TPNG=${DIR_PREP}/${IDPFX}_surface-pial_label-${LAB}.png
+    TPNG=${DIR_SCRATCH}/${IDPFX}_surface-pial_label-${LAB}.png
     if [[ -f ${TPNG} ]]; then
       echo "#### ${LAB}" >> ${RMD}
       echo '!['${LAB}']('${TPNG}')' >> ${RMD}
       echo '' >> ${RMD}
     fi
   done
-
   echo '### Processing Check {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
   echo '#### Cortical Segmentation' >> ${RMD}
-  TPNG=${DIR_PREP}/${IDPFX}_label-ribbon.png
-  echo '!['${LAB}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
-
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-ribbon.png
+    echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
   echo '#### Brain Mask' >> ${RMD}
-  TPNG=${DIR_PREP}/${IDPFX}_mask-brain+fsSynth.png
-  echo '![Brain Mask]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_mask-brain+fsSynth.png
+    echo '![Brain Mask]('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
-  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
+  mv ${RMD} ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
+fi
+
+# Save output to appropriate locations -----------------------------------------
+mkdir -p ${DIR_FS}
+mv ${DIR_SCRATCH}/${IDPFX} ${DIR_FS}/
+mkdir -p ${DIR_SAVE}/anat/native/${FSPIPE}
+mkdir -p ${DIR_SAVE}/anat/label/${FSPIPE}
+mkdir -p ${DIR_SAVE}/anat/mask/${FSPIPE}
+mkdir -p ${DIR_SAVE}/anat/surface
+mv ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz ${DIR_SAVE}/anat/native/${FSPIPE}/
+mv ${DIR_SCRATCH}/${IDPFX}_label*.nii.gz ${DIR_SAVE}/anat/label/${FSPIPE}/
+mv ${DIR_SCRATCH}/${IDPFX}_mask*.nii.gz ${DIR_SAVE}/anat/mask/${FSPIPE}/
+mv ${DIR_SCRATCH}/${IDPFX}_surface-brain+${FSPIPE}.stl ${DIR_SAVE}/anat/surface/
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> output moved to BIDS-esque locations"
 fi
 
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function
