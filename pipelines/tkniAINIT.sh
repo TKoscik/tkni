@@ -379,8 +379,7 @@ fi
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}
-  RMD=${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
+  RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
   echo '```{r setup, include=FALSE}' >> ${RMD}
@@ -541,7 +540,12 @@ if [[ "${NO_RMD}" == "false" ]]; then
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
   mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
-  mv ${RMD} ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.html ${DIR_SAVE}/qc/${PIPE}${FLOW}/
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
+    echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
+  fi
 fi
 
 # Save results -----------------------------------------------------------------

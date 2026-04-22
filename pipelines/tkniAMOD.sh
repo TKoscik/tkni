@@ -154,7 +154,7 @@ while true; do
     --no-denoise) NO_DENOISE="true" ; shift ;;
     --no-coreg) NO_COREG="true" ; shift ;;
     --no-debias) NO_DEBIAS="true" ; shift ;;
-    --no-rescale) NO_REORIENT="true" ; shift ;;
+    --no-rescale) NO_RESCALE="true" ; shift ;;
     --no-norm) NO_NORM="true" ; shift ;;
     --no-outcome) NO_OUTCOME="true" ; shift ;;
     --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
@@ -214,11 +214,17 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -241,7 +247,7 @@ if [[ ${REQUIRES} != "null" ]]; then
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -258,8 +264,8 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -276,6 +282,8 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Identify Inputs --------------------------------------------------------------
+mkdir -p ${DIR_SCRATCH}
+## Base Images ------
 if [[ -z ${BDIR} ]]; then BDIR=${DIR_PROJECT}/derivatives/${PIPE}/anat/native; fi
 if [[ -z ${BIMG} ]]; then BIMG=${BDIR}/${IDPFX}_${BMOD}.nii.gz; fi
 if [[ -z ${BMASK} ]]; then
@@ -287,8 +295,17 @@ if [[ ! -f ${BIMG} ]]; then
 fi
 if [[ ! -f ${BMASK} ]]; then
   BMASK="DO_SYNTH"
+  BMASK=${DIR_SCRATCH}/base_mask.nii.gz
+  mri_synthstrip -i ${BIMG} -m ${BMASK}
 fi
+## copy to scratch
+mkdir -p ${DIR_SCRATCH}/base
+cp ${BIMG} ${DIR_SCRATCH}/base/base_image.nii.gz
+cp ${BMASK} ${DIR_SCRATCH}/base/base_maske.nii.gz
+BIMG="${DIR_SCRATCH}/base/base_image.nii.gz"
+BMASK="${DIR_SCRATCH}/base/base_mask.nii.gz"
 
+# Additional Raw Modalities ------
 AMOD=(${AMOD//,/ })
 if [[ -z ${ADIR} ]]; then ADIR=${DIR_PROJECT}/rawdata/${IDDIR}/anat; fi
 if [[ -z ${AIMG} ]]; then
@@ -312,9 +329,16 @@ if [[ ${NADD} -eq 0 ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] Additional anatomical images not found."
   exit 3
 fi
+# Copy to scratch
+mkdir -p ${DIR_SCRATCH}/aimg
+for (( i=0; i<${NADD}; i++ )); do
+  TIMG=${AIMG[${i}]}
+  cp ${TIMG} ${DIR_SCRATCH}/aimg/
+  AIMG[${i}]=${DIR_SCRATCH}/aimg/$(basename ${TIMG})
+done
 
+# Transforms ------
 if [[ -z ${DIR_XFM} ]]; then DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}; fi
-
 if [[ ${NO_NORM,,} == "false" ]]; then
   if [[ -z ${NORM_REF} ]]; then
     TDIR=($(ls -d ${DIR_PROJECT}/derivatives/${PIPE}/anat/reg_*))
@@ -336,15 +360,27 @@ if [[ ${NO_NORM,,} == "false" ]]; then
       fi
     done
   fi
+  # copy to scratch
+  for (( j=0; j<${#NORM_REF[@]}; j++ )); do
+    TREF=${NORM_REF[${j}]}
+    TMAT=${NORM_MAT[${j}]}
+    TSYN=${NORM_SYN[${j}]}
+    cp ${TREF} ${DIR_SCRATCH}/base/
+    cp ${TMAT} ${DIR_SCRATCH}/base/
+    cp ${TSYN} ${DIR_SCRATCH}/base/
+    NORM_REF[${j}]=${DIR_SCRATCH}/base/$(basename ${TREF})
+    NORM_MAT[${j}]=${DIR_SCRATCH}/base/$(basename ${TMAT})
+    NORM_SYN[${j}]=${DIR_SCRATCH}/base/$(basename ${TSYN})
+  done
+  mkdir -p ${DIR_SCRATCH}/reg
 fi
 
 # set directories --------------------------------------------------------------
 if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}; fi
-mkdir -p ${DIR_SCRATCH}
+
 
 # initialize RMD output --------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  #mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
   RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
@@ -373,26 +409,32 @@ if [[ "${NO_RMD}" == "false" ]]; then
 fi
 
 # Loop over Additional anatomical images ---------------------------------------
+mkdir -p ${DIR_SCRATCH}/clean
+mkdir -p ${DIR_SCRATCH}/mask
+mkdir -p ${DIR_SCRATCH}/xfm
+mkdir -p ${DIR_SCRATCH}/outcomes
+mkdir -p ${DIR_SCRATCH}/prep
 for (( i=0; i<${NADD}; i++ )); do
-  # Copy raw image to scratch --------------------------------------------------
-  cp ${AIMG[${i}]} ${DIR_SCRATCH}/
-  IMG=${DIR_SCRATCH}/$(basename ${AIMG[${i}]})
+  # Set Variables --------------------------------------------------------------
+  IMG=${AIMG[${i}]}
   MOD=$(getField -i ${IMG} -f modality)
   TPFX=$(getBidsBase -i ${IMG} -s)
-  make3Dpng --bg ${AIMG[${i}]} --bg-thresh "2.5,97.5" \
-    --filename "${TPFX}_prep-raw_${MOD}" --dir-save ${DIR_SCRATCH}
+
+  # make PNG of raw AIMG -------------------------------------------------------
+  make3Dpng --bg ${IMG} --bg-thresh "2.5,97.5" \
+    --filename "${TPFX}_prep-raw_${MOD}" --dir-save ${DIR_SCRATCH}/aimg
 
   # Reorient to RPI ------------------------------------------------------------
   if [[ ${NO_REORIENT} == "false" ]]; then
-    reorientRPI --image ${IMG} --dir-save ${DIR_SCRATCH}
-    mv ${DIR_SCRATCH}/${TPFX}_prep-reorient_${MOD}.nii.gz ${IMG}
+    reorientRPI --image ${IMG} --dir-save ${DIR_SCRATCH}/prep
+    cp ${DIR_SCRATCH}/prep/${TPFX}_prep-reorient_${MOD}.nii.gz ${IMG}
     if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Reoriented to RPI"; fi
   fi
 
   # Denoise image --------------------------------------------------------------
   if [[ ${NO_DENOISE} == "false" ]]; then
-    ricianDenoise --image ${IMG} --dir-save ${DIR_SCRATCH}
-    mv ${DIR_SCRATCH}/${TPFX}_prep-denoise_${MOD}.nii.gz ${IMG}
+    ricianDenoise --image ${IMG} --dir-save ${DIR_SCRATCH}/prep --keep
+    cp ${DIR_SCRATCH}/prep/${TPFX}_prep-denoise_${MOD}.nii.gz ${IMG}
     if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Rician denoised"; fi
   fi
 
@@ -400,49 +442,44 @@ for (( i=0; i<${NADD}; i++ )); do
   FG_CLIP=0.4
   brainExtraction --image ${IMG} \
     --method "automask" --automask-clip ${FG_CLIP} \
-    --label "fg" --dir-save ${DIR_SCRATCH}
-  MASK_FG=${DIR_SCRATCH}/${TPFX}_mod-${MOD}_mask-fg+AUTO.nii.gz
-  rename "s/mask-fg/mod-${MOD}_mask-fg/g" ${DIR_SCRATCH}/*
+    --label "fg" --dir-save ${DIR_SCRATCH}/mask
+  MASK_FG=${DIR_SCRATCH}/mask/${TPFX}_mod-${MOD}_mask-fg+AUTO.nii.gz
+  mv ${DIR_SCRATCH}/mask/${TPFX}_mask-fg+AUTO.nii.gz ${MASK_FG}
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> FG mask generated"; fi
 
   # Non-uniformity Correction --------------------------------------------------
   if [[ ${NO_DEBIAS} == "false" ]]; then
-    inuCorrection --image ${IMG} --method N4 --mask ${MASK_FG} --dir-save ${DIR_SCRATCH} --keep
-    mv ${DIR_SCRATCH}/${TPFX}_prep-biasN4_${MOD}.nii.gz ${IMG}
-    rm ${DIR_SCRATCH}/${TPFX}_mod-${MOD}_prep-biasN4_biasField.nii.gz
+    inuCorrection --image ${IMG} --method N4 --mask ${MASK_FG} --dir-save ${DIR_SCRATCH}/prep --keep
+    cp ${DIR_SCRATCH}/prep/${TPFX}_prep-biasN4_${MOD}.nii.gz ${IMG}
     if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Non-uniformity corrected"; fi
   fi
 
   # Rescale intensity ------------------------------------------------------------
   if [[ ${NO_RESCALE} == "false" ]]; then
-    rescaleIntensity --image ${IMG} --mask ${MASK_FG} --dir-save ${DIR_SCRATCH}
-    mv ${DIR_SCRATCH}/${TPFX}_prep-rescale_${MOD}.nii.gz ${IMG}
+    rescaleIntensity --image ${IMG} --mask ${MASK_FG} --dir-save ${DIR_SCRATCH}/prep
+    cp ${DIR_SCRATCH}/prep/${TPFX}_prep-rescale_${MOD}.nii.gz ${IMG}
     if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Rescale Intensity"; fi
   fi
 
   # Extract brain mask ---------------------------------------------------------
-  brainExtraction --image ${IMG} --method "synth" --dir-save ${DIR_SCRATCH}
-  MASK=${DIR_SCRATCH}/${TPFX}_mod-${MOD}_mask-brain+SYNTH.nii.gz
-  rename "s/mask-brain/mod-${MOD}_mask-brain/g" ${DIR_SCRATCH}/*
+  brainExtraction --image ${IMG} --method "synth" --dir-save ${DIR_SCRATCH}/mask
+  MASK=${DIR_SCRATCH}/mask/${TPFX}_mod-${MOD}_mask-brain+SYNTH.nii.gz
+  mv ${DIR_SCRATCH}/mask/${TPFX}_mod-${MOD}_mask-brain+SYNTH.nii.gz ${MASK}
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> FS Synth brain extraction"; fi
 
   # Coregistration -------------------------------------------------------------
   if [[ ${NO_COREG} == "false" ]]; then
-    if [[ ${BMASK^^} == "DO_SYNTH" ]]; then
-      BMASK=${DIR_SCRATCH}/tmp_mask-brain+${BMOD}.nii.gz
-      mri_synthstrip -i ${BIMG} -m ${BMASK}
-    fi
     coregistrationChef --recipe-name ${COREG_RECIPE} \
       --fixed ${BIMG} --fixed-mask ${BMASK} \
       --moving ${IMG} --moving-mask ${MASK} \
       --space-target "fixed" --interpolation "Linear" \
       --prefix ${TPFX} --label-from ${MOD} --label-to native \
       --dir-save ${DIR_SCRATCH} \
-      --dir-xfm ${DIR_SCRATCH}/xfm${i}
+      --dir-xfm ${DIR_SCRATCH}/xfm
     rm ${DIR_SCRATCH}/*${COREG_RECIPE}*
-    mv ${DIR_SCRATCH}/xfm${i}/*.png ${DIR_SCRATCH}/
-    TXFM1=${DIR_SCRATCH}/xfm${i}/${TPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-affine.mat
-    TXFM2=${DIR_SCRATCH}/xfm${i}/${TPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-syn.nii.gz
+    mv ${DIR_SCRATCH}/xfm/*.png ${DIR_SCRATCH}/
+    TXFM1=${DIR_SCRATCH}/xfm/${TPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-affine.mat
+    TXFM2=${DIR_SCRATCH}/xfm/${TPFX}_mod-${MOD}_from-${MOD}_to-native_xfm-syn.nii.gz
     XFMSTR="-t identity"
     if [[ -f ${TXFM2} ]]; then XFMSTR="${XFMSTR} -t ${TXFM2}"; fi
     if [[ -f ${TXFM1} ]]; then XFMSTR="${XFMSTR} -t ${TXFM1}"; fi
@@ -458,10 +495,7 @@ for (( i=0; i<${NADD}; i++ )); do
         --fg-cbar "false"\
       --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
       --filename ${TPFX}_coregistration \
-      --dir-save ${DIR_SCRATCH}
-    if [[ -f ${DIR_SCRATCH}/tmp_mask-brain+${BMOD}.nii.gz ]]; then
-      rm ${DIR_SCRATCH}/tmp_mask-brain+${BMOD}.nii.gz
-    fi
+      --dir-save ${DIR_SCRATCH}/xfm
   fi
 
   # append results to RMD output -----------------------------------------------
@@ -469,13 +503,11 @@ for (( i=0; i<${NADD}; i++ )); do
     echo '### Anatomical Processing Results' >> ${RMD}
     echo '### '${TPFX}'_'${MOD}' {.tabset}' >> ${RMD}
     echo '#### Cleaned' >> ${RMD}
-    TNII=$(getBidsBase -i ${IMG})
     TPNG=${IMG//.nii.gz}.png
-    echo -e '!['${TNII}']('${TPNG}')\n' >> ${RMD}
+    echo -e '![Cleaned '${MOD}']('${TPNG}')\n' >> ${RMD}
     echo '#### Raw' >> ${RMD}
-    TNII=${AIMG[${i}]}
     TPNG="${DIR_SCRATCH}/${TPFX}_prep-raw_${MOD}.png"
-    echo -e '!['${TNII}']('${TPNG}')\n' >> ${RMD}
+    echo -e '![Raw '${MOD}']('${TPNG}')\n' >> ${RMD}
   fi
 
   # Normalization --------------------------------------------------------------
@@ -484,7 +516,7 @@ for (( i=0; i<${NADD}; i++ )); do
       TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
       xfm_fcn="antsApplyTransforms -d 3 -n BSpline[3]"
       xfm_fcn="${xfm_fcn} -i ${IMG}"
-      xfm_fcn="${xfm_fcn} -o ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_${MOD}.nii.gz"
+      xfm_fcn="${xfm_fcn} -o ${DIR_SCRATCH}/reg/${TPFX}_reg-${TRG}_${MOD}.nii.gz"
       xfm_fcn="${xfm_fcn} -r ${NORM_REF[${j}]}"
       xfm_fcn="${xfm_fcn} -t identity"
       if [[ -n ${NORM_SYN[${j}]} ]]; then xfm_fcn="${xfm_fcn} -t ${NORM_SYN[${j}]}"; fi
@@ -492,13 +524,13 @@ for (( i=0; i<${NADD}; i++ )); do
       eval ${xfm_fcn}
       make3Dpng --bg ${NORM_REF[${j}]} --bg-thresh "2.5,97.5" \
         --filename tmp_ref --dir-save ${DIR_SCRATCH}
-      make3Dpng --bg ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_${MOD}.nii.gz \
+      make3Dpng --bg ${DIR_SCRATCH}/reg/${TPFX}_reg-${TRG}_${MOD}.nii.gz \
         --bg-thresh "2.5,97.5" --filename tmp_norm
-      montage ${DIR_SCRATCH}/tmp_ref.png ${DIR_SCRATCH}/tmp_norm.png \
+      montage ${DIR_SCRATCH}/reg/tmp_ref.png ${DIR_SCRATCH}/reg/tmp_norm.png \
       -tile 1x -geometry +0+0 -gravity center -background "#000000" \
-      ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_${MOD}.png
-      rm ${DIR_SCRATCH}/tmp_ref.png
-      rm ${DIR_SCRATCH}/tmp_norm.png
+      ${DIR_SCRATCH}/reg/${TPFX}_reg-${TRG}_${MOD}.png
+      rm ${DIR_SCRATCH}/reg/tmp_ref.png
+      rm ${DIR_SCRATCH}/reg/tmp_norm.png
     done
   fi
 
@@ -506,19 +538,20 @@ for (( i=0; i<${NADD}; i++ )); do
   if [[ ${NO_OUTCOME,,} == "false" ]]; then
     ## make myelin map if T2w
     if [[ ${MOD} == "T2w" ]] && [[ ${BMOD} == "T1w" ]] && [[ ${NO_MYELIN} == "false" ]]; then
+      mkdir -p ${DIR_SCRATCH}/outcomes/myelin
       if [[ -z ${TISSUE} ]]; then
         TISSUE=${DIR_PROJECT}/derivatives/${PIPE}/anat/label/${IDPFX}_label-tissue.nii.gz
         TISSUE_VAL=1x2x4
       fi
       mapMyelin --t1 ${BIMG} --t2 ${IMG} \
         --label ${TISSUE} --label-vals ${TISSUE_VAL} \
-        --dir-save ${DIR_SCRATCH}
+        --dir-save ${DIR_SCRATCH}/outcomes/myelin
       if [[ ${NO_NORM,,} == "false" ]] || [[ ${NO_COREG} == "false" ]]; then
         for (( j=0; j<${#NORM_REF[@]}; j++ )); do
           TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
           xfm_fcn="antsApplyTransforms -d 3 -n BSpline[3]"
-          xfm_fcn="${xfm_fcn} -i ${DIR_SCRATCH}/${TPFX}_myelin.nii.gz"
-          xfm_fcn="${xfm_fcn} -o ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_myelin.nii.gz"
+          xfm_fcn="${xfm_fcn} -i ${DIR_SCRATCH}/outcomes/myelin/${TPFX}_myelin.nii.gz"
+          xfm_fcn="${xfm_fcn} -o ${DIR_SCRATCH}/outcomes/myelin/${TPFX}_reg-${TRG}_myelin.nii.gz"
           xfm_fcn="${xfm_fcn} -r ${NORM_REF[${j}]}"
           xfm_fcn="${xfm_fcn} -t identity"
           if [[ -n ${NORM_SYN[${j}]} ]]; then xfm_fcn="${xfm_fcn} -t ${NORM_SYN[${j}]}"; fi
@@ -554,48 +587,16 @@ for (( i=0; i<${NADD}; i++ )); do
       HYPER=${DIR_SCRATCH}/tmp_synthseg/hyper.nii.gz
       niimath ${IMG} -uthr ${LO} -mas ${TWM} -bin ${HYPO} -odt char
       niimath ${IMG} -thr ${HI} -mas ${TWM} -bin -mul 2 ${HYPER} -odt char
-      niimath ${HYPO} -add ${HYPER} ${DIR_SCRATCH}/${TPFX}_mask-anomalyWM.nii.gz -odt char
+      mkdir -p ${DIR_SCRATCH}/outcomes/anomalyWM
+      niimath ${HYPO} -add ${HYPER} ${DIR_SCRATCH}/outcomes/anomalyWM/${TPFX}_mask-anomalyWM.nii.gz -odt char
       make3Dpng --bg ${IMG} --bg-threshold "2.5,97.5" \
-        --fg ${DIR_SCRATCH}/${TPFX}_mask-anomalyWM.nii.gz \
-        --fg-mask ${DIR_SCRATCH}/${TPFX}_mask-anomalyWM.nii.gz \
+        --fg ${DIR_SCRATCH}/outcomes/anomalyWM/${TPFX}_mask-anomalyWM.nii.gz \
+        --fg-mask ${DIR_SCRATCH}/outcomes/anomalyWM/${TPFX}_mask-anomalyWM.nii.gz \
         --fg-color "timbow:hue=#FF0000:sat=100:lum=65,65:cyc=5/6:n=2" \
         --fg-alpha 50 --fg-cbar "false" --layout "5:z;5:z;5:z" \
-        --filename ${TPFX}_mask-anomalyWM --dir-save ${DIR_SCRATCH}
-      rm -rf ./tmp_synthseg
+        --filename ${TPFX}_mask-anomalyWM --dir-save ${DIR_SCRATCH}/outcomes/anomalyWM
+      rm -rf ${DIR_SCRATCH}/tmp_synthseg
     fi
-  fi
-
-  # Save results ---------------------------------------------------------------
-  mkdir -p ${DIR_SAVE}/anat/native
-  mv ${IMG} ${DIR_SAVE}/anat/native/
-
-  mkdir -p ${DIR_SAVE}/anat/mask/${FLOW}
-  mv ${MASK_FG} ${DIR_SAVE}/anat/mask/${FLOW}/
-  mv ${MASK} ${DIR_SAVE}/anat/mask/${FLOW}/
-
-  if [[ ${NO_COREG} == "false" ]]; then
-    mv ${DIR_SCRATCH}/xfm${i}/* ${DIR_XFM}/
-  fi
-
-  if [[ -f ${DIR_SCRATCH}/${TPFX}_myelin.nii.gz ]]; then
-    mkdir -p ${DIR_SAVE}/anat/outcomes/myelin_native
-    mv ${DIR_SCRATCH}/${TPFX}_myelin.* ${DIR_SAVE}/anat/outcomes/myelin_native/
-  fi
-  if [[ -f ${DIR_SCRATCH}/${TPFX}_mask-anomalyWM.nii.gz ]]; then
-    mkdir -p ${DIR_SAVE}/anat/label
-    mv ${DIR_SCRATCH}/${TPFX}_mask-anomalyWM.* ${DIR_SAVE}/anat/label/
-  fi
-
-  if [[ ${NO_NORM,,} == "false" ]] || [[ ${NO_COREG} == "false" ]]; then
-    for (( j=0; j<${#NORM_REF[@]}; j++ )); do
-      TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
-      mkdir -p ${DIR_SAVE}/anat/reg_${TRG}
-      mv ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_${MOD}.nii.gz ${DIR_SAVE}/anat/reg_${TRG}/
-      if [[ -f ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_myelin.nii.gz ]]; then
-        mkdir -p ${DIR_SAVE}/anat/outcomes/myelin_${TRG}
-        mv ${DIR_SCRATCH}/${TPFX}_reg-${TRG}_myelin.* ${DIR_SAVE}/anat/outcomes/myelin_${TRG}/
-      fi
-    done
   fi
 
   # append to RMD output -------------------------------------------------------
@@ -604,45 +605,45 @@ for (( i=0; i<${NADD}; i++ )); do
     echo '#### Click to View -->' >> ${RMD}
     if [[ ${NO_REORIENT} == "false" ]]; then
       echo '#### Reorient' >> ${RMD}
-      echo -e '![Reorient]('${DIR_SCRATCH}'/'${TPFX}'_prep-reorient_'${MOD}'.png)\n' >> ${RMD}
+      echo -e '![Reorient]('${DIR_SCRATCH}'/prep/'${TPFX}'_prep-reorient_'${MOD}'.png)\n' >> ${RMD}
     fi
     if [[ ${NO_DENOISE} == "false" ]]; then
       echo '#### Denoise' >> ${RMD}
-      echo -e '![Denoise]('${DIR_SCRATCH}'/'${TPFX}'_prep-denoise_'${MOD}'.png)\n' >> ${RMD}
-      echo -e '![Noise]('${DIR_SCRATCH}'/'${TPFX}'_prep-noise_'${MOD}'.png)\n' >> ${RMD}
+      echo -e '![Denoise]('${DIR_SCRATCH}'/prep/'${TPFX}'_prep-denoise_'${MOD}'.png)\n' >> ${RMD}
+      echo -e '![Noise]('${DIR_SCRATCH}'/prep/'${TPFX}'_prep-noise_'${MOD}'.png)\n' >> ${RMD}
     fi
     echo '#### FG Mask' >> ${RMD}
-    echo -e '![FG Mask]('${DIR_SCRATCH}'/'${TPFX}'_mod-'${MOD}'_mask-fg+AUTO.png)\n' >> ${RMD}
+    echo -e '![FG Mask]('${DIR_SCRATCH}'/prep/'${TPFX}'_mod-'${MOD}'_mask-fg+AUTO.png)\n' >> ${RMD}
     if [[ ${NO_DEBIAS} == "false" ]]; then
       echo '#### Debias' >> ${RMD}
-      echo -e '![Debias]('${DIR_SCRATCH}'/'${TPFX}'_prep-biasN4_'${MOD}'.png)\n' >> ${RMD}
-      echo -e '![Bias]('${DIR_SCRATCH}'/'${TPFX}'_mod-'${MOD}'_prep-biasN4_biasField.png)\n' >> ${RMD}
+      echo -e '![Debias]('${DIR_SCRATCH}'/prep/'${TPFX}'_prep-biasN4_'${MOD}'.png)\n' >> ${RMD}
+      echo -e '![Bias]('${DIR_SCRATCH}'/prep/'${TPFX}'_mod-'${MOD}'_prep-biasN4_biasField.png)\n' >> ${RMD}
     fi
     if [[ ${NO_RESCALE} == "false" ]]; then
       echo '#### Rescale' >> ${RMD}
-      echo -e '![Rescale]('${DIR_SCRATCH}'/'${TPFX}'_prep-rescale_'${MOD}'.png)\n' >> ${RMD}
+      echo -e '![Rescale]('${DIR_SCRATCH}'/prep/'${TPFX}'_prep-rescale_'${MOD}'.png)\n' >> ${RMD}
     fi
     echo '#### Brain Mask' >> ${RMD}
-    echo -e '![Brain Mask]('${DIR_SCRATCH}'/'${TPFX}'_mod-'${MOD}'_mask-brain+SYNTH.png)\n' >> ${RMD}
+    echo -e '![Brain Mask]('${DIR_SCRATCH}'/mask/'${TPFX}'_mod-'${MOD}'_mask-brain+SYNTH.png)\n' >> ${RMD}
     if [[ ${NO_COREG} == "false" ]]; then
       echo '#### Coregistration' >> ${RMD}
-      echo -e '![Coregistration]('${DIR_SCRATCH}'/'${TPFX}'_coregistration.png)\n' >> ${RMD}
+      echo -e '![Coregistration]('${DIR_SCRATCH}'/xfm/'${TPFX}'_coregistration.png)\n' >> ${RMD}
     fi
     if [[ ${NO_NORM,,} == "false" ]] || [[ ${NO_COREG} == "false" ]]; then
       echo '#### Normalization' >> ${RMD}
       for (( j=0; j<${#NORM_REF[@]}; j++ )); do
         TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
-        echo -e '!['${TRG}']('${DIR_SCRATCH}'/'${TPFX}'_reg-'${TRG}'_'${MOD}'.png)\n' >> ${RMD}
+        echo -e '!['${TRG}']('${DIR_SCRATCH}'/reg/'${TPFX}'_reg-'${TRG}'_'${MOD}'.png)\n' >> ${RMD}
       done
     fi
     if [[ ${NO_OUTCOME,,} == "false" ]]; then
       if [[ ${MOD} == "T2w" ]] && [[ ${BMOD} == "T1w" ]] && [[ ${NO_MYELIN} == "false" ]]; then
         echo '#### Myelin' >> ${RMD}
-        echo -e '![Myelin]('${DIR_SAVE}'/anat/outcomes/myelin_native/'${TPFX}'_myelin.png)\n' >> ${RMD}
+        echo -e '![Myelin]('${DIR_SCRATCH}'/outcomes/myelin/'${TPFX}'_myelin.png)\n' >> ${RMD}
       fi
       if [[ ${MOD} == "FLAIR" ]] && [[ ${NO_ANOMALY} == "false" ]]; then
         echo '#### WM Anomaly' >> ${RMD}
-        echo -e '![WM Anomaly]('${DIR_SAVE}'/anat/label/'${TPFX}'_mask-anomalyWM.png)\n' >> ${RMD}
+        echo -e '![WM Anomaly]('${DIR_SCRATCH}'/outcomes/anomalyWM/'${TPFX}'_mask-anomalyWM.png)\n' >> ${RMD}
       fi
     fi
   fi
@@ -651,14 +652,52 @@ done
 if [[ "${NO_RMD}" == "false" ]]; then
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
-  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
-  mv ${DIR_SCRATCH}/*.html ${DIR_PROJECT}/qc/${PIPE}${FLOW}/
+  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.html ${DIR_SAVE}/qc/${PIPE}${FLOW}/
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
+  if [[ ${VERBOSE} == "true" ]]; then
+    echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
+    echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
+  fi
 fi
 
+# Save output -----------------------------------------------------------------
+mkdir -p ${DIR_SAVE}/anat/native
+mv ${DIR_SCRATCH}/aimg/* ${DIR_SAVE}/anat/native/
+
+mkdir -p ${DIR_SAVE}/anat/mask/${FLOW}
+mv ${DIR_SCRATCH}/mask/* ${DIR_SAVE}/anat/mask/${FLOW}/
+
+if [[ ${NO_COREG} == "false" ]]; then mv ${DIR_SCRATCH}/xfm/* ${DIR_XFM}/; fi
+
+if [[ -d ${DIR_SCRATCH}/outcomes ]]; then
+  if [[ -d ${DIR_SCRATCH}/outcomes/myelin ]]; then
+    mkdir -p ${DIR_SAVE}/anat/outcomes/myelin_native
+    mv ${DIR_SCRATCH}/outcomes/myelin/${TPFX}_myelin.* ${DIR_SAVE}/anat/outcomes/myelin_native/
+  fi
+  if [[ -d ${DIR_SCRATCH}/outcomes/anomalyWM ]]; then
+    mkdir -p ${DIR_SAVE}/anat/label
+    mv ${DIR_SCRATCH}/outcomes/anomalyWM/* ${DIR_SAVE}/anat/label/
+  fi
+fi
+if [[ ${NO_NORM,,} == "false" ]] || [[ ${NO_COREG} == "false" ]]; then
+ for (( j=0; j<${#NORM_REF[@]}; j++ )); do
+    TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
+    mkdir -p ${DIR_SAVE}/anat/reg_${TRG}
+    mv ${DIR_SCRATCH}/reg/${TPFX}_reg-${TRG}_${MOD}.nii.gz ${DIR_SAVE}/anat/reg_${TRG}/
+    if [[ -f ${DIR_SCRATCH}/outcomes ]]; then
+      if [[ -d ${DIR_SCRATCH}/outcomes/myelin ]]; then
+        mkdir -p ${DIR_SAVE}/anat/outcomes/myelin_${TRG}
+        mv ${DIR_SCRATCH}/outcomes/myelin/${TPFX}_reg-${TRG}_myelin.* ${DIR_SAVE}/anat/outcomes/myelin_${TRG}/
+      fi
+    fi
+  done
+fi
+
+
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function

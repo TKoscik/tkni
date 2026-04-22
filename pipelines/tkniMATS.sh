@@ -53,11 +53,11 @@ trap egress EXIT
 # Parse inputs -----------------------------------------------------------------
 OPTS=$(getopt -o hvlnr --long pi:,project:,dir-project:,\
 id:,dir-id:,\
-image:,mod:,mask:,mask-dil:,\
+src-anat:,image:,mod:,mask:,mask-dil:,\
 method:,atlas:,roi:,prob:,prior:,k-class:,\
 weight-ants:,weight-5tt:,weight-synth:,pthresh:,fmed:,\
 no-keep,no-jac,no-thickness,refine:,no-png,no-rmd,\
-dir-scratch:,requires:,\
+dir-save:,dir-scratch:,requires:,\
 help,verbose,loquacious,force -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -74,6 +74,7 @@ DIR_SAVE=
 IDPFX=
 IDDIR=
 
+SRC_ANAT=
 IMAGE=
 MASK=
 MOD="T1w"
@@ -126,6 +127,7 @@ while true; do
     --project) PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
+    --src_anat) SRC_ANAT="$2" ; shift 2 ;;
     --image) IMG="$2" ; shift 2 ;;
     --mod) MOD="$2" ; shift 2 ;;
     --mask) MASK="$2" ; shift 2 ;;
@@ -146,6 +148,7 @@ while true; do
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    --dir-save) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -190,18 +193,26 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [TKNI:${FCN_NAME}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
 fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+
 
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "Start Time:\t${PROC_START}"
 fi
 ANTS_VERBOSE=0
@@ -218,7 +229,6 @@ if [[ -z ${IDDIR} ]]; then
   IDDIR=sub-${TSUB}
   if [[ -n ${TSES} ]]; then IDDIR="${IDDIR}/ses-${TSES}"; fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e "ID:\t${IDPFX}"
   echo -e "SUBDIR:\t${IDDIR}"
@@ -230,7 +240,7 @@ if [[ ${REQUIRES} != "null" ]]; then
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -241,14 +251,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -259,27 +268,37 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
 
 # Set Up Directories -----------------------------------------------------------
-DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
-if [[ -z ${DIR_ANAT} ]]; then DIR_ANAT=${DIR_PIPE}/anat; fi
 mkdir -p ${DIR_SCRATCH}
-mkdir -p ${DIR_ANAT}
 
 # Gather Inputs ----------------------------------------------------------------
 ## keep copy of original image for output image overlays
-if [[ -z ${IMAGE} ]]; then IMAGE=${DIR_ANAT}/native/${IDPFX}_${MOD}.nii.gz; fi
-if [[ -z ${MASK} ]]; then MASK=${DIR_ANAT}/mask/${IDPFX}_mask-brain.nii.gz; fi
+if [[ -z ${IMAGE} ]]; then
+  if [[ -z ${SRC_ANAT} ]]; then SRC_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
+  if [[ ! -d ${SRC_ANAT} ]]; then
+    echo "ERROR [${PIPE}${FLOW}] Cannot determine an exisiting source path for anatomical images, aborting"
+    exit 1
+  fi
+  IMAGE=${SRC_ANAT}/native/${IDPFX}_${MOD}.nii.gz
+fi
+if [[ -z ${MASK} ]]; then
+  if [[ -z ${SRC_ANAT} ]]; then SRC_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
+  if [[ ! -d ${SRC_ANAT} ]]; then SRC_ANAT=$(dirname $(dirname ${IMAGE})); then
+  if [[ ! -d ${SRC_ANAT} ]]; then
+    echo "ERROR [${PIPE}${FLOW}] Cannot determine an exisiting source path for anatomical images, aborting"
+    exit 1
+  fi
+  MASK=${SRC_ANAT}/mask/${IDPFX}_mask-brain.nii.gz
+fi
 cp ${IMAGE} ${DIR_SCRATCH}/image.nii.gz
 cp ${MASK} ${DIR_SCRATCH}/mask.nii.gz
 cp ${DIR_SCRATCH}/image.nii.gz ${DIR_SCRATCH}/image_orig.nii.gz
 IMAGE=${DIR_SCRATCH}/image.nii.gz
 MASK=${DIR_SCRATCH}/mask.nii.gz
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> gathered participant image and mask"
 fi
@@ -582,9 +601,7 @@ fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> merge into multivolume posterior"
 fi
-DIR_POSTERIOR=${DIR_ANAT}/posterior
-mkdir -p ${DIR_POSTERIOR}
-ImageMath 4 ${DIR_POSTERIOR}/${IDPFX}_posterior-tissue.nii.gz \
+ImageMath 4 ${DIR_SCRATCH}/${IDPFX}_posterior-tissue.nii.gz \
   TimeSeriesAssemble 1 0 \
   ${DIR_SCRATCH}/${IDPFX}_posterior-gm.nii.gz \
   ${DIR_SCRATCH}/${IDPFX}_posterior-gmDeep.nii.gz \
@@ -665,48 +682,9 @@ if [[ ${REFINE} != "false" ]]; then
   done
 fi
 
-## Move results to OUTPUT folder -----------------------------------------------
-if [[ ${VERBOSE} == "true" ]]; then
-  echo -e ">>>>> copy output"
-fi
-mkdir -p ${DIR_ANAT}/label/MATS
-if [[ ${KEEP_PARTS} == "true" ]]; then
-  if [[ ${METHOD^^} == *"ANTS"* ]]; then mkdir -p ${DIR_POSTERIOR}/ANTS; fi
-  if [[ ${METHOD^^} == *"5TT"* ]]; then mkdir -p ${DIR_POSTERIOR}/5TT; fi
-  if [[ ${METHOD^^} == *"SYNTH"* ]]; then mkdir -p ${DIR_POSTERIOR}/SYNTHSEG; fi
-fi
-
-mv ${DIR_SCRATCH}/${IDPFX}_posterior-* ${DIR_POSTERIOR}/
-mv ${DIR_SCRATCH}/${IDPFX}_label-tissue* ${DIR_ANAT}/label/
-
-if [[ ${REFINE} != "false" ]]; then
-  mv ${DIR_SCRATCH}/${IDPFX}_label-* ${DIR_ANAT}/label/MATS/
-fi
-
-if [[ ${KEEP_PARTS} == "true" ]]; then
-  if [[ ${METHOD^^} == *"ANTS"* ]]; then
-    mv ${DIR_SCRATCH}/ANTS/${IDPFX}_posterior-* ${DIR_POSTERIOR}/ANTS/
-    mv ${DIR_SCRATCH}/ANTS/${IDPFX}_label* ${DIR_ANAT}/label/MATS/
-  fi
-  if [[ ${METHOD^^} == *"5TT"* ]]; then
-    mv ${DIR_SCRATCH}/5TT/${IDPFX}_posterior-* ${DIR_POSTERIOR}/5TT/
-    mv ${DIR_SCRATCH}/5TT/${IDPFX}_label* ${DIR_ANAT}/label/MATS/
-  fi
-  if [[ ${METHOD^^} == *"SYNTH"* ]]; then
-    mv ${DIR_SCRATCH}/SYNTHSEG/${IDPFX}_posterior-* ${DIR_POSTERIOR}/SYNTHSEG/
-    mv ${DIR_SCRATCH}/SYNTHSEG/${IDPFX}_label* ${DIR_ANAT}/label/MATS/
-  fi
-fi
-
-if [[ ${NO_THICKNESS} == "false" ]]; then
-  mkdir -p ${DIR_ANAT}/outcomes/thickness
-  mv ${DIR_SCRATCH}/${IDPFX}_thickness.* ${DIR_ANAT}/outcomes/thickness
-fi
-
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
-  RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.Rmd
+  RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
   echo '```{r setup, include=FALSE}' >> ${RMD}
@@ -736,39 +714,33 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '' >> ${RMD}
 
   echo '## Tissue Segmentation' >> ${RMD}
-  TNII=${DIR_ANAT}/label/${IDPFX}_label-tissue.nii.gz
-  TPNG=${DIR_ANAT}/label/${IDPFX}_label-tissue.png
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+  TPNG=${DIR_SCRATCH}/${IDPFX}_label-tissue/${IDPFX}_label-tissue.png
+  echo '!['${IDPFX}'_label-tissue.nii.gz]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
   echo '## Tissue Posterior Probabilities {.tabset}' >> ${RMD}
   echo '### Click to View ->' >> ${RMD}
   echo '### Gray Matter' >> ${RMD}
-    TNII=${DIR_POSTERIOR}/${IDPFX}_posterior-gm.nii.gz
-    TPNG=${DIR_POSTERIOR}/${IDPFX}_posterior-gm.png
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_posterior-gm.png
+    echo '!['${IDPFX}'_posterior-gm.nii.gz]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
   echo '### White Matter' >> ${RMD}
-    TNII=${DIR_POSTERIOR}/${IDPFX}_posterior-wm.nii.gz
-    TPNG=${DIR_POSTERIOR}/${IDPFX}_posterior-wm.png
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_posterior-wm.png
+    echo '!['${IDPFX}'_posterior-wm.nii.gz]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
   echo '### Deep Gray Matter' >> ${RMD}
-    TNII=${DIR_POSTERIOR}/${IDPFX}_posterior-gmDeep.nii.gz
-    TPNG=${DIR_POSTERIOR}/${IDPFX}_posterior-gmDeep.png
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_posterior-gmDeep.png
+    echo '!['${IDPFX}'_posterior-gmDeep.nii.gz]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
   echo '### Cerebrospinal Fluid' >> ${RMD}
-    TNII=${DIR_POSTERIOR}/${IDPFX}_posterior-csf.nii.gz
-    TPNG=${DIR_POSTERIOR}/${IDPFX}_posterior-csf.png
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_posterior-csf.png
+    echo '!['${IDPFX}'_posterior-csf.nii.gz]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
 
   if [[ ${NO_THICKNESS} == "false" ]]; then
     echo '## Cortical Thickness' >> ${RMD}
-      TNII=${DIR_ANAT}/outcomes/thickness/${IDPFX}_thickness.nii.gz
-      TPNG=${DIR_ANAT}/outcomes/thickness/${IDPFX}_thickness.png
-      echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+      TPNG=${DIR_SCRATCH}/${IDPFX}_thickness.png
+      echo '!['${IDPFX}'_thickness.nii.gz]('${TPNG}')' >> ${RMD}
       echo '' >> ${RMD}
   fi
 
@@ -779,87 +751,72 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="ANTS"
       echo '#### ANTs {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TNII=${DIR_ANAT}/label/MATS/${IDPFX}_label-tissue+${TM}.nii.gz
-        TPNG=${DIR_ANAT}/label/MATS/${IDPFX}_label-tissue+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gm+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gm+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-gm+${TM}.png
+        echo '!['${IDPFX}'_posterior-gm+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### White Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-wm+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-wm+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-wm+${TM}.png
+        echo '!['${IDPFX}'_posterior-wm+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Deep Gray Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.png
+        echo '!['${IDPFX}'_posterior-gmDeep+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Cerebrospinal Fluid' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-csf+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-csf+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-csf+${TM}.png
+        echo '!['${IDPFX}'_posterior-csf+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
     fi
     if [[ ${METHOD^^} == *"5TT"* ]]; then
       TM="5TT"
       echo '#### 5TT (MRTrix3, FSL) {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TNII=${DIR_ANAT}/label/MATS/${IDPFX}_label-tissue+${TM}.nii.gz
-        TPNG=${DIR_ANAT}/label/MATS/${IDPFX}_label-tissue+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gm+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gm+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-gm+${TM}.png
+        echo '!['${IDPFX}'_posterior-gm+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### White Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-wm+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-wm+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-wm+${TM}.png
+        echo '!['${IDPFX}'_posterior-wm+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Deep Gray Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.png
+        echo '!['${IDPFX}'_posterior-gmDeep+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Cerebrospinal Fluid' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-csf+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-csf+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-csf+${TM}.png
+        echo '!['${IDPFX}'_posterior-csf+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
     fi
     if [[ ${METHOD^^} == *"SYNTH"* ]]; then
       TM="SYNTHSEG"
       echo '#### Freesurfer SynthSeg {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TNII=${DIR_ANAT}/label/MATS/${IDPFX}_label-tissue+${TM}.nii.gz
-        TPNG=${DIR_ANAT}/label/MATS/${IDPFX}_label-tissue+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gm+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gm+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-gm+${TM}.png
+        echo '!['${IDPFX}'_posterior-gm+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### White Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-wm+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-wm+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-wm+${TM}.png
+        echo '!['${IDPFX}'_posterior-wm+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Deep Gray Matter' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-gmDeep+${TM}.png
+        echo '!['${IDPFX}'_posterior-gmDeep+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Cerebrospinal Fluid' >> ${RMD}
-        TNII=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-csf+${TM}.nii.gz
-        TPNG=${DIR_POSTERIOR}/${TM}/${IDPFX}_posterior-csf+${TM}.png
-        echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_posterior-csf+${TM}.png
+        echo '!['${IDPFX}'_posterior-csf+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
     fi
   fi
@@ -870,21 +827,60 @@ if [[ "${NO_RMD}" == "false" ]]; then
     LABELS=(${REFINE//,/ })
     for (( i=0; i<${#LABELS[@]}; i++ )); do
       echo "#### ${LABELS[${i}]}" >> ${RMD}
-      TNII=${DIR_ANAT}/label/MATS/${IDPFX}_label-${LABELS[${i}]}_prep-refine.nii.gz
-      TPNG=${DIR_ANAT}/label/MATS/${IDPFX}_label-${LABELS[${i}]}_prep-refine.png
-      echo '!['${TNII}']('${TPNG}')' >> ${RMD}
+      TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-${LABELS[${i}]}_prep-refine.png
+      echo '!['${IDPFX}'_label-'${LABELS[${i}]}'_prep-refine.nii.gz]('${TPNG}')' >> ${RMD}
       echo '' >> ${RMD}
     done
   fi
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
-  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.html ${DIR_SAVE}/qc/${PIPE}${FLOW}/
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
-    echo -e "\t${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
+    echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
+fi
+
+## Move results to OUTPUT folder -----------------------------------------------
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> copy output"
+fi
+
+mkdir -p ${DIR_SAVE}/anat/posterior
+mkdir -p ${DIR_SAVE}/anat/label
+mv ${DIR_SCRATCH}/${IDPFX}_posterior-* ${DIR_SAVE}/anat/posterior/
+mv ${DIR_SCRATCH}/${IDPFX}_label-tissue* ${DIR_SAVE}/anat/label/
+
+if [[ ${REFINE} != "false" ]]; then
+  mkdir -p ${DIR_SAVE}/anat/label/MATS
+  mv ${DIR_SCRATCH}/${IDPFX}_label-* ${DIR_SAVE}/anat/label/MATS/
+fi
+
+if [[ ${KEEP_PARTS} == "true" ]]; then
+  mkdir -p ${DIR_SAVE}/anat/label/MATS
+  if [[ ${METHOD^^} == *"ANTS"* ]]; then
+    mkdir -p ${DIR_SAVE}/anat/posterior/ANTS
+    mv ${DIR_SCRATCH}/ANTS/${IDPFX}_posterior-* ${DIR_SAVE}/anat/posterior/ANTS/
+    mv ${DIR_SCRATCH}/ANTS/${IDPFX}_label* ${DIR_SAVE}/anat/label/MATS/
+  fi
+  if [[ ${METHOD^^} == *"5TT"* ]]; then
+    mkdir -p ${DIR_SAVE}/anat/posterior/5TT
+    mv ${DIR_SCRATCH}/5TT/${IDPFX}_posterior-* ${DIR_SAVE}/anat/posterior/5TT/
+    mv ${DIR_SCRATCH}/5TT/${IDPFX}_label* ${DIR_SAVE}/anat/label/MATS/
+  fi
+  if [[ ${METHOD^^} == *"SYNTH"* ]]; then
+    mkdir -p ${DIR_SAVE}/anat/posterior/SYNTHSEG
+    mv ${DIR_SCRATCH}/SYNTHSEG/${IDPFX}_posterior-* ${DIR_SAVE}/anat/posterior/SYNTHSEG/
+    mv ${DIR_SCRATCH}/SYNTHSEG/${IDPFX}_label* ${DIR_SAVE}/anat/label/MATS/
+  fi
+fi
+
+if [[ ${NO_THICKNESS} == "false" ]]; then
+  mkdir -p ${DIR_SAVE}/anat/outcomes/thickness
+  mv ${DIR_SCRATCH}/${IDPFX}_thickness.* ${DIR_SAVE}/anat/outcomes/thickness
 fi
 
 # set status file --------------------------------------------------------------
