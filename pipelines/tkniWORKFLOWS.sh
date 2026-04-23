@@ -20,6 +20,7 @@ HARDWARE="$(uname -m)"
 NO_LOG=false
 umask 007
 
+echo "Running tkniWORKFLOWS"
 # Parse Input Variables --------------------------------------------------------
 # 1. Remove leading hyphens
 # 2. Convert to uppercase and replace hyphens with underscores
@@ -27,6 +28,7 @@ umask 007
 # 3. Assign the next argument to the dynamic variable name
 ##   We use 'printf -v' or 'eval' for dynamic assignment
 # 4. Require '--' flags, throw an error if '-'
+echo ">>>>>>parsing inputs"
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --*)
@@ -90,12 +92,14 @@ fi
 if [[ -z ${IDVARS} ]]; then IDVARS="participant_id,session_id"; fi
 if [[ -z ${IDFLAG} ]]; then IDFLAG="sub,ses"; fi
 if [[ -z ${ID} ]]; then ID="all"; fi
+echo ">>>>>>required inputs checked"
 
 # establish job directory ------------------------------------------------------
 if [[ -z ${DIR_JOB} ]]; then DIR_JOB=/home/${USER}/job/${PI}_${PROJECT}_tkniWORKFLOWS; fi
 if [[ -z ${DIR_LOG} ]]; then DIR_LOG=/home/${USER}/log/${PI}_${PROJECT}_tkniWORKFLOWS; fi
 mkdir -p ${DIR_JOB}
 mkdir -p ${DIR_LOG}
+echo ">>>>>>setup job and log directories"
 
 # Loop over participants -------------------------------------------------------
 N=2 # should be 1 but this works with the tsv output to make the code easier
@@ -118,6 +122,7 @@ for (( i=1; i<${N}; i++ )); do
 
   # Write Job Scripts for Workflows ----------------------------------------------
   SLURM_SFX=${IDPFX}_${DATE_SUFFIX}
+  echo ">>>>>>writing jobs for ${SLURM_SFX}"
 
   ###############################################################################
   ## tkniAINIT - Initial Anatomical Processing
