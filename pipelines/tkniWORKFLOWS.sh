@@ -1204,71 +1204,71 @@ for (( i=1; i<${N}; i++ )); do
   for (( i=0; i<${#TFLOW[@]}; i++ )); do unset JOB_${TFLOW[${i}]^^}; done
 
   if [[ ${WORKFLOWS^^} == *"AINIT"* ]]; then
-    JOB_AINIT=$(sbatch --parseable ${SLURM_AINIT})
+    JOB_AINIT=$(sbatch --parsable ${SLURM_AINIT})
   fi
   if [[ ${WORKFLOWS^^} == *"FSSYNTH"* ]]; then
-    JOB_FSSYNTH=$(sbatch --parseable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_FSSYNTH})
+    JOB_FSSYNTH=$(sbatch --parsable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_FSSYNTH})
   fi
   if [[ ${WORKFLOWS^^} == *"MALF"* ]]; then
-    JOB_MALF=$(sbatch --parseable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_MALF})
+    JOB_MALF=$(sbatch --parsable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_MALF})
   fi
   if [[ ${WORKFLOWS^^} == *"MATS"* ]]; then
-    JOB_MATS=$(sbatch --parseable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_MATS})
+    JOB_MATS=$(sbatch --parsable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_MATS})
   fi
   if [[ ${WORKFLOWS^^} == *"AMOD"* ]]; then
     DEP_AMOD="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}"
     DEP_AMOD=$(echo "${DEP_AMOD}" | sed -E 's/:+/:/g; s/^:|:$//g')
-    JOB_AMOD=$(sbatch --parseable ${DEP_AMOD:+--dependency=afterok:${DEP_AMOD}} ${SLURM_AMOD})
+    JOB_AMOD=$(sbatch --parsable ${DEP_AMOD:+--dependency=afterok:${DEP_AMOD}} ${SLURM_AMOD})
   fi
   if [[ ${WORKFLOWS^^} == *"QALAS"* ]]; then
-    JOB_QALAS=$(sbatch --parseable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_QALAS})
+    JOB_QALAS=$(sbatch --parsable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_QALAS})
   fi
   if [[ ${WORKFLOWS^^} == *"DPREP"* ]]; then
-    JOB_DPREP=$(sbatch --parseable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_DPREP})
+    JOB_DPREP=$(sbatch --parsable ${JOB_AINIT:+--dependency=afterok:${JOB_AINIT}} ${SLURM_DPREP})
   fi
   if [[ ${WORKFLOWS^^} == *"DSCALE"* ]]; then
     DEP_DSCALE="${JOB_AINIT}${JOB_AINIT:+:}${JOB_DPREP}"
-    JOB_DSCALE=$(sbatch --parseable ${DEP_DSCALE:+--dependency=afterok:${DEP_DSCALE}} ${SLURM_DSCALE})
+    JOB_DSCALE=$(sbatch --parsable ${DEP_DSCALE:+--dependency=afterok:${DEP_DSCALE}} ${SLURM_DSCALE})
   fi
   if [[ ${WORKFLOWS^^} == *"DMICRO"* ]]; then
     DEP_DMICRO="${JOB_AINIT}${JOB_AINIT:+:}${JOB_DPREP}"
-    JOB_DMICRO=$(sbatch --parseable ${DEP_DMICRO:+--dependency=afterok:${DEP_DMICRO}} ${SLURM_DMICRO})
+    JOB_DMICRO=$(sbatch --parsable ${DEP_DMICRO:+--dependency=afterok:${DEP_DMICRO}} ${SLURM_DMICRO})
   fi
   if [[ ${WORKFLOWS^^} == *"DTRACT"* ]]; then
     DEP_DTRACT="${JOB_AINIT}${JOB_AINIT:+:}${JOB_DPREP}${JOB_DPREP:+:}${JOB_MATS}"
     DEP_DTRACT=$(echo "${DEP_DTRACT}" | sed -E 's/:+/:/g; s/^:|:$//g')
-    JOB_DTRACT=$(sbatch --parseable ${DEP_DTRACT:+--dependency=afterok:${DEP_DTRACT}} ${SLURM_DTRACT})
+    JOB_DTRACT=$(sbatch --parsable ${DEP_DTRACT:+--dependency=afterok:${DEP_DTRACT}} ${SLURM_DTRACT})
   fi
   if [[ ${WORKFLOWS^^} == *"PCASL"* ]]; then
     DEP_PCASL="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}"
-    JOB_PCASL=$(sbatch --parseable ${DEP_PCASL:+--dependency=afterok:${DEP_PCASL}} ${SLURM_PCASL})
+    JOB_PCASL=$(sbatch --parsable ${DEP_PCASL:+--dependency=afterok:${DEP_PCASL}} ${SLURM_PCASL})
   fi
   if [[ ${WORKFLOWS^^} == *"FUNK"* ]]; then
     DEP_FUNK="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MATS}"
-    JOB_FUNK=$(sbatch --parseable ${DEP_FUNK:+--dependency=afterok:${DEP_FUNK}} ${SLURM_FUNK})
+    JOB_FUNK=$(sbatch --parsable ${DEP_FUNK:+--dependency=afterok:${DEP_FUNK}} ${SLURM_FUNK})
   fi
   if [[ ${WORKFLOWS^^} == *"FCON"* ]]; then
     DEP_FCON="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}"
     DEP_FCON=$(echo "${DEP_FCON}" | sed -E 's/:+/:/g; s/^:|:$//g')
-    JOB_FCON=$(sbatch --parseable ${DEP_FCON:+--dependency=afterok:${DEP_FCON}} ${SLURM_FCON})
+    JOB_FCON=$(sbatch --parsable ${DEP_FCON:+--dependency=afterok:${DEP_FCON}} ${SLURM_FCON})
   fi
   if [[ ${WORKFLOWS^^} == *"MRS"* ]]; then
     DEP_MRS="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MATS}"
-    JOB_MRS=$(sbatch --parseable ${DEP_MRS:+--dependency=afterok:${DEP_MRS}} ${SLURM_MRS})
+    JOB_MRS=$(sbatch --parsable ${DEP_MRS:+--dependency=afterok:${DEP_MRS}} ${SLURM_MRS})
   fi
   if [[ ${WORKFLOWS^^} == *"QCANAT"* ]]; then
     DEP_QCANAT="${JOB_AINIT}${JOB_AINIT:+:}${JOB_FSSYNTH}${JOB_FSSYNTH:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_AMOD}${JOB_AMOD:+:}${JOB_QALAS}"
     DEP_QCANAT=$(echo "${DEP_QCANAT}" | sed -E 's/:+/:/g; s/^:|:$//g')
-    JOB_QCANAT=$(sbatch --parseable ${DEP_QCANAT:+--dependency=afterok:${DEP_QCANAT}} ${SLURM_QCANAT})
+    JOB_QCANAT=$(sbatch --parsable ${DEP_QCANAT:+--dependency=afterok:${DEP_QCANAT}} ${SLURM_QCANAT})
   fi
   if [[ ${WORKFLOWS^^} == *"QCDWI"* ]]; then
     DEP_QCDWI="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_DPREP}${JOB_DPREP:+:}${JOB_DSCALE}${JOB_DSCALE:+:}${JOB_DMICRO}${JOB_DMICRO:+:}${JOB_QCDWI}"
     DEP_QCDWI=$(echo "${DEP_QCDWI}" | sed -E 's/:+/:/g; s/^:|:$//g')
-    JOB_QCDWI=$(sbatch --parseable ${DEP_QCDWI:+--dependency=afterok:${DEP_QCDWI}} ${SLURM_QCDWI})
+    JOB_QCDWI=$(sbatch --parsable ${DEP_QCDWI:+--dependency=afterok:${DEP_QCDWI}} ${SLURM_QCDWI})
   fi
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
     DEP_QCFUNC="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}${JOB_FUNK:+:}${JOB_FCON}"
     DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$//g')
-    JOB_QCFUNC=$(sbatch --parseable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
+    JOB_QCFUNC=$(sbatch --parsable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
   fi
 done
