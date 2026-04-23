@@ -137,7 +137,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ "${WORKFLOWS^^}" == *"AINIT"* ]]; then
     SLURM_AINIT=${DIR_JOB}/AINIT_${SLURM_SUFFIX}.slurm
     if [[ -z ${AINIT_NTHREADS} ]]; then AINIT_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_AINIT}
+    echo "#!/bin/bash" > ${SLURM_AINIT}
     echo "#SBATCH --output=${DIR_LOG}/AINIT_${SLURM_SUFFIX}.txt" >> ${SLURM_AINIT}
     echo "#SBATCH -p normal" >> ${SLURM_AINIT}
     echo "#SBATCH -q normal" >> ${SLURM_AINIT}
@@ -181,7 +181,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"FSSYNTH"* ]]; then
     SLURM_FSSYNTH=${DIR_JOB}/FSSYNTH_${SLURM_SUFFIX}.slurm
     if [[ -z ${FSSYNTH_NTHREADS} ]]; then FSSYNTH_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_FSSYNTH}
+    echo "#!/bin/bash" > ${SLURM_FSSYNTH}
     echo "#SBATCH --output=${DIR_LOG}/FSSYNTH_${SLURM_SUFFIX}.txt" >> ${SLURM_FSSYNTH}
     echo "#SBATCH -p normal" >> ${SLURM_FSSYNTH}
     echo "#SBATCH -q normal" >> ${SLURM_FSSYNTH}
@@ -223,7 +223,7 @@ for (( i=1; i<${N}; i++ )); do
    if [[ ${WORKFLOWS^^} == *"MALF"* ]]; then
     SLURM_MALF=${DIR_JOB}/MALF_${SLURM_SUFFIX}.slurm
     if [[ -z ${MALF_NTHREADS} ]]; then MALF_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_MALF}
+    echo "#!/bin/bash" > ${SLURM_MALF}
     echo "#SBATCH --output=${DIR_LOG}/MALF_${SLURM_SUFFIX}.txt" >> ${SLURM_MALF}
     echo "#SBATCH -p normal" >> ${SLURM_MALF}
     echo "#SBATCH -q normal" >> ${SLURM_MALF}
@@ -273,7 +273,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"MATS"* ]]; then
     SLURM_MATS=${DIR_JOB}/MATS_${SLURM_SUFFIX}.slurm
     if [[ -z ${MATS_NTHREADS} ]]; then MATS_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_MATS}
+    echo "#!/bin/bash" > ${SLURM_MATS}
     echo "#SBATCH --output=${DIR_LOG}/MATS_${SLURM_SUFFIX}.txt" >> ${SLURM_MATS}
     echo "#SBATCH -p normal" >> ${SLURM_MATS}
     echo "#SBATCH -q normal" >> ${SLURM_MATS}
@@ -330,7 +330,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"AMOD"* ]]; then
     SLURM_AMOD=${DIR_JOB}/AMOD_${SLURM_SUFFIX}.slurm
     if [[ -z ${AMOD_NTHREADS} ]]; then AMOD_NTHREADS=1; fi
-    echo "#/bin/bash" > ${SLURM_AMOD}
+    echo "#!/bin/bash" > ${SLURM_AMOD}
     echo "#SBATCH --output=${DIR_LOG}/AMOD_${SLURM_SUFFIX}.txt" >> ${SLURM_AMOD}
     echo "#SBATCH -p normal" >> ${SLURM_AMOD}
     echo "#SBATCH -q normal" >> ${SLURM_AMOD}
@@ -393,7 +393,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"QALAS"* ]]; then
     SLURM_QALAS=${DIR_JOB}/QALAS_${SLURM_SUFFIX}.slurm
     if [[ -z ${QALAS_NTHREADS} ]]; then QALAS_NTHREADS=1; fi
-    echo "#/bin/bash" > ${SLURM_QALAS}
+    echo "#!/bin/bash" > ${SLURM_QALAS}
     echo "#SBATCH --output=${DIR_LOG}/QALAS_${SLURM_SUFFIX}.txt" >> ${SLURM_QALAS}
     echo "#SBATCH -p normal" >> ${SLURM_QALAS}
     echo "#SBATCH -q normal" >> ${SLURM_QALAS}
@@ -481,7 +481,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"DPREP"* ]]; then
     SLURM_DPREP=${DIR_JOB}/DPREP_${SLURM_SUFFIX}.slurm
     if [[ -z ${DPREP_NTHREADS} ]]; then DPREP_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_DPREP}
+    echo "#!/bin/bash" > ${SLURM_DPREP}
     echo "#SBATCH --output=${DIR_LOG}/DPREP_${SLURM_SUFFIX}.txt" >> ${SLURM_DPREP}
     echo "#SBATCH -p normal" >> ${SLURM_DPREP}
     echo "#SBATCH -q normal" >> ${SLURM_DPREP}
@@ -533,7 +533,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"DSCALE"* ]]; then
     SLURM_DSCALE=${DIR_JOB}/DSCALE_${SLURM_SUFFIX}.slurm
     if [[ -z ${DSCALE_NTHREADS} ]]; then DSCALE_NTHREADS=1; fi
-    echo "#/bin/bash" > ${SLURM_DSCALE}
+    echo "#!/bin/bash" > ${SLURM_DSCALE}
     echo "#SBATCH --output=${DIR_LOG}/DSCALE_${SLURM_SUFFIX}.txt" >> ${SLURM_DSCALE}
     echo "#SBATCH -p normal" >> ${SLURM_DSCALE}
     echo "#SBATCH -q normal" >> ${SLURM_DSCALE}
@@ -579,7 +579,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"DMICRO"* ]]; then
     SLURM_DMICRO=${DIR_JOB}/DMICRO_${SLURM_SUFFIX}.slurm
     if [[ -z ${DMICRO_NTHREADS} ]]; then DMICRO_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_DMICRO}
+    echo "#!/bin/bash" > ${SLURM_DMICRO}
     echo "#SBATCH --output=${DIR_LOG}/DMICRO_${SLURM_SUFFIX}.txt" >> ${SLURM_DMICRO}
     echo "#SBATCH -p normal" >> ${SLURM_DMICRO}
     echo "#SBATCH -q normal" >> ${SLURM_DMICRO}
@@ -640,7 +640,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"DTRACT"* ]]; then
     SLURM_DTRACT=${DIR_JOB}/DTRACT_${SLURM_SUFFIX}.slurm
     if [[ -z ${DTRACT_NTHREADS} ]]; then DTRACT_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_DTRACT}
+    echo "#!/bin/bash" > ${SLURM_DTRACT}
     echo "#SBATCH --output=${DIR_LOG}/DTRACT_${SLURM_SUFFIX}.txt" >> ${SLURM_DTRACT}
     echo "#SBATCH -p normal" >> ${SLURM_DTRACT}
     echo "#SBATCH -q normal" >> ${SLURM_DTRACT}
@@ -690,7 +690,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"PCASL"* ]]; then
     SLURM_PCASL=${DIR_JOB}/PCASL_${SLURM_SUFFIX}.slurm
     if [[ -z ${PCASL_NTHREADS} ]]; then PCASL_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_PCASL}
+    echo "#!/bin/bash" > ${SLURM_PCASL}
     echo "#SBATCH --output=${DIR_LOG}/PCASL_${SLURM_SUFFIX}.txt" >> ${SLURM_PCASL}
     echo "#SBATCH -p normal" >> ${SLURM_PCASL}
     echo "#SBATCH -q normal" >> ${SLURM_PCASL}
@@ -756,7 +756,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"FUNK"* ]]; then
     SLURM_FUNK=${DIR_JOB}/FUNK_${SLURM_SUFFIX}.slurm
     if [[ -z ${FUNK_NTHREADS} ]]; then FUNK_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_FUNK}
+    echo "#!/bin/bash" > ${SLURM_FUNK}
     echo "#SBATCH --output=${DIR_LOG}/FUNK_${SLURM_SUFFIX}.txt" >> ${SLURM_FUNK}
     echo "#SBATCH -p normal" >> ${SLURM_FUNK}
     echo "#SBATCH -q normal" >> ${SLURM_FUNK}
@@ -820,7 +820,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"FCON"* ]]; then
     SLURM_FCON=${DIR_JOB}/FCON_${SLURM_SUFFIX}.slurm
     if [[ -z ${FCON_NTHREADS} ]]; then FCON_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_FCON}
+    echo "#!/bin/bash" > ${SLURM_FCON}
     echo "#SBATCH --output=${DIR_LOG}/FCON_${SLURM_SUFFIX}.txt" >> ${SLURM_FCON}
     echo "#SBATCH -p normal" >> ${SLURM_FCON}
     echo "#SBATCH -q normal" >> ${SLURM_FCON}
@@ -868,7 +868,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"MRS"* ]]; then
     SLURM_MRS=${DIR_JOB}/MRS_${SLURM_SUFFIX}.slurm
     if [[ -z ${MRS_NTHREADS} ]]; then MRS_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_MRS}
+    echo "#!/bin/bash" > ${SLURM_MRS}
     echo "#SBATCH --output=${DIR_LOG}/MRS_${SLURM_SUFFIX}.txt" >> ${SLURM_MRS}
     echo "#SBATCH -p normal" >> ${SLURM_MRS}
     echo "#SBATCH -q normal" >> ${SLURM_MRS}
@@ -918,7 +918,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"QCANAT"* ]]; then
     SLURM_QCANAT=${DIR_JOB}/QCANAT_${SLURM_SUFFIX}.slurm
     if [[ -z ${QCANAT_NTHREADS} ]]; then QCANAT_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_QCANAT}
+    echo "#!/bin/bash" > ${SLURM_QCANAT}
     echo "#SBATCH --output=${DIR_LOG}/QCANAT_${SLURM_SUFFIX}.txt" >> ${SLURM_QCANAT}
     echo "#SBATCH -p normal" >> ${SLURM_QCANAT}
     echo "#SBATCH -q normal" >> ${SLURM_QCANAT}
@@ -981,7 +981,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"QCDWI"* ]]; then
     SLURM_QCDWI=${DIR_JOB}/QCDWI_${SLURM_SUFFIX}.slurm
     if [[ -z ${QCDWI_NTHREADS} ]]; then QCDWI_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_QCDWI}
+    echo "#!/bin/bash" > ${SLURM_QCDWI}
     echo "#SBATCH --output=${DIR_LOG}/QCDWI_${SLURM_SUFFIX}.txt" >> ${SLURM_QCDWI}
     echo "#SBATCH -p normal" >> ${SLURM_QCDWI}
     echo "#SBATCH -q normal" >> ${SLURM_QCDWI}
@@ -1032,7 +1032,7 @@ for (( i=1; i<${N}; i++ )); do
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
     SLURM_QCFUNC=${DIR_JOB}/QCFUNC_${SLURM_SUFFIX}.slurm
     if [[ -z ${QCFUNC_NTHREADS} ]]; then QCFUNC_NTHREADS=4; fi
-    echo "#/bin/bash" > ${SLURM_QCFUNC}
+    echo "#!/bin/bash" > ${SLURM_QCFUNC}
     echo "#SBATCH --output=${DIR_LOG}/QCFUNC_${SLURM_SUFFIX}.txt" >> ${SLURM_QCFUNC}
     echo "#SBATCH -p normal" >> ${SLURM_QCFUNC}
     echo "#SBATCH -q normal" >> ${SLURM_QCFUNC}
@@ -1080,7 +1080,7 @@ for (( i=1; i<${N}; i++ )); do
 #  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
 #    SLURM_****=${DIR_JOB}/****_${SLURM_SUFFIX}.slurm
 #    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
-#    echo "#/bin/bash" > ${SLURM_****}
+#    echo "#!/bin/bash" > ${SLURM_****}
 #    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SUFFIX}.txt" >> ${SLURM_****}
 #    echo "#SBATCH -p normal" >> ${SLURM_****}
 #    echo "#SBATCH -q normal" >> ${SLURM_****}
@@ -1120,7 +1120,7 @@ for (( i=1; i<${N}; i++ )); do
 #  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
 #    SLURM_****=${DIR_JOB}/****_${SLURM_SUFFIX}.slurm
 #    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
-#    echo "#/bin/bash" > ${SLURM_****}
+#    echo "#!/bin/bash" > ${SLURM_****}
 #    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SUFFIX}.txt" >> ${SLURM_****}
 #    echo "#SBATCH -p normal" >> ${SLURM_****}
 #    echo "#SBATCH -q normal" >> ${SLURM_****}
@@ -1160,7 +1160,7 @@ for (( i=1; i<${N}; i++ )); do
 #  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
 #    SLURM_****=${DIR_JOB}/****_${SLURM_SUFFIX}.slurm
 #    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
-#    echo "#/bin/bash" > ${SLURM_****}
+#    echo "#!/bin/bash" > ${SLURM_****}
 #    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SUFFIX}.txt" >> ${SLURM_****}
 #    echo "#SBATCH -p normal" >> ${SLURM_****}
 #    echo "#SBATCH -q normal" >> ${SLURM_****}
