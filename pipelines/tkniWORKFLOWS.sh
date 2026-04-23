@@ -35,8 +35,15 @@ while [[ "$#" -gt 0 ]]; do
       flag_name="${1#--}"
       var_name="${flag_name^^}"
       var_name="${var_name//-/_}"
-      printf -v "$var_name" "%s" "$2"
-      shift 2 ;;
+      if [[ -n "$2" && "$2" != -* ]]; then
+        printf -v "$var_name" "%s" "$2"
+        shift 2
+      else
+        # Otherwise, treat it as a boolean 'true' flag
+        printf -v "$var_name" "true"
+        shift 1
+      fi
+      ;;
     -*)
       echo "ERROR [${PIPE}:${FLOW}]: '-' flags ($1) are not supported, use '--'"
       exit 1 ;;
