@@ -1200,7 +1200,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
 
   # Reset Job IDs for iteration
-  TFLOW=(${WORKFLOWS/,/ })
+  TFLOW=(${WORKFLOWS//,/ })
   for (( i=0; i<${#TFLOW[@]}; i++ )); do unset JOB_${TFLOW[${i}]^^}; done
 
   if [[ ${WORKFLOWS^^} == *"AINIT"* ]]; then
@@ -1218,7 +1218,7 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"AMOD"* ]]; then
     DEP_AMOD="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}"
-    DEP_AMOD=$(echo "${DEP_AMOD}" | sed -E 's/:+/:/g; s/^:|:$/g')
+    DEP_AMOD=$(echo "${DEP_AMOD}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_AMOD=$(sbatch --parsable ${DEP_AMOD:+--dependency=afterok:${DEP_AMOD}} ${SLURM_AMOD})
   fi
   if [[ ${WORKFLOWS^^} == *"QALAS"* ]]; then
@@ -1237,7 +1237,7 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"DTRACT"* ]]; then
     DEP_DTRACT="${JOB_AINIT}${JOB_AINIT:+:}${JOB_DPREP}${JOB_DPREP:+:}${JOB_MATS}"
-    DEP_DTRACT=$(echo "${DEP_DTRACT}" | sed -E 's/:+/:/g; s/^:|:$/g')
+    DEP_DTRACT=$(echo "${DEP_DTRACT}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_DTRACT=$(sbatch --parsable ${DEP_DTRACT:+--dependency=afterok:${DEP_DTRACT}} ${SLURM_DTRACT})
   fi
   if [[ ${WORKFLOWS^^} == *"PCASL"* ]]; then
@@ -1250,7 +1250,7 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"FCON"* ]]; then
     DEP_FCON="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}"
-    DEP_FCON=$(echo "${DEP_FCON}" | sed -E 's/:+/:/g; s/^:|:$/g')
+    DEP_FCON=$(echo "${DEP_FCON}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_FCON=$(sbatch --parsable ${DEP_FCON:+--dependency=afterok:${DEP_FCON}} ${SLURM_FCON})
   fi
   if [[ ${WORKFLOWS^^} == *"MRS"* ]]; then
@@ -1259,18 +1259,18 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"QCANAT"* ]]; then
     DEP_QCANAT="${JOB_AINIT}${JOB_AINIT:+:}${JOB_FSSYNTH}${JOB_FSSYNTH:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_AMOD}${JOB_AMOD:+:}${JOB_QALAS}"
-    DEP_QCANAT=$(echo "${DEP_QCANAT}" | sed -E 's/:+/:/g; s/^:|:$/g')
+    DEP_QCANAT=$(echo "${DEP_QCANAT}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_QCANAT=$(sbatch --parsable ${DEP_QCANAT:+--dependency=afterok:${DEP_QCANAT}} ${SLURM_QCANAT})
   fi
   if [[ ${WORKFLOWS^^} == *"QCDWI"* ]]; then
     DEP_QCDWI="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_DPREP}${JOB_DPREP:+:}${JOB_DSCALE}${JOB_DSCALE:+:}${JOB_DMICRO}${JOB_DMICRO:+:}${JOB_QCDWI}"
-    DEP_QCDWI=$(echo "${DEP_QCDWI}" | sed -E 's/:+/:/g; s/^:|:$/g')
+    DEP_QCDWI=$(echo "${DEP_QCDWI}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_QCDWI=$(sbatch --parsable ${DEP_QCDWI:+--dependency=afterok:${DEP_QCDWI}} ${SLURM_QCDWI})
   fi
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
     echo "submitting QCFUNC"
     DEP_QCFUNC="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}${JOB_FUNK:+:}${JOB_FCON}"
-    DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$/g')
+    DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_QCFUNC=$(sbatch --parsable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
   fi
   echo ">>>>>${IDPFX} jobs submitted"
