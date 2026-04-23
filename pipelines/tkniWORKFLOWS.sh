@@ -157,7 +157,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_AINIT}
     FSTR="${TKNIPATH}/pipelines/tkniAINIT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
-    if [[ -n ${AINIT_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${AINIT_DIR_ID}"; fi
+    if [[ -n ${AINIT_DIR_ID} ]]; then       FSTR="${FSTR} --dir-id ${AINIT_DIR_ID}"; fi
     if [[ -n ${AINIT_DIR_PROJECT} ]]; then  FSTR="${FSTR} --dir-project ${AINIT_DIR_PROJECT}"; fi
     if [[ -n ${AINIT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${AINIT_DIR_SAVE}"; fi
     if [[ -n ${AINIT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${AINIT_DIR_SCRATCH}"; fi
