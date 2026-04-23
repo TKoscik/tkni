@@ -135,10 +135,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniAINIT - Initial Anatomical Processing
   ###############################################################################
   if [[ "${WORKFLOWS^^}" == *"AINIT"* ]]; then
-    SLURM_AINIT=${DIR_JOB}/AINIT_${SLURM_SUFFIX}.slurm
+    SLURM_AINIT=${DIR_JOB}/AINIT_${SLURM_SFX}.slurm
     if [[ -z ${AINIT_NTHREADS} ]]; then AINIT_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_AINIT}
-    echo "#SBATCH --output=${DIR_LOG}/AINIT_${SLURM_SUFFIX}.txt" >> ${SLURM_AINIT}
+    echo "#SBATCH --output=${DIR_LOG}/AINIT_${SLURM_SFX}.txt" >> ${SLURM_AINIT}
     echo "#SBATCH -p normal" >> ${SLURM_AINIT}
     echo "#SBATCH -q normal" >> ${SLURM_AINIT}
     echo "#SBATCH --nodes=1" >> ${SLURM_AINIT}
@@ -179,10 +179,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniFSSYNTH - Freesurfer's recon-all-clinical
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"FSSYNTH"* ]]; then
-    SLURM_FSSYNTH=${DIR_JOB}/FSSYNTH_${SLURM_SUFFIX}.slurm
+    SLURM_FSSYNTH=${DIR_JOB}/FSSYNTH_${SLURM_SFX}.slurm
     if [[ -z ${FSSYNTH_NTHREADS} ]]; then FSSYNTH_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_FSSYNTH}
-    echo "#SBATCH --output=${DIR_LOG}/FSSYNTH_${SLURM_SUFFIX}.txt" >> ${SLURM_FSSYNTH}
+    echo "#SBATCH --output=${DIR_LOG}/FSSYNTH_${SLURM_SFX}.txt" >> ${SLURM_FSSYNTH}
     echo "#SBATCH -p normal" >> ${SLURM_FSSYNTH}
     echo "#SBATCH -q normal" >> ${SLURM_FSSYNTH}
     echo "#SBATCH --nodes=1" >> ${SLURM_FSSYNTH}
@@ -221,10 +221,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniMALF - Multi-label Atlas Fusion
   ###############################################################################
    if [[ ${WORKFLOWS^^} == *"MALF"* ]]; then
-    SLURM_MALF=${DIR_JOB}/MALF_${SLURM_SUFFIX}.slurm
+    SLURM_MALF=${DIR_JOB}/MALF_${SLURM_SFX}.slurm
     if [[ -z ${MALF_NTHREADS} ]]; then MALF_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_MALF}
-    echo "#SBATCH --output=${DIR_LOG}/MALF_${SLURM_SUFFIX}.txt" >> ${SLURM_MALF}
+    echo "#SBATCH --output=${DIR_LOG}/MALF_${SLURM_SFX}.txt" >> ${SLURM_MALF}
     echo "#SBATCH -p normal" >> ${SLURM_MALF}
     echo "#SBATCH -q normal" >> ${SLURM_MALF}
     echo "#SBATCH --nodes=1" >> ${SLURM_MALF}
@@ -271,10 +271,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniMATS - Multi-Approach Tissue Segmentation
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"MATS"* ]]; then
-    SLURM_MATS=${DIR_JOB}/MATS_${SLURM_SUFFIX}.slurm
+    SLURM_MATS=${DIR_JOB}/MATS_${SLURM_SFX}.slurm
     if [[ -z ${MATS_NTHREADS} ]]; then MATS_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_MATS}
-    echo "#SBATCH --output=${DIR_LOG}/MATS_${SLURM_SUFFIX}.txt" >> ${SLURM_MATS}
+    echo "#SBATCH --output=${DIR_LOG}/MATS_${SLURM_SFX}.txt" >> ${SLURM_MATS}
     echo "#SBATCH -p normal" >> ${SLURM_MATS}
     echo "#SBATCH -q normal" >> ${SLURM_MATS}
     echo "#SBATCH --nodes=1" >> ${SLURM_MATS}
@@ -328,10 +328,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniAMOD - Additional Anatomical Modality Processing
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"AMOD"* ]]; then
-    SLURM_AMOD=${DIR_JOB}/AMOD_${SLURM_SUFFIX}.slurm
+    SLURM_AMOD=${DIR_JOB}/AMOD_${SLURM_SFX}.slurm
     if [[ -z ${AMOD_NTHREADS} ]]; then AMOD_NTHREADS=1; fi
     echo "#!/bin/bash" > ${SLURM_AMOD}
-    echo "#SBATCH --output=${DIR_LOG}/AMOD_${SLURM_SUFFIX}.txt" >> ${SLURM_AMOD}
+    echo "#SBATCH --output=${DIR_LOG}/AMOD_${SLURM_SFX}.txt" >> ${SLURM_AMOD}
     echo "#SBATCH -p normal" >> ${SLURM_AMOD}
     echo "#SBATCH -q normal" >> ${SLURM_AMOD}
     echo "#SBATCH --nodes=1" >> ${SLURM_AMOD}
@@ -391,10 +391,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniQALAS - QALAS Processing
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QALAS"* ]]; then
-    SLURM_QALAS=${DIR_JOB}/QALAS_${SLURM_SUFFIX}.slurm
+    SLURM_QALAS=${DIR_JOB}/QALAS_${SLURM_SFX}.slurm
     if [[ -z ${QALAS_NTHREADS} ]]; then QALAS_NTHREADS=1; fi
     echo "#!/bin/bash" > ${SLURM_QALAS}
-    echo "#SBATCH --output=${DIR_LOG}/QALAS_${SLURM_SUFFIX}.txt" >> ${SLURM_QALAS}
+    echo "#SBATCH --output=${DIR_LOG}/QALAS_${SLURM_SFX}.txt" >> ${SLURM_QALAS}
     echo "#SBATCH -p normal" >> ${SLURM_QALAS}
     echo "#SBATCH -q normal" >> ${SLURM_QALAS}
     echo "#SBATCH --nodes=1" >> ${SLURM_QALAS}
@@ -479,10 +479,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniDPREP - Diffusion Image Preprocessing
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"DPREP"* ]]; then
-    SLURM_DPREP=${DIR_JOB}/DPREP_${SLURM_SUFFIX}.slurm
+    SLURM_DPREP=${DIR_JOB}/DPREP_${SLURM_SFX}.slurm
     if [[ -z ${DPREP_NTHREADS} ]]; then DPREP_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_DPREP}
-    echo "#SBATCH --output=${DIR_LOG}/DPREP_${SLURM_SUFFIX}.txt" >> ${SLURM_DPREP}
+    echo "#SBATCH --output=${DIR_LOG}/DPREP_${SLURM_SFX}.txt" >> ${SLURM_DPREP}
     echo "#SBATCH -p normal" >> ${SLURM_DPREP}
     echo "#SBATCH -q normal" >> ${SLURM_DPREP}
     echo "#SBATCH --nodes=1" >> ${SLURM_DPREP}
@@ -531,10 +531,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniDSCALE - Diffusion Scalars
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"DSCALE"* ]]; then
-    SLURM_DSCALE=${DIR_JOB}/DSCALE_${SLURM_SUFFIX}.slurm
+    SLURM_DSCALE=${DIR_JOB}/DSCALE_${SLURM_SFX}.slurm
     if [[ -z ${DSCALE_NTHREADS} ]]; then DSCALE_NTHREADS=1; fi
     echo "#!/bin/bash" > ${SLURM_DSCALE}
-    echo "#SBATCH --output=${DIR_LOG}/DSCALE_${SLURM_SUFFIX}.txt" >> ${SLURM_DSCALE}
+    echo "#SBATCH --output=${DIR_LOG}/DSCALE_${SLURM_SFX}.txt" >> ${SLURM_DSCALE}
     echo "#SBATCH -p normal" >> ${SLURM_DSCALE}
     echo "#SBATCH -q normal" >> ${SLURM_DSCALE}
     echo "#SBATCH --nodes=1" >> ${SLURM_DSCALE}
@@ -577,10 +577,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniMICRO - Diffusion Microstructure, NODDI and SANDI
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"DMICRO"* ]]; then
-    SLURM_DMICRO=${DIR_JOB}/DMICRO_${SLURM_SUFFIX}.slurm
+    SLURM_DMICRO=${DIR_JOB}/DMICRO_${SLURM_SFX}.slurm
     if [[ -z ${DMICRO_NTHREADS} ]]; then DMICRO_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_DMICRO}
-    echo "#SBATCH --output=${DIR_LOG}/DMICRO_${SLURM_SUFFIX}.txt" >> ${SLURM_DMICRO}
+    echo "#SBATCH --output=${DIR_LOG}/DMICRO_${SLURM_SFX}.txt" >> ${SLURM_DMICRO}
     echo "#SBATCH -p normal" >> ${SLURM_DMICRO}
     echo "#SBATCH -q normal" >> ${SLURM_DMICRO}
     echo "#SBATCH --nodes=1" >> ${SLURM_DMICRO}
@@ -638,10 +638,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniDTRACT - Diffusion Tractography
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"DTRACT"* ]]; then
-    SLURM_DTRACT=${DIR_JOB}/DTRACT_${SLURM_SUFFIX}.slurm
+    SLURM_DTRACT=${DIR_JOB}/DTRACT_${SLURM_SFX}.slurm
     if [[ -z ${DTRACT_NTHREADS} ]]; then DTRACT_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_DTRACT}
-    echo "#SBATCH --output=${DIR_LOG}/DTRACT_${SLURM_SUFFIX}.txt" >> ${SLURM_DTRACT}
+    echo "#SBATCH --output=${DIR_LOG}/DTRACT_${SLURM_SFX}.txt" >> ${SLURM_DTRACT}
     echo "#SBATCH -p normal" >> ${SLURM_DTRACT}
     echo "#SBATCH -q normal" >> ${SLURM_DTRACT}
     echo "#SBATCH --nodes=1" >> ${SLURM_DTRACT}
@@ -688,10 +688,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniPCASL - Cerebral Blood Flow from PCASL
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"PCASL"* ]]; then
-    SLURM_PCASL=${DIR_JOB}/PCASL_${SLURM_SUFFIX}.slurm
+    SLURM_PCASL=${DIR_JOB}/PCASL_${SLURM_SFX}.slurm
     if [[ -z ${PCASL_NTHREADS} ]]; then PCASL_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_PCASL}
-    echo "#SBATCH --output=${DIR_LOG}/PCASL_${SLURM_SUFFIX}.txt" >> ${SLURM_PCASL}
+    echo "#SBATCH --output=${DIR_LOG}/PCASL_${SLURM_SFX}.txt" >> ${SLURM_PCASL}
     echo "#SBATCH -p normal" >> ${SLURM_PCASL}
     echo "#SBATCH -q normal" >> ${SLURM_PCASL}
     echo "#SBATCH --nodes=1" >> ${SLURM_PCASL}
@@ -754,10 +754,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniFUNK - BOLD Functional Preprocessing
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"FUNK"* ]]; then
-    SLURM_FUNK=${DIR_JOB}/FUNK_${SLURM_SUFFIX}.slurm
+    SLURM_FUNK=${DIR_JOB}/FUNK_${SLURM_SFX}.slurm
     if [[ -z ${FUNK_NTHREADS} ]]; then FUNK_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_FUNK}
-    echo "#SBATCH --output=${DIR_LOG}/FUNK_${SLURM_SUFFIX}.txt" >> ${SLURM_FUNK}
+    echo "#SBATCH --output=${DIR_LOG}/FUNK_${SLURM_SFX}.txt" >> ${SLURM_FUNK}
     echo "#SBATCH -p normal" >> ${SLURM_FUNK}
     echo "#SBATCH -q normal" >> ${SLURM_FUNK}
     echo "#SBATCH --nodes=1" >> ${SLURM_FUNK}
@@ -818,10 +818,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniFCON - Functional Connectivity
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"FCON"* ]]; then
-    SLURM_FCON=${DIR_JOB}/FCON_${SLURM_SUFFIX}.slurm
+    SLURM_FCON=${DIR_JOB}/FCON_${SLURM_SFX}.slurm
     if [[ -z ${FCON_NTHREADS} ]]; then FCON_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_FCON}
-    echo "#SBATCH --output=${DIR_LOG}/FCON_${SLURM_SUFFIX}.txt" >> ${SLURM_FCON}
+    echo "#SBATCH --output=${DIR_LOG}/FCON_${SLURM_SFX}.txt" >> ${SLURM_FCON}
     echo "#SBATCH -p normal" >> ${SLURM_FCON}
     echo "#SBATCH -q normal" >> ${SLURM_FCON}
     echo "#SBATCH --nodes=1" >> ${SLURM_FCON}
@@ -866,10 +866,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniMRS - Magnetic Resonance Spectroscopy
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"MRS"* ]]; then
-    SLURM_MRS=${DIR_JOB}/MRS_${SLURM_SUFFIX}.slurm
+    SLURM_MRS=${DIR_JOB}/MRS_${SLURM_SFX}.slurm
     if [[ -z ${MRS_NTHREADS} ]]; then MRS_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_MRS}
-    echo "#SBATCH --output=${DIR_LOG}/MRS_${SLURM_SUFFIX}.txt" >> ${SLURM_MRS}
+    echo "#SBATCH --output=${DIR_LOG}/MRS_${SLURM_SFX}.txt" >> ${SLURM_MRS}
     echo "#SBATCH -p normal" >> ${SLURM_MRS}
     echo "#SBATCH -q normal" >> ${SLURM_MRS}
     echo "#SBATCH --nodes=1" >> ${SLURM_MRS}
@@ -916,10 +916,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniQCANAT - Anatomical Quality Control
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QCANAT"* ]]; then
-    SLURM_QCANAT=${DIR_JOB}/QCANAT_${SLURM_SUFFIX}.slurm
+    SLURM_QCANAT=${DIR_JOB}/QCANAT_${SLURM_SFX}.slurm
     if [[ -z ${QCANAT_NTHREADS} ]]; then QCANAT_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_QCANAT}
-    echo "#SBATCH --output=${DIR_LOG}/QCANAT_${SLURM_SUFFIX}.txt" >> ${SLURM_QCANAT}
+    echo "#SBATCH --output=${DIR_LOG}/QCANAT_${SLURM_SFX}.txt" >> ${SLURM_QCANAT}
     echo "#SBATCH -p normal" >> ${SLURM_QCANAT}
     echo "#SBATCH -q normal" >> ${SLURM_QCANAT}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCANAT}
@@ -979,10 +979,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniQCDWI - Diffusion Quality Control
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QCDWI"* ]]; then
-    SLURM_QCDWI=${DIR_JOB}/QCDWI_${SLURM_SUFFIX}.slurm
+    SLURM_QCDWI=${DIR_JOB}/QCDWI_${SLURM_SFX}.slurm
     if [[ -z ${QCDWI_NTHREADS} ]]; then QCDWI_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_QCDWI}
-    echo "#SBATCH --output=${DIR_LOG}/QCDWI_${SLURM_SUFFIX}.txt" >> ${SLURM_QCDWI}
+    echo "#SBATCH --output=${DIR_LOG}/QCDWI_${SLURM_SFX}.txt" >> ${SLURM_QCDWI}
     echo "#SBATCH -p normal" >> ${SLURM_QCDWI}
     echo "#SBATCH -q normal" >> ${SLURM_QCDWI}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCDWI}
@@ -1030,10 +1030,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniQCFUNC - BOLD Functional Quality Control
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
-    SLURM_QCFUNC=${DIR_JOB}/QCFUNC_${SLURM_SUFFIX}.slurm
+    SLURM_QCFUNC=${DIR_JOB}/QCFUNC_${SLURM_SFX}.slurm
     if [[ -z ${QCFUNC_NTHREADS} ]]; then QCFUNC_NTHREADS=4; fi
     echo "#!/bin/bash" > ${SLURM_QCFUNC}
-    echo "#SBATCH --output=${DIR_LOG}/QCFUNC_${SLURM_SUFFIX}.txt" >> ${SLURM_QCFUNC}
+    echo "#SBATCH --output=${DIR_LOG}/QCFUNC_${SLURM_SFX}.txt" >> ${SLURM_QCFUNC}
     echo "#SBATCH -p normal" >> ${SLURM_QCFUNC}
     echo "#SBATCH -q normal" >> ${SLURM_QCFUNC}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCFUNC}
@@ -1078,10 +1078,10 @@ for (( i=1; i<${N}; i++ )); do
   ## Summarize - Summarize results and add to datasets
   ###############################################################################
 #  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
-#    SLURM_****=${DIR_JOB}/****_${SLURM_SUFFIX}.slurm
+#    SLURM_****=${DIR_JOB}/****_${SLURM_SFX}.slurm
 #    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
 #    echo "#!/bin/bash" > ${SLURM_****}
-#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SUFFIX}.txt" >> ${SLURM_****}
+#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SFX}.txt" >> ${SLURM_****}
 #    echo "#SBATCH -p normal" >> ${SLURM_****}
 #    echo "#SBATCH -q normal" >> ${SLURM_****}
 #    echo "#SBATCH --nodes=1" >> ${SLURM_****}
@@ -1118,10 +1118,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniXINIT - Ex Vivo Preprocessing
   ###############################################################################
 #  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
-#    SLURM_****=${DIR_JOB}/****_${SLURM_SUFFIX}.slurm
+#    SLURM_****=${DIR_JOB}/****_${SLURM_SFX}.slurm
 #    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
 #    echo "#!/bin/bash" > ${SLURM_****}
-#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SUFFIX}.txt" >> ${SLURM_****}
+#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SFX}.txt" >> ${SLURM_****}
 #    echo "#SBATCH -p normal" >> ${SLURM_****}
 #    echo "#SBATCH -q normal" >> ${SLURM_****}
 #    echo "#SBATCH --nodes=1" >> ${SLURM_****}
@@ -1158,10 +1158,10 @@ for (( i=1; i<${N}; i++ )); do
   ## tkniXSEGMENT - Ex vivo Watershed Segmentation
   ###############################################################################
 #  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
-#    SLURM_****=${DIR_JOB}/****_${SLURM_SUFFIX}.slurm
+#    SLURM_****=${DIR_JOB}/****_${SLURM_SFX}.slurm
 #    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
 #    echo "#!/bin/bash" > ${SLURM_****}
-#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SUFFIX}.txt" >> ${SLURM_****}
+#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SFX}.txt" >> ${SLURM_****}
 #    echo "#SBATCH -p normal" >> ${SLURM_****}
 #    echo "#SBATCH -q normal" >> ${SLURM_****}
 #    echo "#SBATCH --nodes=1" >> ${SLURM_****}
@@ -1204,6 +1204,7 @@ for (( i=1; i<${N}; i++ )); do
   for (( i=0; i<${#TFLOW[@]}; i++ )); do unset JOB_${TFLOW[${i}]^^}; done
 
   if [[ ${WORKFLOWS^^} == *"AINIT"* ]]; then
+    echo "submitting AINIT"
     JOB_AINIT=$(sbatch --parsable ${SLURM_AINIT})
   fi
   if [[ ${WORKFLOWS^^} == *"FSSYNTH"* ]]; then
@@ -1267,8 +1268,10 @@ for (( i=1; i<${N}; i++ )); do
     JOB_QCDWI=$(sbatch --parsable ${DEP_QCDWI:+--dependency=afterok:${DEP_QCDWI}} ${SLURM_QCDWI})
   fi
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
+    echo "submitting QCFUNC"
     DEP_QCFUNC="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}${JOB_FUNK:+:}${JOB_FCON}"
     DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_QCFUNC=$(sbatch --parsable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
   fi
+  echo ">>>>>${IDPFX} jobs submitted"
 done
