@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 #!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
+##!/usr/bin/env python
 import argparse
 import nibabel as nib
 import numpy as np

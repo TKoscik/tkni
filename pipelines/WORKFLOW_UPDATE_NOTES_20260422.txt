@@ -1,0 +1,20 @@
+NOTES FOR TKNI HPC PIPELINE UPDATE ------
+1. all pipelines, need newer logic for setting up project and save directories, allowing them to be independent
+2. need to updata status check to work off save directory
+3. move all work to scratch
+4. save output only after RMD generation
+5. change RMD generation to work of scratch files.... probably should change this so it knits in scratch too
+6. NEED TO MAKE SURE THAT IN workflows THERE IS NOT TRAILILNG BACKSLASHES FOR FUNCTIONS.
+
+
+DIR_POSTERIOR=${DIR_ANAT}/posterior
+mkdir -p ${DIR_POSTERIOR}
+mv ${DIR_SCRATCH}/${IDPFX}_posterior-* ${DIR_POSTERIOR}
+
+${DIR_SCRATCH}/${IDPFX}_posterior-tissue.nii.gz \
+${DIR_SCRATCH}/${IDPFX}_posterior-gm.nii.gz \
+${DIR_SCRATCH}/${IDPFX}_posterior-gmDeep.nii.gz \
+${DIR_SCRATCH}/${IDPFX}_posterior-wm.nii.gz \
+${DIR_SCRATCH}/${IDPFX}_posterior-csf.nii.gz
+
+${DIR_SCRATCH}/${IDPFX}_thickness.nii.gz
