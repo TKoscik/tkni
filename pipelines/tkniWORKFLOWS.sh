@@ -169,9 +169,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -n ${AINIT_FORCE} ]]; then        FSTR="${FSTR} --force \\" >> ${SLURM_AINIT}; fi
     echo ${FSTR} >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_AINIT}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_AINIT}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_AINIT}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_AINIT}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_AINIT}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
   fi
 
@@ -211,9 +211,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${FSSYNTH_FORCE} ]]; then       FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_FSSYNTH}
     echo "" >> ${SLURM_FSSYNTH}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_FSSYNTH}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_FSSYNTH}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_FSSYNTH}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_FSSYNTH}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_FSSYNTH}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_FSSYNTH}
     echo "" >> ${SLURM_FSSYNTH}
   fi
 
@@ -261,9 +261,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${MALF_FORCE} ]]; then         FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_MALF}
     echo "" >> ${SLURM_MALF}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_MALF}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_MALF}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_MALF}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_MALF}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_MALF}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_MALF}
     echo "" >> ${SLURM_MALF}
   fi
 
@@ -318,9 +318,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${MATS_FORCE} ]]; then        FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_MATS}
     echo "" >> ${SLURM_MATS}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_MATS}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_MATS}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_MATS}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_MATS}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_MATS}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_MATS}
     echo "" >> ${SLURM_MATS}
   fi
 
@@ -381,9 +381,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${AMOD_FORCE} ]]; then        FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_AMOD}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_AMOD}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_AMOD}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_AMOD}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_AMOD}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
   fi
 
@@ -469,9 +469,9 @@ for (( i=1; i<${N}; i++ )); do
     fi
 
 
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_QALAS}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_QALAS}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_QALAS}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_QALAS}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_QALAS}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
   fi
 
@@ -521,9 +521,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${DPREP_FORCE} ]]; then          FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_DPREP}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_DPREP}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_DPREP}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_DPREP}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_DPREP}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
   fi
 
@@ -567,9 +567,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${DSCALE_FORCE} ]]; then       FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_DSCALE}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_DSCALE}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_DSCALE}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_DSCALE}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_DSCALE}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
   fi
 
@@ -628,9 +628,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${DMICRO_FORCE} ]]; then            FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_DMICRO}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_DMICRO}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_DMICRO}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_DMICRO}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_DMICRO}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
   fi
 
@@ -678,9 +678,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${DTRACT_FORCE} ]]; then             FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_DTRACT}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_DTRACT}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_DTRACT}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_DTRACT}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_DTRACT}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
   fi
 
@@ -744,9 +744,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${PCASL_FORCE} ]]; then          FSTR="${FSTR} --force ${PCASL_}"; fi
     echo ${FSTR} >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_PCASL}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_PCASL}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_PCASL}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_PCASL}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_PCASL}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
   fi
 
@@ -808,9 +808,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${FUNK_FORCE} ]]; then         FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_FUNK}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_FUNK}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_FUNK}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_FUNK}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_FUNK}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
   fi
 
@@ -856,9 +856,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${FCON_FORCE} ]]; then       FSTR="${FSTR} --force ${FCON_}"; fi
     echo ${FSTR} >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_FCON}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_FCON}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_FCON}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_FCON}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_FCON}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
   fi
 
@@ -906,9 +906,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${MRS_FORCE} ]]; then            FSTR="${FSTR} --force ${MRS_}"; fi
     echo ${FSTR} >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_MRS}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_MRS}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_MRS}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_MRS}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_MRS}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
   fi
 
@@ -969,9 +969,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${QCANAT_FORCE} ]]; then            FSTR="${FSTR} --force ${QCANAT_}"; fi
     echo ${FSTR} >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_QCANAT}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_QCANAT}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_QCANAT}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_QCANAT}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_QCANAT}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
   fi
 
@@ -1020,9 +1020,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${QCDWI_FORCE} ]]; then       FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_QCDWI}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_QCDWI}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_QCDWI}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_QCDWI}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_QCDWI}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
   fi
 
@@ -1068,9 +1068,9 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${QCFUNC_FORCE} ]]; then         FSTR="${FSTR} --force ${QCFUNC_}"; fi
     echo ${FSTR} >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
-    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_QCFUNC}
-    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_QCFUNC}
-    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_QCFUNC}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_QCFUNC}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_QCFUNC}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
   fi
 
@@ -1108,9 +1108,9 @@ for (( i=1; i<${N}; i++ )); do
 #    if [[ -z ${****_FORCE} ]]; then  FSTR="${FSTR} --force ${****_}"; fi
 #    echo ${FSTR} >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
-#    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_****}
-#    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_****}
-#    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_****}
+#    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_****}
+#    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_****}
+#    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
 #  fi
 
@@ -1148,9 +1148,9 @@ for (( i=1; i<${N}; i++ )); do
 #    if [[ -z ${****_FORCE} ]]; then  FSTR="${FSTR} --force ${****_}"; fi
 #    echo ${FSTR} >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
-#    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_****}
-#    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_****}
-#    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_****}
+#    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_****}
+#    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_****}
+#    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
 #  fi
 
@@ -1188,9 +1188,9 @@ for (( i=1; i<${N}; i++ )); do
 #    if [[ -z ${****_FORCE} ]]; then  FSTR="${FSTR} --force ${****_}"; fi
 #    echo ${FSTR} >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
-#    echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_****}
-#    echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_****}
-#    echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_****}
+#    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_****}
+#    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_****}
+#    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
 #  fi
 
