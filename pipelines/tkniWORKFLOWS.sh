@@ -428,6 +428,35 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${QALAS_FORCE} ]]; then             FSTR="${FSTR} --force"; fi
     echo ${FSTR} >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
+    if [[ -z ${QALAS_NO_MYELIN} ]]; then
+      TDIR=${DIR_PROJECT}
+      if [[ -z ${QALAS_DIR_PROJECT} ]]; then TDIR=${QALAS_DIR_PROJECT}; fi
+      if [[ -z ${QALAS_DIR_SAVE} ]]; then TDIR=${QALAS_DIR_SAVE}; fi
+      echo "mapMyelin --t1 ${TDIR}/anat/native_synth/${IDPFX}_acq-GRE_synthT1w.nii.gz \\" >> ${SLURM_QALAS}
+      echo "  --t2 ${TDIR}/anat/native_synth/${IDPFX}_acq-FSE_synthT2w.nii.gz \\" >> ${SLURM_QALAS}
+      echo "  --label ${TDIR}/anat/label/${IDPFX}_label-tissue.nii.gz --label-vals \"1x2x4\" \\" >> ${SLURM_QALAS}
+      echo "  --dir-save ${TDIR}/anat/outcomes/myelin --prefix ${IDPFX}" >> ${SLURM_QALAS}
+      echo "mkdir -p ${TDIR}/anat/outcomes/myelin_reg-HCPYAX" >> ${SLURM_QALAS}
+      if [[ -z ${QALAS_DIR_ID} ]]; then
+        TSUB=$(getField -i ${IDPFX} -f sub)
+        TSES=$(getField -i ${IDPFX} -f ses)
+        IDDIR=sub-${TSUB}
+        if [[ -n ${TSES} ]]; then
+          IDDIR="${IDDIR}/ses-${TSES}"
+        fi
+      else
+        IDDIR=${QALAS_DIR_ID}
+      fi
+      echo "antsApplyTransforms -d 3 -n BSpline[3] \\" >> ${SLURM_QALAS}
+      echo "  -i ${TDIR}/anat/outcomes/myelin/${IDPFX}_myelin.nii.gz \\" >> ${SLURM_QALAS}
+      echo "  -o ${TDIR}/anat/outcomes/myelin_reg-HCPYAX/${IDPFX}_reg-HCPYAX_myelin.nii.gz \\" >> ${SLURM_QALAS}
+      echo "  -r ${TDIR}/anat/reg_HCPYAX/${IDPFX}_reg-HCPYAX_T1w.nii.gz \\" >> ${SLURM_QALAS}
+      echo "  -t identity -t ${TDIR}/xfm/${IDDIR}/${IDPFX}_from-native_to-HCPYAX_xfm-syn.nii.gz \\" >> ${SLURM_QALAS}
+      echo "  -t ${TDIR}/xfm/${IDDIR}/${IDPFX}_from-native_to-HCPYAX_xfm-affine.mat" >> ${SLURM_QALAS}
+      echo "" >> ${SLURM_QALAS}
+    fi
+
+
     echo "PROC_END=\"$(date -u +%s.%N)\"" >> ${SLURM_QALAS}
     echo "ELAPSED=$(echo \"$PROC_END - $PROC_START\" | bc)" >> ${SLURM_QALAS}
     echo "echo -e \"Processing Time:\t${ELAPSED}s\"" >> ${SLURM_QALAS}
