@@ -226,6 +226,14 @@ fi
 if [[ -z ${DIR_SAVE} ]]; then
   DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
+fi
 
 # Check ID ---------------------------------------------------------------------
 if [[ -z ${IDPFX} ]]; then
@@ -241,7 +249,7 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
@@ -258,7 +266,6 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
@@ -276,7 +283,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -693,7 +699,6 @@ if [[ ${NO_NORM,,} == "false" ]] || [[ ${NO_COREG} == "false" ]]; then
     fi
   done
 fi
-
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}

@@ -151,10 +151,18 @@ elif [[ -z ${DIR_PROJECT} ]]; then
   exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
 fi
 if [[ -z ${DIR_SAVE} ]]; then
   DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------

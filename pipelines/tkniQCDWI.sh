@@ -176,11 +176,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -230,15 +244,12 @@ fi
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/dwi/qc
-fi
 if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
 mkdir -p ${DIR_SCRATCH}
-mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SAVE}/dwi/qc
 
 # set output files and initialize with header as needed ----------------------
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>initialize CSV output files"; fi
@@ -247,11 +258,11 @@ efc,fber,snr_frame,snr_fg,snr_brain,snr_cc,snr_dietrich,fwhm_x,fwhm_y,fwhm_z,pie
 is_nan,is_degen,spike_slice"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary.csv
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-dwi.csv
+CSV_PX=${DIR_SAVE}//dwi/qc${IDPFX}_qc-dwi.csv
 CSV_LOG=${TKNI_LOG}/log_QCDWI.csv
 if [[ ${RESET_CSV} == "true" ]]; then
   mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary_dep${TIMESTAMP}.csv
-  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-dwi_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/dwi/qc${IDPFX}_qc-dwi_dep${TIMESTAMP}.csv
   mv ${CSV_LOG} ${TKNI_LOG}/log_QCDWI_dep${TIMESTAMP}.csv
 fi
 if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi

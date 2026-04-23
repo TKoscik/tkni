@@ -205,14 +205,12 @@ fi
 if [[ -z ${DIR_SAVE} ]]; then
   DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
-
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
-  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
 ANTS_VERBOSE=0
@@ -234,7 +232,7 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e "SUBDIR:\t${IDDIR}"
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0

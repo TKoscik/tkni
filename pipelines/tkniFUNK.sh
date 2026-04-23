@@ -202,46 +202,34 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
 
-# Check ID ---------------------------------------------------------------------
-if [[ -z ${IDPFX} ]]; then
-  echo "ERROR [TKNI:${FCN_NAME}] ID Prefix must be provided"
-  exit 1
-fi
-if [[ -z ${IDDIR} ]]; then
-  TSUB=$(getField -i ${IDPFX} -f sub)
-  TSES=$(getField -i ${IDPFX} -f ses)
-  IDDIR=sub-${TSUB}
-  if [[ -n ${TSES} ]]; then
-    IDDIR="${IDDIR}/ses-${TSES}"
-  fi
-fi
-if [[ ${VERBOSE} == "true" ]]; then
-  echo ">>>>>Process BOLD images for the following participant:"
-  echo -e "\tID:\t${IDPFX}"
-  echo -e "\tDIR_SUBJECT:\t${IDDIR}"
-fi
-
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -252,14 +240,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -270,16 +257,12 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
 
 # set up directories -----------------------------------------------------------
-DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PIPE}/func
-fi
+#DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PIPE}/xfm/${IDDIR}
 fi
@@ -875,34 +858,6 @@ if [[ ${NO_RMD} == "false" ]] || [[ ${NO_PNG} == "false" ]]; then
   done
 fi
 
-# move final output to save folders --------------------------------------------
-mkdir -p ${DIR_SAVE}/mask
-cp ${DIR_SCRATCH}/mask/* ${DIR_SAVE}/mask/
-
-mkdir -p ${DIR_SAVE}/mean
-cp ${DIR_SCRATCH}/mean/* ${DIR_SAVE}/mean/
-
-mkdir -p ${DIR_SAVE}/qc/${IDDIR}
-cp ${DIR_SCRATCH}/qc/* ${DIR_SAVE}/qc/${IDDIR}/
-
-mkdir -p ${DIR_SAVE}/regressor/${IDDIR}
-cp ${DIR_SCRATCH}/regressor/* ${DIR_SAVE}/regressor/${IDDIR}/
-
-mkdir -p ${DIR_SAVE}/residual_native
-cp ${DIR_SCRATCH}/residual_native/* ${DIR_SAVE}/residual_native/
-
-if [[ ${NO_NORM} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/residual_${NORM_LABEL}
-  cp ${DIR_SCRATCH}/residual_${NORM_LABEL}/* ${DIR_SAVE}/residual_${NORM_LABEL}/
-fi
-
-if [[ ${NO_SAVE_CLEAN} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/clean
-  cp ${DIR_SCRATCH}/clean/* ${DIR_SAVE}/clean/
-fi
-
-cp ${DIR_SCRATCH}/xfm/${IDPFX}* ${DIR_XFM}/
-
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
   RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
@@ -945,14 +900,14 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### Click to View ->' >> ${RMD}
   echo '#### File Tree' >> ${RMD}
   echo '```{bash}' >> ${RMD}
-  echo 'tree -P "'${IDPFX}'*" -Rn --prune '${DIR_SAVE} >> ${RMD}
+  echo 'tree -P "'${IDPFX}'*" -Rn --prune '${DIR_SCRATCH} >> ${RMD}
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
 
   # ts-processing
   echo '## Time-series Preprocessing {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SAVE}/qc/${IDDIR}/${IDPPFX}*ts-processing.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*ts-processing.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]} -s)
     BNAME=${BNAME//${IDPFX}_}
@@ -964,7 +919,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # coregistration
   echo '## Coregistration {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SAVE}/qc/${IDDIR}/${IDPPFX}*reg-native*.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*reg-native*.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]})
     BNAME=${BNAME//${IDPFX}_}
@@ -976,7 +931,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # normalization
   echo '## Normalization {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SAVE}/qc/${IDDIR}/${IDPPFX}*reg-${NORM_LABEL}*.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*reg-${NORM_LABEL}*.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]})
     BNAME=${BNAME//${IDPFX}_}
@@ -988,7 +943,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # regressor plot
   echo '## Nuisance Regression {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SAVE}/qc/${IDDIR}/${IDPPFX}*regressors.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*regressors.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]})
     BNAME=${BNAME//${IDPFX}_}
@@ -1008,9 +963,38 @@ if [[ "${NO_RMD}" == "false" ]]; then
   fi
 fi
 
+
+# move final output to save folders --------------------------------------------
+mkdir -p ${DIR_SAVE}/mask
+cp ${DIR_SCRATCH}/mask/* ${DIR_SAVE}/mask/
+
+mkdir -p ${DIR_SAVE}/mean
+cp ${DIR_SCRATCH}/mean/* ${DIR_SAVE}/mean/
+
+mkdir -p ${DIR_SAVE}/qc/${IDDIR}
+cp ${DIR_SCRATCH}/qc/* ${DIR_SAVE}/qc/${IDDIR}/
+
+mkdir -p ${DIR_SAVE}/regressor/${IDDIR}
+cp ${DIR_SCRATCH}/regressor/* ${DIR_SAVE}/regressor/${IDDIR}/
+
+mkdir -p ${DIR_SAVE}/residual_native
+cp ${DIR_SCRATCH}/residual_native/* ${DIR_SAVE}/residual_native/
+
+if [[ ${NO_NORM} == "false" ]]; then
+  mkdir -p ${DIR_SAVE}/residual_${NORM_LABEL}
+  cp ${DIR_SCRATCH}/residual_${NORM_LABEL}/* ${DIR_SAVE}/residual_${NORM_LABEL}/
+fi
+
+if [[ ${NO_SAVE_CLEAN} == "false" ]]; then
+  mkdir -p ${DIR_SAVE}/clean
+  cp ${DIR_SCRATCH}/clean/* ${DIR_SAVE}/clean/
+fi
+
+cp ${DIR_SCRATCH}/xfm/${IDPFX}* ${DIR_XFM}/
+
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi

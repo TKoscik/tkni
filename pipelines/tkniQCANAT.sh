@@ -199,11 +199,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -259,15 +273,15 @@ fi
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/qc
-fi
+#if [[ -z ${DIR_SAVE} ]]; then
+#  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/qc
+#fi
 if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
 mkdir -p ${DIR_SCRATCH}
-mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SAVE}/anat/qc
 
 # set output files and initialize with header as needed ----------------------
 HDR="${HDR},dateCalculated,processingStage,imageType,\
@@ -275,7 +289,7 @@ cjv,cnr,efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max,fwhm_x,fwhm_y,fw
 piesno,mean,sigma,median,mad,skew,kurtosis,p05,p95,rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
+CSV_PX=${DIR_SAVE}/anat/qc/${IDPFX}_qc-anat.csv
 CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
 if [[ ${RESET_CSV} == "true" ]]; then
   mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary_dep${TIMESTAMP}.csv
@@ -516,8 +530,8 @@ fi
 
 # set status file --------------------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function

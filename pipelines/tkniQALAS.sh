@@ -60,7 +60,7 @@ id:,dir-id:,qalas:,b1:,native:,brain:,csf:,\
 opt-tr:,opt-fa:,opt-turbo:,opt-echo-spacing:,opt-t2prep:,opt-t1init:,opt-m0init:,\
 no-b1,b1k:,do-n4,\
 no-denoise,no-norm,atlas:atlas-xfm:,\
-dir-scratch:,requires:,\
+dir-save:,dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -152,6 +152,7 @@ while true; do
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -204,11 +205,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -225,13 +240,13 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -242,14 +257,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -260,7 +274,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -269,13 +282,10 @@ fi
 DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}
 DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
 mkdir -p ${DIR_SCRATCH}
-
 if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Directories Setup"; fi
 
 # parse inputs -----------------------------------------------------------------
-if [[ -z ${QALAS} ]]; then
-  QALAS=${DIR_RAW}/anat/${IDPFX}_qalas.nii.gz
-fi
+if [[ -z ${QALAS} ]]; then QALAS=${DIR_RAW}/anat/${IDPFX}_qalas.nii.gz; fi
 if [[ ! -f ${QALAS} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] QALAS not found"
   exit 1
@@ -283,18 +293,12 @@ fi
 if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Processing QALAS: ${QALAS}"; fi
 
 if [[ ${NO_B1,,} == "false" ]]; then
-  if [[ -z ${B1} ]]; then
-    B1=${DIR_RAW}/fmap/${IDPFX}_acq-sFlip_TB1TFL.nii.gz
-  fi
-  if [[ ! -f ${B1} ]]; then
-    echo "WARNING [${PIPE}:${FLOW}] B1 not found"
-  fi
+  if [[ -z ${B1} ]]; then B1=${DIR_RAW}/fmap/${IDPFX}_acq-sFlip_TB1TFL.nii.gz; fi
+  if [[ ! -f ${B1} ]]; then echo "WARNING [${PIPE}:${FLOW}] B1 not found"; fi
   if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Using B1: ${B1}"; fi
 fi
 
-if [[ -z ${NATIVE} ]]; then
-  NATIVE=${DIR_PIPE}/anat/native/${IDPFX}_T1w.nii.gz
-fi
+if [[ -z ${NATIVE} ]]; then NATIVE=${DIR_PIPE}/anat/native/${IDPFX}_T1w.nii.gz; fi
 if [[ ! -f ${NATIVE} ]]; then
   NATIVE=($(ls ${DIR_PIPE}/anat/native/${IDPFX}_*.nii.gz))
   if [[ ${#NATIVE[@]} -eq 0 ]]; then
@@ -310,29 +314,6 @@ if [[ -n ${CSF} ]]; then
     exit 3
   fi
 fi
-
-#if [[ ${NO_NORM} == "false" ]]; then
-#  if [[ ! -f ${ATLAS} ]]; then
-#    echo "ERROR [${PIPE}:${FLOW}] ATLAS reference image not found"
-#    exit 4
-#  fi
-#  if [[ -n ${ATLAS_XFM} ]]; then
-#    ATLAS_XFM=(${ATLAS_XFM//,/ })
-#    DO_EXIT="false"
-#    for (( i=0; i<${#ATLAS_XFM[@]}; i++ )); do
-#      if [[ ! -f ${ATLAS_XFM[${i}]} ]]; then
-#        echo "ERROR [${PIPE}:${FLOW}] ATLAS XFM ${ATLAS_XFM[${i}]} not found"
-#        DO_EXIT="true"
-#      fi
-#    done
-#    if [[ ${DO_EXIT} == "true" ]]; then exit 5; fi
-#  else
-#    TX=($(ls ${DIR_PIPE}/xfm/${IDDIR}/${IDPFX}_from-native*xfm-affine.mat))
-#    ATLAS_XFM+=(${TX[0]})
-#    TX=($(ls ${DIR_PIPE}/xfm/${IDDIR}/${IDPFX}_from-native*xfm-syn.nii.gz))
-#    ATLAS_XFM+=(${TX[0]})
-#  fi
-#fi
 
 # Copy QALAS to scratch --------------------------------------------------------
 QALAS_RAW=${DIR_SCRATCH}/$(modField -i $(basename ${QALAS}) -a -f prep -v raw)
@@ -412,7 +393,6 @@ if [[ ${NO_B1,,} == "false" ]]; then
   antsApplyTransforms -d 3 -n Linear -i ${B1} -o ${BIAS} -t identity -r ${FG}
   niimath ${BIAS} -s ${B1K} ${BIAS}
   # normalize bias image range
-  #ImageMath 3 ${BIAS} Normalize ${BIAS} ${FG}
   for (( i=0; i<${NVOL}; i++ )); do
     OV=($(3dROIstats -mask ${FG} -sigma ${QPROC[${i}]}))
     niimath ${QPROC[${i}]} -div ${BIAS} ${DIR_SCRATCH}/q${i}_debiasB1.nii.gz
@@ -591,7 +571,7 @@ niimath ${DIR_SCRATCH}/${IDPFX}_PDunscaled.nii.gz \
   -div ${PD99[-1]} -mul 1000 \
   ${IMG_PD}
 
-if [[ ${NO_PNG} == "false" ]]; then
+if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == "false" ]]; then
   make3Dpng --bg ${IMG_T1}
   make3Dpng --bg ${IMG_T1} --layout "9:x;9:x;9:x;9:x;9:x" --filename ${IDPFX}_plane-sagittal_T1map
   make3Dpng --bg ${IMG_T1} --layout "9:y;9:y;9:y;9:y;9:y" --filename ${IDPFX}_plane-coronal_T1map
@@ -729,49 +709,14 @@ for (( i=0; i<${#SYNTH[@]}; i++ )) do
   fi
 done
 
-if [[ ${NO_PNG} == "false" ]]; then
+if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == "false" ]]; then
   FLS=($(ls ${DIR_SCRATCH}/*synth*.nii.gz))
   for (( i=0; i<${#FLS[@]}; i++ )); do
     make3Dpng --bg ${FLS[${i}]} --bg-thresh "2.5,97.5"
   done
 fi
 
-# Save outputs -----------------------------------------------------------------
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PIPE}
-fi
 
-if [[ ${KEEP_CLEANED} == "true" ]]; then
-  mkdir -p ${DIR_SAVE}/anat/cleaned
-  mv ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz ${DIR_SAVE}/anat/cleaned/
-fi
-
-mkdir -p ${DIR_SAVE}/anat/native_qmri
-mv ${DIR_SCRATCH}/${IDPFX}_T1map.nii.gz ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_T1map.png ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_T2map.nii.gz ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_T2map.png ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_PDmap.nii.gz ${DIR_SAVE}/anat/native_qmri/
-mv ${DIR_SCRATCH}/${IDPFX}_PDmap.png ${DIR_SAVE}/anat/native_qmri/
-
-mkdir -p ${DIR_SAVE}/anat/native_synth
-mv ${DIR_SCRATCH}/${IDPFX}*synth* ${DIR_SAVE}/anat/native_synth/
-
-mkdir -p ${DIR_SAVE}/anat/mask/${FLOW}
-mv ${DIR_SCRATCH}/${IDPFX}_mask* ${DIR_SAVE}/anat/mask/${FLOW}
-
-mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
-mv ${DIR_SCRATCH}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
-
-DIR_PREP="${DIR_SAVE}/prep/${IDDIR}/${PIPE}${FLOW}"
-mkdir -p ${DIR_PREP}
-mv ${DIR_SCRATCH}/*.png ${DIR_PREP}/
-
-#mkdir -p ${DIR_SAVE}/anat/posterior/${FLOW}
-#mv ${DIR_SCRATCH}/*posterior* ${DIR_SAVE}/anat/posterior/${FLOW}/
-
-#mkdir -p ${DIR_SAVE}/label/${FLOW}
-#mv ${DIR_SCRATCH}/*label-tissue.nii.gz ${DIR_SAVE}/label/${FLOW}/
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
@@ -807,125 +752,83 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   ## T1 ------------------------------------------------------------------------
   echo '### T1 map' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T1map.nii.gz
-  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T1map.png
-  if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
-
+  echo -e '!['${IDPFX}'_T1map.nii.gz]('${DIR_SCRATCH}'/'${IDPFX}'_T1map.png)\n' >> ${RMD}
   echo '#### T1map Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T1map.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T1map.png')\n' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_T1map.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_T1map.png')\n' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_T1map.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_T1map.png')\n' >> ${RMD}
 
   ## T2 ------------------------------------------------------------------------
   echo '### T2 map' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T2map.nii.gz
-  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_T2map.png
-  if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
-
+  echo -e '!['${IDPFX}'_T2map.nii.gz]('${DIR_SCRATCH}/${IDPFX}'_T2map.png)\n' >> ${RMD}
   echo '#### T2map Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T2map.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T2map.png')\n' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_T2map.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Coronal]('${DIR_PREP}/${IDPFX}_plane-coronal_T2map.png')\n' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_T2map.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Sagittal]('${DIR_PREP}/${IDPFX}_plane-sagittal_T2map.png')\n' >> ${RMD}
 
   ## PD ------------------------------------------------------------------------
   echo '### Proton Density (PD)' >> ${RMD}
-  TNII=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PDmap.nii.gz
-  TPNG=${DIR_SAVE}/anat/native_qmri/${IDPFX}_PDmap.png
-  if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
-  echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
-
+  echo -e '!['${IDPFX}'_PDmap.nii.gz]('${DIR_SCRATCH}/${IDPFX}'_PDmap.png)\n' >> ${RMD}
   echo '#### PD Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PDmap.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PDmap.png')\n' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_PDmap.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Coronal]('${DIR_PREP}/${IDPFX}_plane-coronal_PDmap.png')\n' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_PDmap.png')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e'![Sagittal]('${DIR_PREP}/${IDPFX}_plane-sagittal_PDmap.png')\n' >> ${RMD}
 
   ## Synthesized Images --------------------------------------------------------
   echo '### Synthesized Images {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
-  NIILS=($(ls ${DIR_SAVE}/anat/native_synth/${IDPFX}*synth*.nii.gz))
+  NIILS=($(ls ${DIR_SCRATCH}/${IDPFX}*synth*.nii.gz))
   for (( i=0; i<${#NIILS[@]}; i++ )); do
     TNII=$(basename ${NIILS[${i}]})
     FNAME=${TNII//\.nii\.gz}
-    TPNG=${DIR_SAVE}/anat/native_synth/${FNAME}.png
-    SFX=${FNAME//${IDPFX}_}
-    echo "#### ${SFX}" >> ${RMD}
-    if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII} --bg-thresh "2.5,97.5"; fi
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo "#### ${FNAME//${IDPFX}_}" >> ${RMD}
+    echo -e '!['${FNAME}']('${DIR_SCRATCH}'/'${FNAME}'.png)\n' >> ${RMD}
   done
 
   ## Processing
   echo '### Processing Steps {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
   echo '#### Raw QALAS' >> ${RMD}
-  TPNG=${DIR_PREP}/${IDPFX}_prep-raw_qalas.png
-  echo '![Raw QALAS]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Raw QALAS]('${DIR_SCRATCH}'/'${IDPFX}'_prep-raw_qalas.png)\n' >> ${RMD}
 
   if [[ ${NO_DENOISE} == "false" ]]; then
     echo '#### Denoising' >> ${RMD}
-    echo '![Denoised QALAS]('${DIR_PREP}/${IDPFX}_prep-denoise_qalas.png')' >> ${RMD}
-    echo '' >> ${RMD}
-    echo '![Noise]('${DIR_PREP}/${IDPFX}_prep-noise_qalas.png')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '![Denoised QALAS]('${DIR_PREP}/${IDPFX}_prep-denoise_qalas.png')\n' >> ${RMD}
+    echo -e '![Noise]('${DIR_PREP}/${IDPFX}_prep-noise_qalas.png')\n' >> ${RMD}
   fi
 
   echo '#### FG Mask' >> ${RMD}
-  TPNG=${DIR_SAVE}/anat/mask/${FLOW}/${IDPFX}_mask-fg+${FLOW}.png
-  echo '![FG Mask]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![FG Mask]('${DIR_SCRATCH}'/'${IDPFX}'_mask-fg+'${FLOW}'.png)\n' >> ${RMD}
 
   if [[ ${NO_B1,,} == "false" ]]; then
     echo '#### Debias' >> ${RMD}
-    echo '![Debiased QALAS]('${DIR_PREP}/${IDPFX}_prep-debiasB1_qalas.png')' >> ${RMD}
-    echo '' >> ${RMD}
-    echo '![Bias Field]('${DIR_PREP}/${IDPFX}_prep-biasB1_qalas.png')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '![Debiased QALAS]('${DIR_SCRATCH}'/'${IDPFX}'_prep-debiasB1_qalas.png)\n' >> ${RMD}
+    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-biasB1_qalas.png)\n' >> ${RMD}
   fi
 
   if [[ ${DO_N4,,} == "true" ]]; then
     echo '#### Debias' >> ${RMD}
-    echo '![Debiased QALAS]('${DIR_PREP}/${IDPFX}_prep-debiasN4_qalas.png')' >> ${RMD}
-    echo '' >> ${RMD}
-    echo '![Bias Field]('${DIR_PREP}/${IDPFX}_prep-biasN4_qalas.png')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '![Debiased QALAS]('${DIR_SCRATCH}'/'${IDPFX}'_prep-debiasN4_qalas.png)\n' >> ${RMD}
+    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-biasN4_qalas.png)\n' >> ${RMD}
   fi
 
   echo '#### Brain Mask' >> ${RMD}
-  TPNG=${DIR_SAVE}/anat/mask/${FLOW}/${IDPFX}_mask-brain+${FLOW}.png
-  echo '![Brain Mask]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Brain Mask]('${DIR_SCRATCH}'/'${IDPFX}'_mask-brain+'${FLOW}'.png)\n' >> ${RMD}
 
   echo '#### Coregistration' >> ${RMD}
-  TPNG=${DIR_SAVE}/xfm/${IDDIR}/${IDPFX}_coregistration.png
-  echo '![Coregistration to Native]('${TPNG}')' >> ${RMD}
-  echo '' >> ${RMD}
+  echo -e '![Coregistration to Native]('${DIR_SCRATCH}'/'${IDPFX}'_coregistration.png)\n' >> ${RMD}
 
   ## knit RMD
   Rscript -e "Sys.setenv(RSTUDIO_PANDOC=\"/usr/bin/pandoc\"); rmarkdown::render('${RMD}')"
@@ -937,6 +840,39 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
 fi
+
+# Save outputs -----------------------------------------------------------------
+if [[ ${KEEP_CLEANED} == "true" ]]; then
+  mkdir -p ${DIR_SAVE}/anat/cleaned
+  mv ${DIR_SCRATCH}/${IDPFX}_qalas.nii.gz ${DIR_SAVE}/anat/cleaned/
+fi
+
+mkdir -p ${DIR_SAVE}/anat/native_qmri
+mv ${DIR_SCRATCH}/${IDPFX}_T1map.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_T1map.png ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_T2map.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_T2map.png ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_PDmap.nii.gz ${DIR_SAVE}/anat/native_qmri/
+mv ${DIR_SCRATCH}/${IDPFX}_PDmap.png ${DIR_SAVE}/anat/native_qmri/
+
+mkdir -p ${DIR_SAVE}/anat/native_synth
+mv ${DIR_SCRATCH}/${IDPFX}*synth* ${DIR_SAVE}/anat/native_synth/
+
+mkdir -p ${DIR_SAVE}/anat/mask/${FLOW}
+mv ${DIR_SCRATCH}/${IDPFX}_mask* ${DIR_SAVE}/anat/mask/${FLOW}
+
+mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
+mv ${DIR_SCRATCH}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
+
+DIR_PREP="${DIR_SAVE}/prep/${IDDIR}/${PIPE}${FLOW}"
+mkdir -p ${DIR_PREP}
+mv ${DIR_SCRATCH}/*.png ${DIR_PREP}/
+
+#mkdir -p ${DIR_SAVE}/anat/posterior/${FLOW}
+#mv ${DIR_SCRATCH}/*posterior* ${DIR_SAVE}/anat/posterior/${FLOW}/
+
+#mkdir -p ${DIR_SAVE}/label/${FLOW}
+#mv ${DIR_SCRATCH}/*label-tissue.nii.gz ${DIR_SAVE}/label/${FLOW}/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}

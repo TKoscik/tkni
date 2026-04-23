@@ -129,11 +129,11 @@ while true; do
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
-    --dir-dwi) "$2" ; shift 2 ;;
-    --bval) "$2" ; shift 2 ;;
-    --bvec) "$2" ; shift 2 ;;
-    --dwi) "$2" ; shift 2 ;;
-    --mask) "$2" ; shift 2 ;;
+    --dir-dwi) DIR_DWI="$2" ; shift 2 ;;
+    --bval) BVAL="$2" ; shift 2 ;;
+    --bvec) BVEC="$2" ; shift 2 ;;
+    --dwi) DWI="$2" ; shift 2 ;;
+    --mask) MASK="$2" ; shift 2 ;;
     --no-noddi) NO_NODDI="true" ; shift ;;
     --no-sandi) NO_SANDI="true" ; shift ;;
     --noddi-dpar) NODDI_DPAR="$2" ; shift 2 ;;
@@ -199,16 +199,23 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [TKNI:${FCN_NAME}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
@@ -227,13 +234,13 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -244,14 +251,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -262,7 +268,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -279,10 +284,10 @@ if [[ -z ${BVEC} ]]; then BVEC=${DIR_DWI}/dwi/${IDPFX}_dwi.bvec; fi
 if [[ -z ${DWI} ]]; then DWI=${DIR_DWI}/dwi/${IDPFX}_dwi.nii.gz; fi
 if [[ -z ${MASK} ]]; then MASK=${DIR_DWI}/mask/${IDPFX}_mask-brain+b0.nii.gz; fi
 
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/dwi/microstructure
-fi
-mkdir -p ${DIR_SAVE}
+#if [[ -z ${DIR_SAVE} ]]; then
+#  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/dwi/microstructure
+#fi
+#mkdir -p ${DIR_SAVE}
 
 if [[ -z ${NATIVE} ]]; then
   NATIVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/native/${IDPFX}_T1w.nii.gz
@@ -426,15 +431,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '```{r, out.width = "400px", fig.align="right"}' >> ${RMD}
   echo 'knitr::include_graphics("'${TKNIPATH}'/TK_BRAINLab_logo.png")' >> ${RMD}
   echo -e '```\n' >> ${RMD}
-  echo '```{r, echo=FALSE}' >> ${RMD}
-  echo 'library(DT)' >> ${RMD}
-  echo 'library(downloadthis)' >> ${RMD}
-  echo "create_dt <- function(x){" >> ${RMD}
-  echo "  DT::datatable(x, extensions='Buttons'," >> ${RMD}
-  echo "    options=list(dom='Blfrtip'," >> ${RMD}
-  echo "    buttons=c('copy', 'csv', 'excel', 'pdf', 'print')," >> ${RMD}
-  echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
-  echo -e '```\n' >> ${RMD}
 
   echo '## '${PIPE}${FLOW}': DWI Microstructure' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
@@ -467,10 +463,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
     for i in {0..2}; do
       echo "#### ${SLAB[${i}]}" >> ${RMD}
       echo -e "${SDESC[${i}]}  " >> ${RMD}
-      TPNG=${DIR_SAVE}/${IDPFX}_NODDI-${SLS[${i}]}.png
-      TNII=${DIR_SAVE}/${IDPFX}_NODDI-${SLS[${i}]}.nii.gz
-      echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-      echo '' >> ${RMD}
+      TPNG=${DIR_SCRATCH}/${IDPFX}_NODDI-${SLS[${i}]}.png
+      echo -e '!['${IDPFX}'_NODDI-'${SLS[${i}]}'.nii.gz]('${TPNG}')\n' >> ${RMD}
     done
   fi
   if [[ ${NO_SANDI} == "false" ]]; then
@@ -486,10 +480,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
     for i in {0..5}; do
       echo "#### ${SLAB[${i}]}" >> ${RMD}
       echo -e "${SDESC[${i}]}  " >> ${RMD}
-      TPNG=${DIR_SAVE}/${IDPFX}_SANDI-${SLS[${i}]}.png
-      TNII=${DIR_SAVE}/${IDPFX}_SANDI-${SLS[${i}]}.nii.gz
-      echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-      echo '' >> ${RMD}
+      TPNG=${DIR_SCRATCH}/${IDPFX}_SANDI-${SLS[${i}]}.png
+      echo -e '!['${IDPFX}'_SANDI-'${SLS[${i}]}'.nii.gz]('${TPNG}')\n' >> ${RMD}
     done
   fi
 
@@ -513,9 +505,21 @@ if [[ "${NO_RMD}" == "false" ]]; then
   fi
 fi
 
+# Save Results =================================================================
+mkdir -p ${DIR_SAVE}/dwi/microstructure
+if [[ ${NO_NODDI} == "false" ]]; then
+  mv ${DIR_SCRATCH}/NODDI_results/*NODDI* ${DIR_SAVE}/dwi/microstructure
+  mv ${DIR_SCRATCH}/*NODDI*.png ${DIR_SAVE}/dwi/microstructure
+fi
+if [[ ${NO_SANDI} == "false" ]]; then
+  mv ${DIR_SCRATCH}/SANDI_results/*SANDI* ${DIR_SAVE}/dwi/microstructure
+  mv ${DIR_SCRATCH}/*SANDI*.png ${DIR_SAVE}/dwi/microstructure
+fi
+
+
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi

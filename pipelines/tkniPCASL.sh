@@ -63,7 +63,7 @@ native:,native-mask:,native-mod:,\
 opt-brainblood:,opt-t1blood:,opt-duration:,opt-efficiency:,opt-delay:,\
 no-pwi:,no-reorient:,no-denoise,no-debias,no-norm,\
 coreg-recipe:,dir-xfm:,norm-ref:,norm-xfm-mat:,norm-xfm-syn:,\
-dir-scratch:,requires:,\
+dir-save:,dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -164,6 +164,7 @@ while true; do
     --no-summary) NO_SUMMARY="true" ; shift ;;
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -234,11 +235,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -255,13 +270,13 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -272,14 +287,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -290,7 +304,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -378,6 +391,18 @@ if [[ ${NO_NORM,,} == "false" ]]; then
       fi
     done
   fi
+  # copy to scratch
+  for (( j=0; j<${#NORM_REF[@]}; j++ )); do
+    TREF=${NORM_REF[${j}]}
+    TMAT=${NORM_MAT[${j}]}
+    TSYN=${NORM_SYN[${j}]}
+    cp ${TREF} ${DIR_SCRATCH}/base/
+    cp ${TMAT} ${DIR_SCRATCH}/base/
+    cp ${TSYN} ${DIR_SCRATCH}/base/
+    NORM_REF[${j}]=${DIR_SCRATCH}/base/$(basename ${TREF})
+    NORM_MAT[${j}]=${DIR_SCRATCH}/base/$(basename ${TMAT})
+    NORM_SYN[${j}]=${DIR_SCRATCH}/base/$(basename ${TSYN})
+  done
 fi
 
 # gather missing OPTS from JSON -------------------------------------------
@@ -401,12 +426,6 @@ if [[ -z ${OPT_DELAY} ]]; then
 fi
 
 # set directories --------------------------------------------------------------
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/outcomes/perfusion
-fi
-if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
-fi
 mkdir -p ${DIR_SCRATCH}
 
 # START PROCESSING PIPELINE ====================================================
@@ -575,37 +594,6 @@ if [[ ${NO_DENOISE} == "false" ]]; then
   rm ${DIR_SCRATCH}/L*.png
 fi
 
-# Bias Correction --------------------------------------------------------------
-#if [[ ${NO_DEBIAS} == "false" ]]; then
-#  for (( i=1; i<=${NPAIR}; i++ )); do
-#    inuCorrection --image ${DIR_SCRATCH}/C${i}.nii.gz --method N4 \
-#      --prefix C${i} --dir-save ${DIR_SCRATCH} --keep
-#    rename "s/prep-biasN4_C${i}_C${i}/C${i}_debias/g" ${DIR_SCRATCH}/*
-#    rename "s/mod-C${i}_prep-biasN4_//g" ${DIR_SCRATCH}/*
-#    inuCorrection --image ${DIR_SCRATCH}/L${i}.nii.gz --method N4 \
-#      --prefix L${i} --dir-save ${DIR_SCRATCH} --keep
-#    rename "s/prep-biasN4_L${i}_L${i}/L${i}_debias/g" ${DIR_SCRATCH}/*
-#    rename "s/mod-L${i}_prep-biasN4_//g" ${DIR_SCRATCH}/*
-#    mv ${DIR_SCRATCH}/C${i}_debias.nii.gz ${DIR_SCRATCH}/C${i}.nii.gz
-#    mv ${DIR_SCRATCH}/L${i}_debias.nii.gz ${DIR_SCRATCH}/L${i}.nii.gz
-#  done
-#  montage ${DIR_SCRATCH}/C*_debias.png \
-#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-#    ${DIR_SCRATCH}/${IDPFX}_prep-control+debias_asl.png
-#  montage ${DIR_SCRATCH}/L*_debias.png \
-#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-#    ${DIR_SCRATCH}/${IDPFX}_prep-label+debias_asl.png
-#  montage ${DIR_SCRATCH}/C*_biasField.png \
-#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-#    ${DIR_SCRATCH}/${IDPFX}_prep-control+biasField_asl.png
-#  montage ${DIR_SCRATCH}/L*_biasField.png \
-#    -tile 1x -geometry +0+0 -gravity center -background "#FFFFFF" \
-#    ${DIR_SCRATCH}/${IDPFX}_prep-label+biasField_asl.png
-#  rm ${DIR_SCRATCH}/C*.png
-#  rm ${DIR_SCRATCH}/L*.png
-#  if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Non-uniformity corrected"; fi
-#fi
-
 # Calculate M0, mean control image ---------------------------------------------
 if [[ ${ASL_M0} == "false" ]]; then
   AVGFCN="AverageImages 3 ${DIR_SCRATCH}/M0.nii.gz 0"
@@ -629,7 +617,6 @@ coregistrationChef --recipe-name ${COREG_RECIPE} \
   --dir-save ${DIR_SCRATCH} \
   --dir-xfm ${DIR_SCRATCH}/xfm \
   --random-seed 572354
-
 rm ${DIR_SCRATCH}/*${COREG_RECIPE}*
 mv ${DIR_SCRATCH}/xfm/*.png ${DIR_SCRATCH}/
 
@@ -739,31 +726,6 @@ for (( i=0; i<${#LABEL[@]}; i++ )); do
   fi
 done
 
-# Save output ------------------------------------------------------------------
-mkdir -p ${DIR_SAVE}
-mv ${DIR_SCRATCH}/${IDPFX}_CBF.* ${DIR_SAVE}/
-if [[ ${NO_PWI} == "false" ]]; then
-  mv ${DIR_SCRATCH}/${IDPFX}_${PWI_LABEL}.* ${DIR_SAVE}/
-fi
-mv ${DIR_SCRATCH}/*.tsv ${DIR_SAVE}/
-
-mkdir -p ${DIR_SAVE}/moco/${IDDIR}
-mv ${DIR_SCRATCH}/*.1D ${DIR_SAVE}/moco/${IDDIR}/
-
-#save normalized output
-if [[ ${NO_NORM,,} == "false" ]]; then
-  for (( j=0; j<${#NORM_REF[@]}; j++ )); do
-    TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
-    mkdir -p ${DIR_SAVE}_${TRG}
-    mv ${DIR_SCRATCH}/${IDPFX}_reg-${TRG}_CBF.nii.gz ${DIR_SAVE}_${TRG}/
-    if [[ ${NO_PWI} == "false" ]]; then
-      mv ${DIR_SCRATCH}/${IDPFX}_reg-${TRG}_${PWI_LABEL}.nii.gz ${DIR_SAVE}_${TRG}/
-    fi
-  done
-fi
-
-mv ${DIR_SCRATCH}/xfm/* ${DIR_XFM}/
-
 # initialize RMD output --------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
   RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
@@ -795,10 +757,10 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   # show outcome
   echo '### Cerebral Blood Flow (ml/100g/min)' >> ${RMD}
-  echo -e '!['${IDPFX}_CBF.nii.gz']('${DIR_SAVE}/${IDPFX}_CBF.png')\n' >> ${RMD}
+  echo -e '!['${IDPFX}'_CBF.nii.gz]('${DIR_SCRATCH}'/'${IDPFX}'_CBF.png)\n' >> ${RMD}
   for (( i=0; i<${#LABEL[@]}; i++ )); do
     LNAME=$(getField -i ${LABEL[${i}]} -f label)
-    TCSV="${DIR_SAVE}/${IDPFX}_label-${LNAME}_CBF.tsv"
+    TCSV="${DIR_SCRATCH}/${IDPFX}_label-${LNAME}_CBF.tsv"
     FNAME="${IDPFX}_label-${LNAME}_CBF"
     echo '```{r}' >> ${RMD}
     echo 'data <- read.csv("'${TCSV}'", sep="\t")' >> ${RMD}
@@ -814,10 +776,10 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # show PWI
   if [[ ${NO_PWI} == "false" ]]; then
     echo '### Relative Cerebral Blood Flow (processed on scanner)' >> ${RMD}
-    echo -e '!['${IDPFX}_${PWI_LABEL}.nii.gz']('${DIR_SAVE}/${IDPFX}_${PWI_LABEL}.png')\n' >> ${RMD}
+    echo -e '!['${IDPFX}_${PWI_LABEL}.nii.gz']('${DIR_SCRATCH}/${IDPFX}_${PWI_LABEL}.png')\n' >> ${RMD}
     for (( i=0; i<${#LABEL[@]}; i++ )); do
       LNAME=$(getField -i ${LABEL[${i}]} -f label)
-      TCSV="${DIR_SAVE}/${IDPFX}_label-${LNAME}_${PWI_LABEL}.tsv"
+      TCSV="${DIR_SCRATCH}/${IDPFX}_label-${LNAME}_${PWI_LABEL}.tsv"
       FNAME="${IDPFX}_label-${LNAME}_${PWI_LABEL}"
       echo '```{r}' >> ${RMD}
       echo 'data <- read.csv("'${TCSV}'", sep="\t")' >> ${RMD}
@@ -836,48 +798,26 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### Click to View -->' >> ${RMD}
   echo '#### Raw' >> ${RMD}
   echo -e '![Raw]('${DIR_SCRATCH}'/'${IDPFX}'_prep-raw_asl.png)\n' >> ${RMD}
-  echo '' >> ${RMD}
-
   if [[ ${NO_REORIENT} == "false" ]]; then
     echo '#### Reorient' >> ${RMD}
     echo -e '![Reorient]('${DIR_SCRATCH}'/'${IDPFX}'_prep-reorient_asl.png)\n' >> ${RMD}
-    echo '' >> ${RMD}
   fi
-
   echo '#### Motion Correction' >> ${RMD}
   echo -e '![MOCO]('${DIR_SCRATCH}'/'${IDPFX}'_prep-moco_asl.png)\n' >> ${RMD}
   echo -e '![Regressors]('${DIR_SCRATCH}'/'${IDPFX}'_regressors.png)\n' >> ${RMD}
-  echo '' >> ${RMD}
-
   if [[ ${NO_DENOISE} == "false" ]]; then
     echo '#### Denoise {.tabset}' >> ${RMD}
     echo '##### Control' >> ${RMD}
     echo -e '![Denoise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+denoise_asl.png)\n' >> ${RMD}
     echo -e '![Noise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+noise_asl.png)\n' >> ${RMD}
-    echo '' >> ${RMD}
     echo '##### Labeled' >> ${RMD}
     echo -e '![Denoise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+denoise_asl.png)\n' >> ${RMD}
     echo -e '![Noise]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+noise_asl.png)\n' >> ${RMD}
-    echo '' >> ${RMD}
   fi
-
-#  if [[ ${NO_DEBIAS} == "false" ]]; then
-#    echo '#### Debias {.tabset}' >> ${RMD}
-#    echo '##### Control' >> ${RMD}
-#    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+debias_asl.png)\n' >> ${RMD}
-#    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+biasField_asl.png)\n' >> ${RMD}
-#    echo '' >> ${RMD}
-#    echo '##### Labeled' >> ${RMD}
-#    echo -e '![Debias]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+debias_asl.png)\n' >> ${RMD}
-#    echo -e '![Bias Field]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+biasField_asl.png)\n' >> ${RMD}
-#    echo '' >> ${RMD}
-#  fi
-
   echo '#### Coregistration' >> ${RMD}
   echo -e '![Coregistration]('${DIR_SCRATCH}'/'${IDPFX}'_reg-'${COREG_RECIPE}'+native.png)\n' >> ${RMD}
   echo -e '![Control]('${DIR_SCRATCH}'/'${IDPFX}'_prep-control+coreg_asl.png)\n' >> ${RMD}
   echo -e '![Labeled]('${DIR_SCRATCH}'/'${IDPFX}'_prep-label+coreg_asl.png)\n' >> ${RMD}
-  echo '' >> ${RMD}
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
@@ -890,9 +830,33 @@ if [[ "${NO_RMD}" == "false" ]]; then
   fi
 fi
 
+# Save output ------------------------------------------------------------------
+mkdir -p ${DIR_SAVE}/anat/outcomes/perfusion
+mv ${DIR_SCRATCH}/${IDPFX}_CBF.* ${DIR_SAVE}/anat/outcomes/perfusion/
+if [[ ${NO_PWI} == "false" ]]; then
+  mv ${DIR_SCRATCH}/${IDPFX}_${PWI_LABEL}.* ${DIR_SAVE}/anat/outcomes/perfusion/
+fi
+mv ${DIR_SCRATCH}/*.tsv ${DIR_SAVE}/anat/outcomes/perfusion/
+mkdir -p ${DIR_SAVE}/moco/${IDDIR}
+mv ${DIR_SCRATCH}/*.1D ${DIR_SAVE}/anat/outcomes/perfusion/moco/${IDDIR}/
+
+#save normalized output
+if [[ ${NO_NORM,,} == "false" ]]; then
+  for (( j=0; j<${#NORM_REF[@]}; j++ )); do
+    TRG=$(getField -i ${NORM_REF[${j}]} -f reg)
+    mkdir -p ${DIR_SAVE}/anat/outcomes/perfusion_${TRG}
+    mv ${DIR_SCRATCH}/${IDPFX}_reg-${TRG}_CBF.nii.gz ${DIR_SAVE}/anat/outcomes/perfusion_${TRG}/
+    if [[ ${NO_PWI} == "false" ]]; then
+      mv ${DIR_SCRATCH}/${IDPFX}_reg-${TRG}_${PWI_LABEL}.nii.gz ${DIR_SAVE}/anat/outcomes/perfusion_${TRG}/
+    fi
+  done
+fi
+
+mv ${DIR_SCRATCH}/xfm/* ${DIR_XFM}/
+
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function

@@ -88,7 +88,6 @@ while true; do
     --force) FORCE=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
-    --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
     --dir-id) IDDIR="$2" ; shift 2 ;;
     --image-dwi) IMAGE_DWI="$2" ; shift 2 ;;
@@ -97,6 +96,7 @@ while true; do
     --no-tensor) DO_TENSOR="false" ; shift ;;
     --no-kurtosis) DO_KURTOSIS="false" ; shift 2 ;;
     --do-b0) DO_B0="true" ; shift 2 ;;
+    --dir-mrtrix) DIR_MRTRIX="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -149,23 +149,26 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [TKNI:${FCN_NAME}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
-fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/dwi
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
-#mkdir -p ${DIR_SCRATCH}
 
 # Check ID ---------------------------------------------------------------------
 if [[ -z ${IDPFX} ]]; then
@@ -186,13 +189,13 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e "\tDIR_SUBJECT:\t${IDDIR}"
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -203,14 +206,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -221,18 +223,13 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
 
 # Additional default values ----------------------------------------------------
-if [[ -z ${DIR_MRTRIX} ]]; then
-  DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
-fi
-if [[ -z ${IMAGE_DWI} ]]; then
-  IMAGE_DWI=${DIR_MRTRIX}/dwi_preproc_coreg.mif
-fi
+if [[ -z ${DIR_MRTRIX} ]]; then DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}; fi
+if [[ -z ${IMAGE_DWI} ]]; then IMAGE_DWI=${DIR_MRTRIX}/dwi_preproc_coreg.mif; fi
 EXT="${IMAGE_DWI##*.}"
 if [[ ${EXT} != "mif" ]]; then
   echo "ERROR [TKNI: ${FCN_NAME}] DWI must be in MRTRIX mif format"
@@ -261,18 +258,16 @@ if [[ ! -f ${MASK_ROI} ]]; then
 fi
 
 ## Extract Tensor --------------------------------------------------------------
-mkdir -p ${DIR_SAVE}/tensor
-
 TMPFCN="dwi2tensor -force"
 if [[ -n ${MASK_ROI} ]]; then
   TMPFCN="${TMPFCN} -mask ${MASK_ROI}"
 fi
 if [[ ${NO_B0} == "false" ]]; then
   mkdir -p ${DIR_SAVE}/scalar
-  TMPFCN="${TMPFCN} -b0 ${DIR_SAVE}/scalar/${IDPFX}_b0.nii.gz"
+  TMPFCN="${TMPFCN} -b0 ${DIR_SCRATCH}/${IDPFX}_b0.nii.gz"
 fi
 if [[ ${NO_KURTOSIS} == "false" ]]; then
-  TMPFCN="${TMPFCN} -dkt ${DIR_SAVE}/tensor/${IDPFX}_tensor-kurtosis.nii.gz"
+  TMPFCN="${TMPFCN} -dkt ${DIR_SCRATCH}/${IDPFX}_tensor-kurtosis.nii.gz"
 fi
 TMPFCN="${TMPFCN} ${IMAGE_DWI}"
 TMPFCN="${TMPFCN} ${DIR_SCRATCH}/${IDPFX}_tensor-diffusion.nii.gz"
@@ -284,12 +279,11 @@ if [[ ${NO_PNG} == "false" ]] || [[ ${NO_PNG} == "false" ]]; then
 fi
 
 if [[ ${NO_SCALAR} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/scalar
   tensor2metric -mask ${MASK_ROI} \
-    -adc ${DIR_SAVE}/scalar/${IDPFX}_scalar-adc.nii.gz \
-    -fa ${DIR_SAVE}/scalar/${IDPFX}_scalar-fa.nii.gz \
-    -ad ${DIR_SAVE}/scalar/${IDPFX}_scalar-ad.nii.gz \
-    -rd ${DIR_SAVE}/scalar/${IDPFX}_scalar-rd.nii.gz \
+    -adc ${DIR_SCRATCH}/${IDPFX}_scalar-adc.nii.gz \
+    -fa  ${DIR_SCRATCH}/${IDPFX}_scalar-fa.nii.gz \
+    -ad  ${DIR_SCRATCH}/${IDPFX}_scalar-ad.nii.gz \
+    -rd  ${DIR_SCRATCH}/${IDPFX}_scalar-rd.nii.gz \
     ${DIR_SCRATCH}/${IDPFX}_tensor-diffusion.nii.gz -force
   if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == "false" ]]; then
 #    CBARS=("#000000,#7b0031,#6a5700,#008a3c,#00a7b2,#b9afff"\
@@ -304,26 +298,25 @@ if [[ ${NO_SCALAR} == "false" ]]; then
 #           "#000000,#4c3900,#ae005c,#b428ff,#00a6c2,#00d292"\
 #           "#000000,#00433e,#3d6200,#a66a00,#ff53ba,#b9afff"\
 #           "#000000,#6b0076,#005f80,#00876f,#8ba100,#ffa277")
-    make3Dpng --bg ${DIR_SAVE}/scalar/${IDPFX}_scalar-adc.nii.gz \
+    make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_scalar-adc.nii.gz \
       --bg-color "timbow:hue=#FF0000" --bg-threshold 2.5,97.5 --bg-cbar \
       --color-decimal 4 --layout "5:z;5:z;5:z;5:z;5:z"
-    make3Dpng --bg ${DIR_SAVE}/scalar/${IDPFX}_scalar-fa.nii.gz \
+    make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_scalar-fa.nii.gz \
       --bg-color "timbow:hue=#00FF00" --bg-threshold 2.5,97.5 --bg-cbar \
       --layout "5:z;5:z;5:z;5:z;5:z"
-    make3Dpng --bg ${DIR_SAVE}/scalar/${IDPFX}_scalar-ad.nii.gz \
+    make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_scalar-ad.nii.gz \
       --bg-color "timbow:hue=#0000FF" --bg-threshold 2.5,97.5 --bg-cbar \
       --color-decimal 4 --layout "5:z;5:z;5:z;5:z;5:z"
-    make3Dpng --bg ${DIR_SAVE}/scalar/${IDPFX}_scalar-rd.nii.gz \
+    make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_scalar-rd.nii.gz \
       --bg-color "timbow:hue=#FFFF00" --bg-threshold 2.5,97.5 --bg-cbar \
       --color-decimal 4 --layout "5:z;5:z;5:z;5:z;5:z"
   fi
 fi
 
 if [[ ${NO_TENSOR} == "false" ]]; then
-  cp ${DIR_SCRATCH}/${IDPFX}_tensor-diffusion.nii.gz ${DIR_SAVE}/tensor/
   if [[ ${NO_PNG} == "false" ]] || [[ ${NO_PNG} == "false" ]]; then
-    TNII=${DIR_SAVE}/tensor/${IDPFX}_tensor-diffusion.nii.gz
-    TPNG=${DIR_SAVE}/tensor/${IDPFX}_tensor-diffusion.png
+    TNII=${DIR_SCRATCH}/${IDPFX}_tensor-diffusion.nii.gz
+    TPNG=${DIR_SCRATCH}/${IDPFX}_tensor-diffusion.png
     NVOL=$(niiInfo -i ${TNII} -f volumes)
     montage_fcn="montage"
     for (( j=1; j<=${NVOL}; j++ )); do
@@ -343,10 +336,9 @@ if [[ ${NO_TENSOR} == "false" ]]; then
 fi
 
 if [[ ${NO_KURTOSIS} == "false" ]]; then
-  #cp ${DIR_SCRATCH}/${IDPFX}_tensor-kurtosis.nii.gz ${DIR_SAVE}/tensor/
   if [[ ${NO_PNG} == "false" ]] || [[ ${NO_PNG} == "false" ]]; then
-    TNII=${DIR_SAVE}/tensor/${IDPFX}_tensor-kurtosis.nii.gz
-    TPNG=${DIR_SAVE}/tensor/${IDPFX}_tensor-kurtosis.png
+    TNII=${DIR_SCRATCH}/${IDPFX}_tensor-kurtosis.nii.gz
+    TPNG=${DIR_SCRATCH}/${IDPFX}_tensor-kurtosis.png
     NVOL=$(niiInfo -i ${TNII} -f volumes)
     montage_fcn="montage"
     for (( j=1; j<=${NVOL}; j++ )); do
@@ -384,15 +376,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '```{r, out.width = "400px", fig.align="right"}' >> ${RMD}
   echo 'knitr::include_graphics("'${TKNIPATH}'/TK_BRAINLab_logo.png")' >> ${RMD}
   echo -e '```\n' >> ${RMD}
-  echo '```{r, echo=FALSE}' >> ${RMD}
-  echo 'library(DT)' >> ${RMD}
-  echo 'library(downloadthis)' >> ${RMD}
-  echo "create_dt <- function(x){" >> ${RMD}
-  echo "  DT::datatable(x, extensions='Buttons'," >> ${RMD}
-  echo "    options=list(dom='Blfrtip'," >> ${RMD}
-  echo "    buttons=c('copy', 'csv', 'excel', 'pdf', 'print')," >> ${RMD}
-  echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
-  echo -e '```\n' >> ${RMD}
 
   echo '## '${PIPE}${FLOW}': DWI Scalars' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
@@ -421,10 +404,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
     SLAB=("Fractional Anisotropy" "Apparent Diffusivity Coefficient (Mean Diffusivity)" "Axial Diffusivity" "Radial Diffusivity")
     for i in {0..3}; do
       echo "#### ${SLAB[${i}]}" >> ${RMD}
-      TPNG=${DIR_SAVE}/scalar/${IDPFX}_scalar-${SLS[${i}]}.png
-      TNII=${DIR_SAVE}/scalar/${IDPFX}_scalar-${SLS[${i}]}.nii.gz
-      echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-      echo '' >> ${RMD}
+      TNAME="${IDPFX}_scalar-${SLS[${i}]}"
+      echo -e '!['${TNAME}'.nii.gz]('${DIR_SCRATCH}'/'${TNAME}'.png)\n' >> ${RMD}
     done
   fi
 
@@ -434,19 +415,13 @@ if [[ "${NO_RMD}" == "false" ]]; then
   fi
   if [[ ${NO_TENSOR} == "false" ]]; then
     echo "#### Diffusion Tensor" >> ${RMD}
-    TPNG=${DIR_SAVE}/tensor/${IDPFX}_tensor-diffusion.png
-    TNII=${DIR_SAVE}/tensor/${IDPFX}_tensor-diffusion.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_tensor-diffusion.nii.gz]('${DIR_SCRATCH}'/'${IDPFX}'_tensor-diffusion.png)\n' >> ${RMD}
   fi
 
   # Diffusion Kurtosis ---------------------------------------------------------
   if [[ ${NO_KURTOSIS} == "false" ]]; then
     echo "#### Kurtosis Tensor" >> ${RMD}
-    TPNG=${DIR_SAVE}/tensor/${IDPFX}_tensor-kurtosis.png
-    TNII=${DIR_SAVE}/tensor/${IDPFX}_tensor-kurtosis.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_tensor-kurtosis.nii.gz]('${DIR_SCRATCH}'/'${IDPFX}'_tensor-kurtosis.png)\n' >> ${RMD}
   fi
 
   ## knit RMD
@@ -458,6 +433,17 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
     echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
+fi
+
+# Save output ------------------------------------------------------------------
+if [[ ${NO_SCALAR} == "false" ]]; then
+  mkdir -p ${DIR_SAVE}/scalar
+  mv ${DIR_SCRATCH}/${IDPFX}_b0.nii.gz ${DIR_SAVE}/scalar/
+  mv ${DIR_SCRATCH}/*scalar* ${DIR_SAVE}/scalar/
+fi
+if [[ ${NO_TENSOR} == "false" ]] || [[ ${NO_KURTOSIS} == "false" ]]; then
+  mkdir -p ${DIR_SAVE}/tensor
+  mv ${DIR_SCRATCH}/*tensor* ${DIR_SAVE}/tensor/
 fi
 
 # set status file --------------------------------------------------------------

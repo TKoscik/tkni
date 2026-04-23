@@ -69,7 +69,7 @@ trap egress EXIT
 OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
 id:,dir-id:,dir-anat:,dir-dwi:,dir-xfm:,\
 image-dwi:,image-ap:,image-pa:,image-anat:,mask-brain:,mask-b0-method:,rpenone,\
-dir-scratch:,requires:,\
+dir-save:,dir-mrtrix:,dir-scratch:,requires:,\
 help,verbose,force,no-png,no-rmd -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -85,6 +85,8 @@ DIR_SCRATCH=
 DIR_ANAT=
 DIR_DWI=
 DIR_XFM=
+DIR_MRTRIX=
+DIR_SAVE=
 IDPFX=
 IDDIR=
 
@@ -132,6 +134,8 @@ while true; do
     --dir-dwi) DIR_DWI="$2" ; shift 2 ;;
     --dir-xfm) DIR_XFM="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-mrtrix) DIR_MRTRIX="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -179,16 +183,23 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
@@ -212,13 +223,13 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e "\tDIR_SUBJECT:\t${IDDIR}"
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -229,14 +240,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -247,42 +257,32 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
 
 # set project defaults ---------------------------------------------------------
-if [[ -z ${MRTRIXPATH} ]]; then
-  MRTRIXPATH=/usr/lib/mrtrix3/bin
+if [[ -z ${MRTRIXPATH} ]]; then MRTRIXPATH=/usr/lib/mrtrix3/bin; fi
+if [[ -z ${DIR_MRTRIX} ]]; then
+  DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
 fi
 
 # Additional default values ----------------------------------------------------
-if [[ -z ${DIR_ANAT} ]]; then
-  DIR_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat
-fi
-if [[ -z ${DIR_DWI} ]]; then
-  DIR_DWI=${DIR_PROJECT}/derivatives/${PIPE}/dwi
-fi
-if [[ -z ${DIR_XFM} ]]; then
-  DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
-fi
-if [[ -z ${IMAGE_ANAT} ]]; then
-  IMAGE_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat/native/${IDPFX}_T1w.nii.gz
-fi
+if [[ -z ${DIR_ANAT} ]]; then DIR_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
+if [[ -z ${DIR_DWI} ]]; then DIR_DWI=${DIR_PROJECT}/derivatives/${PIPE}/dwi; fi
+if [[ -z ${DIR_XFM} ]]; then DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}; fi
+if [[ -z ${IMAGE_ANAT} ]]; then IMAGE_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat/native/${IDPFX}_T1w.nii.gz; fi
 if [[ ! -f ${IMAGE_ANAT} ]]; then
   echo "ERROR [TKNI: ${FCN_NAME}] Anatomical image not found."
   exit 1
 fi
-if [[ -z ${MASK_BRAIN} ]]; then
-  MASK_BRAIN=${DIR_PROJECT}/derivatives/${PIPE}/anat/mask/${IDPFX}_mask-brain.nii.gz
-fi
+if [[ -z ${MASK_BRAIN} ]]; then MASK_BRAIN=${DIR_PROJECT}/derivatives/${PIPE}/anat/mask/${IDPFX}_mask-brain.nii.gz; fi
 if [[ ! -f ${MASK_BRAIN} ]]; then
   echo "ERROR [TKNI: ${FCN_NAME}] Brain Mask image not found."
   exit 2
 fi
 
-# convert input files ----------------------------------------------------------
+# Locate DWI files -------------------------------------------------------------
 if [[ -z ${IMAGE_DWI} ]]; then
   if ls ${DIR_PROJECT}/rawdata/${IDDIR}/dwi/${IDPFX}*dwi.nii.gz 1> /dev/null 2>&1; then
     IMAGE_DWI=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/dwi/${IDPFX}*dwi.nii.gz))
@@ -322,22 +322,6 @@ MASK_BRAIN=${TMP_NII}/mask.nii.gz
 
 # check image dimensions and pad if uneven -------------------------------------
 for (( i=0; i<${N_DWI}; i++ )); do
-#  unset TDIM
-#  TDIM=$(PrintHeader ${TMP_NII}/dwi_${i}.nii.gz 2)
-#  #echo -e "${i}: ${TDIM}"
-#  TDIM=(${TDIM//x/ })
-#  DIMCHK=0
-#  for j in {0..2}; do
-#    if [ $((${TDIM[${j}]}%2)) -eq 1 ]; then
-#      TDIM[${j}]=$((${TDIM[${j}]} + 1))
-#      DIMCHK=1
-#    fi
-#  done
-#  if [ ${DIMCHK} -eq 1 ]; then
-#    fslroi ${TMP_NII}/dwi_${i}.nii.gz \
-#      ${TMP_NII}/dwi_${i}.nii.gz \
-#      0 ${TDIM[0]} 0 ${TDIM[1]} 0 ${TDIM[2]}
-#  fi
   c4d ${TMP_NII}/dwi_${i}.nii.gz -pad-to-multiple 2x2x2x1 0 -o ${TMP_NII}/dwi_${i}.nii.gz
 done
 
@@ -356,10 +340,8 @@ else
 fi
 
 # Denoise ----------------------------------------------------------------------
-dwidenoise ${TMP_DWI}/dwi_raw.mif ${TMP_DWI}/dwi_den.mif \
-  -noise ${TMP_DWI}/noise.mif
-mrcalc ${TMP_DWI}/dwi_raw.mif ${TMP_DWI}/dwi_den.mif \
-  -subtract ${TMP_DWI}/residual.mif
+dwidenoise ${TMP_DWI}/dwi_raw.mif ${TMP_DWI}/dwi_den.mif -noise ${TMP_DWI}/noise.mif
+mrcalc ${TMP_DWI}/dwi_raw.mif ${TMP_DWI}/dwi_den.mif -subtract ${TMP_DWI}/residual.mif
 
 # Unringing --------------------------------------------------------------------
 mrdegibbs ${TMP_DWI}/dwi_den.mif ${TMP_DWI}/dwi_den_unr.mif -axes 0,1
@@ -426,7 +408,6 @@ else
   dwi2mask ${TMP_DWI}/dwi_den_unr_preproc_unbiased.mif \
     ${TMP_DWI}/mask_den_unr_preproc_unb.mif
 fi
-
 
 # Anatomical Coregistration ----------------------------------------------------
 MOVING=${TMP_NII}/b0_mean.nii.gz
@@ -510,78 +491,41 @@ mrconvert ${TMP_NII}/dwi_preproc_coreg.nii.gz \
   ${TMP_DWI}/dwi_preproc_coreg.mif \
   -fslgrad ${TMP_NII}/dwi_preproc.bvec ${TMP_NII}/dwi_preproc.bval -force
 
-## save cleaned nifti format to tkni folders -----------------------------------
-mkdir -p ${DIR_DWI}/preproc/dwi
-mkdir -p ${DIR_DWI}/preproc/b0
-mkdir -p ${DIR_DWI}/preproc/mask
-mkdir -p ${DIR_ANAT}/native/dwi
-cp ${TMP_NII}/dwi_preproc_coreg.nii.gz ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz
-cp ${TMP_NII}/dwi_preproc.bvec ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bvec
-cp ${TMP_NII}/dwi_preproc.bval ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bval
-cp ${TMP_NII}/b0_mean_coreg.nii.gz ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz
-cp ${TMP_NII}/b0_mask_coreg.nii.gz ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz
-cp ${TMP_NII}/T1_spacing-DWI.nii.gz ${DIR_ANAT}/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz
-
-## save XFMs to TKNI folders ---------------------------------------------------
-cp ${TMP_XFM}/xfm_0GenericAffine.mat \
-  ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat
-cp ${TMP_XFM}/xfm_1Warp.nii.gz \
-  ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn.nii.gz
-cp ${TMP_XFM}/xfm_1InverseWarp.nii.gz \
-  ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn+inverse.nii.gz
-
-# Clean scratch folder and save MRTRIX for next steps --------------------------
-rm ${TMP_NII}/*
-rmdir ${TMP_NII}/
-rm ${TMP_XFM}/*
-rmdir ${TMP_XFM}/
-
-DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
-mkdir -p ${DIR_MRTRIX}
-cp ${TMP_DWI}/b0_mask_coreg.mif ${DIR_MRTRIX}/
-cp ${TMP_DWI}/b0_mean_coreg.mif ${DIR_MRTRIX}/
-cp ${TMP_DWI}/dwi_preproc_coreg.mif ${DIR_MRTRIX}/
-
-## save QC images
-mkdir -p ${DIR_DWI}/preproc/qc
-mrconvert ${TMP_DWI}/bias.mif ${DIR_DWI}/preproc/qc/${IDPFX}_bias.nii.gz -force
-mrconvert ${TMP_DWI}/noise.mif ${DIR_DWI}/preproc/qc/${IDPFX}_noise.nii.gz -force
-mrconvert ${TMP_DWI}/residual.mif ${DIR_DWI}/preproc/qc/${IDPFX}_residual.nii.gz -force
-mrconvert ${TMP_DWI}/residualUnringed.mif ${DIR_DWI}/preproc/qc/${IDPFX}_residualUnring.nii.gz -force
-cp ${TMP_DWI}/percentageOutliers.txt ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt
+# convert QC images to nifti----------------------------------------------------
+mrconvert ${TMP_DWI}/bias.mif ${TMP_NII}/${IDPFX}_bias.nii.gz -force
+mrconvert ${TMP_DWI}/noise.mif ${TMP_NII}/${IDPFX}_noise.nii.gz -force
+mrconvert ${TMP_DWI}/residual.mif ${TMP_NII}/${IDPFX}_residual.nii.gz -force
+mrconvert ${TMP_DWI}/residualUnringed.mif ${TMP_NII}/${IDPFX}_residualUnring.nii.gz -force
 
 if [[ ${NO_PNG} == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
-  make3Dpng --bg ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz
-
-  NB=($(cat ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bval))
+  make3Dpng --bg ${TMP_NII}/b0_mean_coreg.nii.gz
+  NB=($(cat ${TMP_NII}/dwi_preproc.bval))
   N10=$((${#NB[@]} / 10))
   N1=$(($((${#NB[@]} % 10)) - 1))
   TLAYOUT="10"
   for (( i=1; i<${N10}; i++ )) { TLAYOUT="${TLAYOUT};10"; }
   if [[ ${N1} -gt 0 ]]; then TLAYOUT="${TLAYOUT};${N1}"; fi
-  make4Dpng --fg ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz \
-    --fg-mask ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz \
+  make4Dpng --fg ${TMP_NII}/dwi_preproc_coreg.nii.gz \
+    --fg-mask ${TMP_NII}/b0_mask_coreg.nii.gz \
     --fg-color "timbow" --fg-alpha 100 --fg-thresh "2.5,97.5" --layout "${TLAYOUT}"
-  make3Dpng --bg ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz -v \
-    --fg ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz \
+  make3Dpng --bg --bg ${TMP_NII}/b0_mean_coreg.nii.gz -v \
+    --fg ${TMP_NII}/b0_mask_coreg.nii.gz \
     --fg-color "timbow:random" --fg-alpha 25 --fg-cbar "false" \
     --layout "10:x;10:y;10:z" \
-    --filename "${IDPFX}_mask-brain+b0" --dir-save ${DIR_DWI}/preproc/mask
-  make3Dpng --bg ${DIR_DWI}/preproc/qc/${IDPFX}_bias.nii.gz --bg-color "plasma"
-  make3Dpng --bg ${DIR_DWI}/preproc/qc/${IDPFX}_noise.nii.gz --bg-color "virid-esque"
-  make4Dpng --fg ${DIR_DWI}/preproc/qc/${IDPFX}_residual.nii.gz \
-    --layout 5x5 --fg-color grayscale
-  make4Dpng --fg ${DIR_DWI}/preproc/qc/${IDPFX}_residualUnring.nii.gz \
-    --layout 5x5 --fg-color grayscale
+    --filename "${IDPFX}_mask-brain+b0" --dir-save ${TMP_NII}
+  make3Dpng --bg ${TMP_NII}/${IDPFX}_bias.nii.gz --bg-color "plasma"
+  make3Dpng --bg ${TMP_NII}/${IDPFX}_noise.nii.gz --bg-color "virid-esque"
+  make4Dpng --fg ${TMP_NII}/${IDPFX}_residual.nii.gz --layout 5x5 --fg-color grayscale
+  make4Dpng --fg ${TMP_NII}/${IDPFX}_residualUnring.nii.gz --layout 5x5 --fg-color grayscale
   make3Dpng \
-    --bg ${DIR_ANAT}/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz \
+    --bg ${TMP_NII}/T1_spacing-DWI.nii.gz \
       --bg-color "timbow:hue=#00FF00:lum=0,100:cyc=1/6" --bg-thresh "2.5,97.5" \
-    --fg ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz \
+    --fg ${TMP_NII}/b0_mean_coreg.nii.gz \
       --fg-color "timbow:hue=#FF00FF:lum=0,100:cyc=1/6" --fg-thresh "2.5,97.5" \
       --fg-alpha 50 --fg-cbar "false" \
     --layout "9:x;9:x;9:x;9:y;9:y;9:y;9:z;9:z;9:z" \
     --filename ${IDPFX}_from-b0_to-native_overlay \
-    --dir-save ${DIR_DWI}/preproc/qc
+    --dir-save ${TMP_NII}
 fi
 
 # generate HTML QC report ------------------------------------------------------
@@ -594,15 +538,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo -e '```\n' >> ${RMD}
   echo '```{r, out.width = "400px", fig.align="right"}' >> ${RMD}
   echo 'knitr::include_graphics("'${TKNIPATH}'/TK_BRAINLab_logo.png")' >> ${RMD}
-  echo -e '```\n' >> ${RMD}
-  echo '```{r, echo=FALSE}' >> ${RMD}
-  echo 'library(DT)' >> ${RMD}
-  echo 'library(downloadthis)' >> ${RMD}
-  echo "create_dt <- function(x){" >> ${RMD}
-  echo "  DT::datatable(x, extensions='Buttons'," >> ${RMD}
-  echo "    options=list(dom='Blfrtip'," >> ${RMD}
-  echo "    buttons=c('copy', 'csv', 'excel', 'pdf', 'print')," >> ${RMD}
-  echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
   echo -e '```\n' >> ${RMD}
 
   echo '## '${PIPE}${FLOW}': DWI PreProcessing' >> ${RMD}
@@ -625,7 +560,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
 
-  PCTOUT=$(cat ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt)
+  PCTOUT=$(cat ${TMP_DWI}/percentageOutliers.txt)
   echo "### ${PCTOUT} % of SLICES are outliers.  " >> ${RMD}
   echo "If >10 %, may have too much motion or corrupted slices.  " >> ${RMD}
   echo '' >> ${RMD}
@@ -633,48 +568,25 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # B0
   echo '### DWI Preprocessing Results {.tabset}' >> ${RMD}
   echo '#### B0' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/b0/${IDPFX}_b0.png
-    TNII=${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_b0.nii.gz]('${TMP_NII}'/b0_mean_coreg.png)\n' >> ${RMD}
   echo '#### Brain Mask' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.png
-    TNII=${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_mask-brain+b0.nii.gz]('${TMP_NII}'/'${IDPFX}'_mask-brain+b0.png)\n' >> ${RMD}
   echo '#### DWI' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.png
-    TNII=${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_dwi.nii.gz]('${TMP_NII}'/dwi_preproc_coreg.nii.gz)\n' >> ${RMD}
   echo '#### Coregistration' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/qc/${IDPFX}_from-b0_to-native_overlay.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '![]('${TMP_NII}'/'${IDPFX}'_from-b0_to-native_overlay.png)\n' >> ${RMD}
 
   # QC
   echo '### DWI Preprocessing Results {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
   echo '#### Noise' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/qc/${IDPFX}_noise.png
-    TNII=${DIR_DWI}/preproc/qc/${IDPFX}_noise.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_noise.nii.gz]('${TMP_NII}'/'${IDPFX}'_noise.png)\n' >> ${RMD}
   echo '#### Bias' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/qc/${IDPFX}_bias.png
-    TNII=${DIR_DWI}/preproc/qc/${IDPFX}_bias.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_bias.nii.gz]('${TMP_NII}'/'${IDPFX}'_bias.png)\n' >> ${RMD}
   echo '#### Unring' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/qc/${IDPFX}_residualUnring.png
-    TNII=${DIR_DWI}/preproc/qc/${IDPFX}_residualUnring.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_residualUnring.nii.gz]('${TMP_NII}'/'${IDPFX}'_residualUnring.png)\n' >> ${RMD}
   echo '#### Residual' >> ${RMD}
-    TPNG=${DIR_DWI}/preproc/qc/${IDPFX}_residual.png
-    TNII=${DIR_DWI}/preproc/qc/${IDPFX}_residual.nii.gz
-    echo '!['${TNII}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    echo -e '!['${IDPFX}'_residual.nii.gz]('${TMP_NII}'/'${IDPFX}'_residual.png)\n' >> ${RMD}
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
@@ -687,9 +599,50 @@ if [[ "${NO_RMD}" == "false" ]]; then
   fi
 fi
 
+## save cleaned nifti format to tkni folders -----------------------------------
+mkdir -p ${DIR_DWI}/preproc/dwi
+mkdir -p ${DIR_DWI}/preproc/b0
+mkdir -p ${DIR_DWI}/preproc/mask
+mkdir -p ${DIR_ANAT}/native/dwi
+mv ${TMP_NII}/dwi_preproc_coreg.nii.gz   ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz
+mv ${TMP_NII}/dwi_preproc_coreg.png      ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.png
+mv ${TMP_NII}/dwi_preproc.bvec           ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bvec
+mv ${TMP_NII}/dwi_preproc.bval           ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bval
+mv ${TMP_NII}/b0_mean_coreg.nii.gz       ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz
+mv ${TMP_NII}/b0_mean_coreg.png          ${DIR_DWI}/preproc/b0/${IDPFX}_b0.png
+mv ${TMP_NII}/b0_mask_coreg.nii.gz       ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz
+mv ${TMP_NII}/${IDPFX}_mask-brain+b0.png ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.png
+mv ${TMP_NII}/T1_spacing-DWI.nii.gz      ${DIR_ANAT}/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz
+
+## save XFMs to TKNI folders ---------------------------------------------------
+mv ${TMP_XFM}/xfm_0GenericAffine.mat ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat
+mv ${TMP_XFM}/xfm_1Warp.nii.gz ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn.nii.gz
+mv ${TMP_XFM}/xfm_1InverseWarp.nii.gz ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn+inverse.nii.gz
+mv ${TMP_NII}/${IDPFX}_from-b0_to-native_overlay.png ${DIR_XFM}/
+
+# Clean scratch folder and save MRTRIX for next steps --------------------------
+rm ${TMP_NII}/*
+rmdir ${TMP_NII}/
+rm ${TMP_XFM}/*
+rmdir ${TMP_XFM}/
+
+#DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
+mkdir -p ${DIR_MRTRIX}
+mv ${TMP_DWI}/b0_mask_coreg.mif ${DIR_MRTRIX}/
+mv ${TMP_DWI}/b0_mean_coreg.mif ${DIR_MRTRIX}/
+mv ${TMP_DWI}/dwi_preproc_coreg.mif ${DIR_MRTRIX}/
+
+## save QC images
+mkdir -p ${DIR_DWI}/preproc/qc
+mv ${TMP_DWI}/${IDPFX}_bias.nii.gz ${DIR_DWI}/preproc/qc/
+mv ${TMP_DWI}/${IDPFX}_noise.nii.gz ${DIR_DWI}/preproc/qc/
+mv ${TMP_DWI}/${IDPFX}_residual.nii.gz ${DIR_DWI}/preproc/qc/
+mv ${TMP_DWI}/${IDPFX}_residualUnring.nii.gz ${DIR_DWI}/preproc/qc/
+mv ${TMP_DWI}/percentageOutliers.txt ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt
+
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi

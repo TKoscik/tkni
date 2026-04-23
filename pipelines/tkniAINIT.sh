@@ -180,6 +180,17 @@ fi
 if [[ -z ${DIR_SAVE} ]]; then
   DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
+if [[ -z ${DIR_RAW} ]]; then
+  DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}/anat
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
+fi
 
 # Check ID ---------------------------------------------------------------------
 if [[ -z ${IDPFX} ]]; then
@@ -195,17 +206,12 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-if [[ -z ${DIR_RAW} ]]; then
-  DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}/anat
-fi
-
 ## Check if Prerequisites are run and QC'd -------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    #FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."

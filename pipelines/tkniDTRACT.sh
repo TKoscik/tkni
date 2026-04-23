@@ -113,6 +113,7 @@ while true; do
     --keep-10mil) KEEP_10MIL="true" ; shift 2 ;;
     --no-afd) NO_AFD="true" ; shift 2 ;;
     --no-tract) NO_TRACT="true" ; shift 2 ;;
+    --dir-mrtrix) DIR_MRTRIX="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
@@ -165,16 +166,23 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [TKNI:${FCN_NAME}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
@@ -193,13 +201,13 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -210,14 +218,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -228,7 +235,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -237,13 +243,13 @@ fi
 if [[ -z ${DIR_MRTRIX} ]]; then
   DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
 fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/dwi
-fi
 if [[ -z ${POST_5TT} ]]; then
-  if [[ -z ${IMAGE_T1_NATIVE} ]]; then
-    echo "ERROR [TKNI:${FCN_NAME}] 5 tissue posteriors or native space T1w must be provided"
-    exit 1
+  POST_5TT=${DIR_PROJECT}/derivatives/${PIPE}/anat/label/${IDPFX}_label-tissue.nii.gz
+  if [[ ! -f ${POST_5TT} ]]; then
+    if [[ -z ${IMAGE_T1_NATIVE} ]]; then
+      echo "ERROR [TKNI:${FCN_NAME}] 5 tissue posteriors or native space T1w must be provided"
+      exit 1
+    fi
   fi
 fi
 if [[ -z ${IMAGE_T1_DWI} ]]; then
@@ -307,37 +313,36 @@ if [[ "${NO_AFD}" == "false" ]]; then
   fod2fixel -fmls_no_thresholds ${TMP_FOD}/gmfod_norm.mif ${TMP_FOD}/gmfixel \
     -afd gm_afd.mif -disp gm_disp.mif -force
   ## convert FIXEL to NIFTI
-  mkdir -p ${DIR_SAVE}/scalar/AFD
-  mkdir -p ${DIR_SAVE}/scalar/Dispersion
+
   fixel2voxel -weighted ${TMP_FOD}/wmfixel/wm_afd.mif \
     ${TMP_FOD}/wmfixel/wm_afd.mif mean \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.nii.gz -force
+    ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFD.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/wmfixel/wm_afd.mif \
     ${TMP_FOD}/wmfixel/wm_afd.mif complexity \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.nii.gz -force
+    ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFDcomplexity.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/wmfixel/wm_disp.mif \
     ${TMP_FOD}/wmfixel/wm_disp.mif mean \
-    ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.nii.gz -force
+    ${DIR_SCRATCH}/${IDPFX}_roi-wm_Dispersion.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/gmfixel/gm_afd.mif \
     ${TMP_FOD}/gmfixel/gm_afd.mif mean \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.nii.gz -force
+    ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFD.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/gmfixel/gm_afd.mif \
     ${TMP_FOD}/gmfixel/gm_afd.mif complexity \
-    ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.nii.gz -force
+    ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFDcomplexity.nii.gz -force
   fixel2voxel -weighted ${TMP_FOD}/gmfixel/gm_disp.mif \
     ${TMP_FOD}/gmfixel/gm_disp.mif mean \
-    ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.nii.gz -force
-  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.nii.gz \
+    ${DIR_SCRATCH}/${IDPFX}_roi-gm_Dispersion.nii.gz -force
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFD.nii.gz \
     --bg-color "timbow:hue=#FF0000" --layout "9:z;9:z;9:z"
-  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.nii.gz \
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFDcomplexity.nii.gz \
     --bg-color "timbow:hue=#00FF00" --layout "9:z;9:z;9:z"
-  make3Dpng --bg ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.nii.gz \
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_roi-wm_Dispersion.nii.gz \
     --bg-color "timbow:hue=#0000FF" --layout "9:z;9:z;9:z"
-  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.nii.gz \
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFD.nii.gz \
     --bg-color "timbow:hue=#FF0000" --layout "9:z;9:z;9:z"
-  make3Dpng --bg ${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.nii.gz \
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFDcomplexity.nii.gz \
     --bg-color "timbow:hue=#00FF00" --layout "9:z;9:z;9:z"
-  make3Dpng --bg ${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.nii.gz \
+  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_roi-gm_Dispersion.nii.gz \
     --bg-color "timbow:hue=#0000FF" --layout "9:z;9:z;9:z"
 fi
 
@@ -348,7 +353,7 @@ fi
 
 if [[ "${NO_TRACT}" == "false" ]]; then
   ## Preparing a mask for streamline termination
-  if [[ -n ${POST_5TT} ]]; then
+  if [[ -n ${POST_5TT} ]] && [[ -f ${POST_5TT} ]]; then
    cp ${POST_5TT} ${TMP_ANAT}/5tt.nii.gz
    NVOL=$(niiInfo -i ${TMP_ANAT}/5tt.nii.gz -f volumes)
     if [[ ${NVOL} -eq 4 ]]; then
@@ -407,19 +412,12 @@ if [[ "${NO_TRACT}" == "false" ]]; then
       ${TMP_TCK}/${IDPFX}_200k_streamlines.png
   fi
 
-  # Save tractography output -----------------------------------------------------
-  cp -r ${TMP_ANAT} ${DIR_MRTRIX}/
-  cp -r ${TMP_FOD} ${DIR_MRTRIX}/
-  if [[ ${KEEP_10MIL} == "false" ]]; then rm ${TMP_TCK}/tracks_10mio.tck; fi
-  cp -r ${TMP_TCK} ${DIR_MRTRIX}/
-
   # Connectome construction ======================================================
   # Preparing an atlas for structural connectivity analysis ----------------------
   ## Purpose: Obtain a volumetric atlas-based parcellation image, co-registered to
   ## diffusion space for downstream structural connectivity (SC) matrix generation
   ## Main reference: Glasser et al., 2016a (for the atlas used here for SC generation)
   TCK=${TMP_TCK}/sift_1mio.tck
-  #TCK=${DIR_MRTRIX}/TCK/sift_1mio.tck
 
   # convert labels to DWI space
   antsApplyTransforms -d 3 -n MultiLabel \
@@ -449,22 +447,9 @@ if [[ "${NO_TRACT}" == "false" ]]; then
   # Create Mesh Node Geometry ----------------------------------------------------
   label2mesh ${DIR_SCRATCH}/labels.mif ${DIR_SCRATCH}/labels_mesh.obj
 
-  # Save Results output ---------------------------------------------------------
   LABNAME=$(getField -i ${LABEL} -f label)
   LABNAME=(${LABNAME//+/ })
-
-  mkdir -p ${DIR_SAVE}/connectome
-  cp ${DIR_SCRATCH}/connectome.csv ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
-  mkdir -p ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/assignments.csv ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/connectome.csv ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/exemplar.tck ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/labels_mesh.obj ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/labels.mif ${DIR_MRTRIX}/CON
-  cp ${DIR_SCRATCH}/labels.nii.gz ${DIR_MRTRIX}/CON
-
-  Rscript ${TKNIPATH}/R/connectivityPlot.R \
-    ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
+  Rscript ${TKNIPATH}/R/connectivityPlot.R ${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.png
 fi
 
 # generate HTML QC report ======================================================
@@ -519,51 +504,25 @@ if [[ "${NO_RMD}" == "false" ]]; then
   if [[ "${NO_AFD}" == "false" ]]; then
     echo "### Apparent Fiber Density {.tabset}" >> ${RMD}
     echo "#### WM Mean AFD" >> ${RMD}
-    TPNG=${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFD.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-wm_AFD.png)\n' >> ${RMD}
     echo "#### WM Complexity AFD" >> ${RMD}
-    TPNG=${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-wm_AFDcomplexity.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_oi-wm_AFDcomplexity)\n' >> ${RMD}
     echo "#### WM Dispersion" >> ${RMD}
-    TPNG=${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-wm_Dispersion.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-wm_Dispersion.png)\n' >> ${RMD}
     echo "#### GM Mean AFD" >> ${RMD}
-    TPNG=${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFD.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-gm_AFD.png)\n' >> ${RMD}
     echo "#### GM Complexity AFD" >> ${RMD}
-    TPNG=${DIR_SAVE}/scalar/AFD/${IDPFX}_roi-gm_AFDcomplexity.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-gm_AFDcomplexity.png)\n' >> ${RMD}
     echo "#### GM Dispersion" >> ${RMD}
-    TPNG=${DIR_SAVE}/scalar/Dispersion/${IDPFX}_roi-gm_Dispersion.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-gm_Dispersion.png)\n' >> ${RMD}
   fi
 
   if [[ "${NO_TRACT}" == "false" ]]; then
-    # Tractography ---------------------------------------------------------------
     echo "### Whole Brain Tractography" >> ${RMD}
-    TPNG=${DIR_MRTRIX}/TCK/${IDPFX}_200k_streamlines.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
-    # Connectogram ---------------------------------------------------------------
+      echo -e '![]('${TMP_TCK}'/'${IDPFX}'_200k_streamlines.png)\n' >> ${RMD}
     echo "### Connectogram" >> ${RMD}
-    TPNG=${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.png
-    echo '![]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-
-    ## add download button to download CSV
-    TCSV=${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
+      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_connectome-'${LABNAME[0]}'.png)\n' >> ${RMD}
+    TCSV=${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.csv
     FNAME=${IDPFX}_connectome-${LABNAME[0]}
     echo '```{r}' >> ${RMD}
     echo 'data <- read.csv("'${TCSV}'")' >> ${RMD}
@@ -586,9 +545,37 @@ if [[ "${NO_RMD}" == "false" ]]; then
   fi
 fi
 
+# Save Results -----------------------------------------------------------------
+mkdir -p ${DIR_SAVE}/scalar/AFD
+mkdir -p ${DIR_SAVE}/scalar/Dispersion
+mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFD.* ${DIR_SAVE}/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFDcomplexity.* ${DIR_SAVE}/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_Dispersion.* ${DIR_SAVE}/scalar/Dispersion/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFD.* ${DIR_SAVE}/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFDcomplexity.* ${DIR_SAVE}/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_Dispersion.* ${DIR_SAVE}/scalar/Dispersion/
+
+# tractography output
+mv ${TMP_ANAT} ${DIR_MRTRIX}/
+mv ${TMP_FOD} ${DIR_MRTRIX}/
+if [[ ${KEEP_10MIL} == "false" ]]; then rm ${TMP_TCK}/tracks_10mio.tck; fi
+mv ${TMP_TCK} ${DIR_MRTRIX}/
+
+# connectome output
+mkdir -p ${DIR_SAVE}/connectome
+mkdir -p ${DIR_MRTRIX}/CON
+cp ${DIR_SCRATCH}/connectome.csv ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/connectome.csv ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
+mv ${DIR_SCRATCH}/connectome.png ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.png
+mv ${DIR_SCRATCH}/assignments.csv ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/exemplar.tck ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/labels_mesh.obj ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/labels.mif ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/labels.nii.gz ${DIR_MRTRIX}/CON/
+
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi

@@ -183,11 +183,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -204,13 +218,13 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -221,14 +235,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -239,7 +252,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -266,7 +278,7 @@ fi
 if [[ -z ${MRS_LOC} ]]; then
   MRS_LOC=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/${IDPFX}_acq-mrsLoc+axi_T2w.nii.gz))
 fi
-if [[ ! -f ${MRS} ]]; then
+if [[ ! -f ${MRS_LOC} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] MRS localizer image not found."
   exit 1
 fi
@@ -303,20 +315,28 @@ if [[ ! -f ${TISSUE} ]]; then
 fi
 
 # set directories --------------------------------------------------------------
-if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}; fi
 mkdir -p ${DIR_SCRATCH}
 
 # Copy data to scratch and gunzip as needed ------------------------------------
-#cp ${MRS} ${DIR_SCRATCH}/
-#MRS=($(ls ${DIR_SCRATCH}/*PRESS35.dat))
+cp ${MRS} ${DIR_SCRATCH}/
+cp ${MRS_LOC} ${DIR_SCRATCH}/mrs_localizer.nii.gz
+cp ${NATIVE} ${DIR_SCRATCH}/native.nii.gz
+cp ${NATIVE_MASK} ${DIR_SCRATCH}/native_mask.nii.gz
+cp ${TISSUE} ${DIR_SCRATCH}/tissue.nii.gz
+MRS=${DIR_SCRATCH}/$(basename ${MRS})
+NATIVE=${DIR_SCRATCH}/native.nii.gz
+NATIVE_MASK=${DIR_SCRATCH}/native_mask.nii.gz
+TISSUE=${DIR_SCRATCH}/tissue.nii.gz
 
 # Coregister anatomical localizer to NATIVE ------------------------------------
 ## get brain mask for localizer to focus registration, if not provided
 if [[ -z ${MRS_MASK} ]]; then
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>generating brain mask for localizer"; fi
-  MRS_MASK=${DIR_SCRATCH}/mrs-localizer_mask-brain.nii.gz
-  mri_synthstrip -i ${MRS_LOC} -m ${MRS_MASK}
+  mri_synthstrip -i ${MRS_LOC} -m ${DIR_SCRATCH}/mrs_mask.nii.gz
+else
+  cp ${MRS_MASK} ${DIR_SCRATCH}/mrs_mask.nii.gz
 fi
+MRS_MASK=${DIR_SCRATCH}/mrs_mask.nii.gz
 
 ## run coregistation
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>coregistering localizer to native anatomical"; fi
@@ -828,8 +848,8 @@ mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
 cp ${DIR_SCRATCH}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
 
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi
