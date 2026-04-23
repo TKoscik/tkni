@@ -14,7 +14,7 @@ FCN_NAME=($(basename "$0"))
 FCN_NAME=${FCN_NAME%.*}
 DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
 OPERATOR=$(whoami)
-OPERATOR=${OPERATOR//@}
+OPERATOR=${OPERATOR/@}
 KERNEL="$(uname -s)"
 HARDWARE="$(uname -m)"
 NO_LOG=false
@@ -34,7 +34,7 @@ while [[ "$#" -gt 0 ]]; do
     --*)
       flag_name="${1#--}"
       var_name="${flag_name^^}"
-      var_name="${var_name//-/_}"
+      var_name="${var_name/-/_}"
       if [[ -n "$2" && "$2" != -* ]]; then
         printf -v "$var_name" "%s" "$2"
         shift 2
@@ -111,8 +111,8 @@ echo ">>>>>>setup job and log directories"
 # Loop over participants -------------------------------------------------------
 N=2 # should be 1 but this works with the tsv output to make the code easier
 if [[ ${ID,,} == "all" ]]; then N=$(wc -l ${DIR_PROJECT}/participants.tsv); fi
-IDVARS=(${IDVARS//,/ })
-IDFLAG=(${IDFLAG//,/ })
+IDVARS=(${IDVARS/,/ })
+IDFLAG=(${IDFLAG/,/ })
 
 for (( i=1; i<${N}; i++ )); do
   if [[ ${ID,,} == "all" ]]; then
@@ -155,7 +155,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"synthstrip_7.4.1_20240913\" \\" >> ${SLURM_AINIT}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
-    FSTR="${TKNIPIPES}/tkniAINIT.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniAINIT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${AINIT_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${AINIT_DIR_ID}"; fi
     if [[ -n ${AINIT_DIR_PROJECT} ]]; then  FSTR="${FSTR} --dir-project ${AINIT_DIR_PROJECT}"; fi
@@ -198,7 +198,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_FSSYNTH}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_FSSYNTH}
     echo "" >> ${SLURM_FSSYNTH}
-    FSTR="${TKNIPIPES}/tkniFSSYNTH.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniFSSYNTH.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${FSSYNTH_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${FSSYNTH_DIR_ID}"; fi
     if [[ -z ${FSSYNTH_IMAGE} ]]; then       FSTR="${FSTR} --image ${FSSYNTH_IMAGE}"; fi
@@ -240,7 +240,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_MALF}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_MALF}
     echo "" >> ${SLURM_MALF}
-    FSTR="${TKNIPIPES}/tkniMALF.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniMALF.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${MALF_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${MALF_DIR_ID}"; fi
     if [[ -z ${MALF_IMAGE} ]]; then         FSTR="${FSTR} --image ${MALF_IMAGE}"; fi
@@ -292,7 +292,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_MATS}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_MATS}
     echo "" >> ${SLURM_MATS}
-    FSTR="${TKNIPIPES}/tkniMATS.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniMATS.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${MATS_DIR_ID} ]]; then       FSTR="${FSTR} --dir-id ${MATS_DIR_ID}"; fi
     if [[ -z ${MATS_SRC_ANAT} ]]; then     FSTR="${FSTR} --src-anat ${MATS_SRC_ANAT}"; fi
@@ -349,7 +349,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_AMOD}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
-    FSTR="${TKNIPIPES}/tkniAMOD.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniAMOD.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${AMOD_DIR_ID} ]]; then       FSTR="${FSTR} --dir-id ${AMOD_DIR_ID}"; fi
     if [[ -z ${AMOD_BASE_MOD} ]]; then     FSTR="${FSTR} --base-mod ${AMOD_BMOD}"; fi
@@ -411,7 +411,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_QALAS}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
-    FSTR="${TKNIPIPES}/tkniQALAS.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniQALAS.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${QALAS_DIR_ID} ]]; then            FSTR="${FSTR} --dir-id ${QALAS_DIR_ID}"; fi
     if [[ -z ${QALAS_QALAS} ]]; then             FSTR="${FSTR} --qalas ${QALAS_QALAS}"; fi
@@ -500,7 +500,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DPREP}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
-    FSTR="${TKNIPIPES}/tkniDPREP.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniDPREP.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${DPREP_DIR_ID} ]]; then         FSTR="${FSTR} --dir-id ${DPREP_DIR_ID}"; fi
     if [[ -z ${DPREP_IMAGE_DWI} ]]; then      FSTR="--image-dwi ${DPREP_IMAGE_DWI}"; fi
@@ -552,7 +552,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DSCALE}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
-    FSTR="${TKNIPIPES}/tkniDSCALE.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniDSCALE.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${DSCALE_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${DSCALE_DIR_ID}"; fi
     if [[ -z ${DSCALE_IMAGE_DWI} ]]; then   FSTR="${FSTR} --image-dwi ${DSCALE_IMAGE_DWI}"; fi
@@ -598,7 +598,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DMICRO}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
-    FSTR="${TKNIPIPES}/tkniDMICRO.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniDMICRO.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${DMICRO_DIR_ID} ]]; then           FSTR="${FSTR} --dir-id ${DMICRO_DIR_ID}"; fi
     if [[ -z ${DMICRO_DIR_DWI} ]]; then          FSTR="${FSTR} --dir-dwi ${DMICRO_DIR_DWI}"; fi
@@ -659,7 +659,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DTRACT}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
-    FSTR="${TKNIPIPES}/tkniDTRACT.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniDTRACT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${DTRACT_DIR_ID} ]]; then            FSTR="${FSTR} --dir-id ${DTRACT_DIR_ID}"; fi
     if [[ -z ${DTRACT_IMAGE_DWI} ]]; then         FSTR="${FSTR} --image-dwi ${DTRACT_IMAGE_DWI}"; fi
@@ -709,7 +709,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_PCASL}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
-    FSTR="${TKNIPIPES}/tkniPCASL.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniPCASL.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${PCASL_DIR_ID} ]]; then         FSTR="${FSTR} --dir-id ${PCASL_DIR_ID}"; fi
     if [[ -z ${PCASL_ASL} ]]; then            FSTR="${FSTR} --asl ${PCASL_ASL}"; fi
@@ -774,7 +774,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_FUNK}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
-    FSTR="${TKNIPIPES}/tkniFUNK.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniFUNK.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${FUNK_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${FUNK_DIR_ID}"; fi
     if [[ -z ${FUNK_TS} ]]; then            FSTR="${FSTR} --ts ${FUNK_TS}"; fi;
@@ -838,7 +838,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_FCON}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
-    FSTR="${TKNIPIPES}/tkniFCON.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniFCON.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${FCON_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${FCON_DIR_ID}"; fi
     if [[ -z ${FCON_TS} ]]; then          FSTR="${FSTR} --ts ${FCON_TS}"; fi
@@ -886,7 +886,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_MRS}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
-    FSTR="${TKNIPIPES}/tkniMRS.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniMRS.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${MRS_DIR_ID} ]]; then           FSTR="${FSTR} --dir-id ${MRS_DIR_ID}"; fi
     if [[ -z ${MRS_MRS} ]]; then              FSTR="${FSTR} --mrs ${MRS_MRS}"; fi
@@ -937,7 +937,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_QCANAT}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
-    FSTR="${TKNIPIPES}/tkniQCANAT.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniQCANAT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${QCANAT_DIR_ID} ]]; then           FSTR="${FSTR} --dir-id ${QCANAT_DIR_ID}"; fi
     if [[ -z ${QCANAT_RESET_CSV} ]]; then        FSTR="${FSTR} --reset-csv"; fi
@@ -1000,7 +1000,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_QCDWI}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
-    FSTR="${TKNIPIPES}/tkniQCDWI.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniQCDWI.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${QCDWI_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${QCDWI_DIR_ID}"; fi
     if [[ -z ${QCDWI_DIR_RAW} ]]; then     FSTR="${FSTR} --dir-raw ${QCDWI_DIR_RAW}"; fi
@@ -1051,7 +1051,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_QCFUNC}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
-    FSTR="${TKNIPIPES}/tkniQCFUNC.sh"
+    FSTR="${TKNIPATH}/pipelines/tkniQCFUNC.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
     if [[ -n ${QCFUNC_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${QCFUNC_DIR_ID}"; fi
     if [[ -z ${QCFUNC_DIR_RAW} ]]; then       FSTR="${FSTR} --dir-raw ${QCFUNC_DIR_RAW}"; fi
@@ -1099,7 +1099,7 @@ for (( i=1; i<${N}; i++ )); do
 #    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_****}
 #    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
-#    FSTR="${TKNIPIPES}/tkni****.sh"
+#    FSTR="${TKNIPATH}/pipelines/tkni****.sh"
 #    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
 #    if [[ -n ${****_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${****_DIR_ID}"; fi
 #    if [[ -z ${****_} ]]; then  FSTR="${FSTR} --**** ${****_}"; fi
@@ -1139,7 +1139,7 @@ for (( i=1; i<${N}; i++ )); do
 #    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_****}
 #    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
-#    FSTR="${TKNIPIPES}/tkni****.sh"
+#    FSTR="${TKNIPATH}/pipelines/tkni****.sh"
 #    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
 #    if [[ -n ${****_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${****_DIR_ID}"; fi
 #    if [[ -z ${****_} ]]; then  FSTR="${FSTR} --**** ${****_}"; fi
@@ -1179,7 +1179,7 @@ for (( i=1; i<${N}; i++ )); do
 #    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_****}
 #    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_****}
 #    echo "" >> ${SLURM_****}
-#    FSTR="${TKNIPIPES}/tkni****.sh"
+#    FSTR="${TKNIPATH}/pipelines/tkni****.sh"
 #    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
 #    if [[ -n ${****_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${****_DIR_ID}"; fi
 #    if [[ -z ${****_} ]]; then  FSTR="${FSTR} --**** ${****_}"; fi
@@ -1200,7 +1200,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
 
   # Reset Job IDs for iteration
-  TFLOW=(${WORKFLOWS//,/ })
+  TFLOW=(${WORKFLOWS/,/ })
   for (( i=0; i<${#TFLOW[@]}; i++ )); do unset JOB_${TFLOW[${i}]^^}; done
 
   if [[ ${WORKFLOWS^^} == *"AINIT"* ]]; then
@@ -1218,7 +1218,7 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"AMOD"* ]]; then
     DEP_AMOD="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}"
-    DEP_AMOD=$(echo "${DEP_AMOD}" | sed -E 's/:+/:/g; s/^:|:$//g')
+    DEP_AMOD=$(echo "${DEP_AMOD}" | sed -E 's/:+/:/g; s/^:|:$/g')
     JOB_AMOD=$(sbatch --parsable ${DEP_AMOD:+--dependency=afterok:${DEP_AMOD}} ${SLURM_AMOD})
   fi
   if [[ ${WORKFLOWS^^} == *"QALAS"* ]]; then
@@ -1237,7 +1237,7 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"DTRACT"* ]]; then
     DEP_DTRACT="${JOB_AINIT}${JOB_AINIT:+:}${JOB_DPREP}${JOB_DPREP:+:}${JOB_MATS}"
-    DEP_DTRACT=$(echo "${DEP_DTRACT}" | sed -E 's/:+/:/g; s/^:|:$//g')
+    DEP_DTRACT=$(echo "${DEP_DTRACT}" | sed -E 's/:+/:/g; s/^:|:$/g')
     JOB_DTRACT=$(sbatch --parsable ${DEP_DTRACT:+--dependency=afterok:${DEP_DTRACT}} ${SLURM_DTRACT})
   fi
   if [[ ${WORKFLOWS^^} == *"PCASL"* ]]; then
@@ -1250,7 +1250,7 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"FCON"* ]]; then
     DEP_FCON="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}"
-    DEP_FCON=$(echo "${DEP_FCON}" | sed -E 's/:+/:/g; s/^:|:$//g')
+    DEP_FCON=$(echo "${DEP_FCON}" | sed -E 's/:+/:/g; s/^:|:$/g')
     JOB_FCON=$(sbatch --parsable ${DEP_FCON:+--dependency=afterok:${DEP_FCON}} ${SLURM_FCON})
   fi
   if [[ ${WORKFLOWS^^} == *"MRS"* ]]; then
@@ -1259,18 +1259,18 @@ for (( i=1; i<${N}; i++ )); do
   fi
   if [[ ${WORKFLOWS^^} == *"QCANAT"* ]]; then
     DEP_QCANAT="${JOB_AINIT}${JOB_AINIT:+:}${JOB_FSSYNTH}${JOB_FSSYNTH:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_AMOD}${JOB_AMOD:+:}${JOB_QALAS}"
-    DEP_QCANAT=$(echo "${DEP_QCANAT}" | sed -E 's/:+/:/g; s/^:|:$//g')
+    DEP_QCANAT=$(echo "${DEP_QCANAT}" | sed -E 's/:+/:/g; s/^:|:$/g')
     JOB_QCANAT=$(sbatch --parsable ${DEP_QCANAT:+--dependency=afterok:${DEP_QCANAT}} ${SLURM_QCANAT})
   fi
   if [[ ${WORKFLOWS^^} == *"QCDWI"* ]]; then
     DEP_QCDWI="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_DPREP}${JOB_DPREP:+:}${JOB_DSCALE}${JOB_DSCALE:+:}${JOB_DMICRO}${JOB_DMICRO:+:}${JOB_QCDWI}"
-    DEP_QCDWI=$(echo "${DEP_QCDWI}" | sed -E 's/:+/:/g; s/^:|:$//g')
+    DEP_QCDWI=$(echo "${DEP_QCDWI}" | sed -E 's/:+/:/g; s/^:|:$/g')
     JOB_QCDWI=$(sbatch --parsable ${DEP_QCDWI:+--dependency=afterok:${DEP_QCDWI}} ${SLURM_QCDWI})
   fi
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
     echo "submitting QCFUNC"
     DEP_QCFUNC="${JOB_AINIT}${JOB_AINIT:+:}${JOB_MALF}${JOB_MALF:+:}${JOB_MATS}${JOB_MATS:+:}${JOB_FUNK}${JOB_FUNK:+:}${JOB_FCON}"
-    DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$//g')
+    DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$/g')
     JOB_QCFUNC=$(sbatch --parsable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
   fi
   echo ">>>>>${IDPFX} jobs submitted"
