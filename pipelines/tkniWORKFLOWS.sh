@@ -155,8 +155,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"synthstrip_7.4.1_20240913\" \\" >> ${SLURM_AINIT}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_AINIT}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_AINIT}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_AINIT}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_AINIT}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_AINIT}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_AINIT}
     echo "done" >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
     FSTR="${TKNIPATH}/pipelines/tkniAINIT.sh"
@@ -206,8 +206,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_FSSYNTH}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_FSSYNTH}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_FSSYNTH}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_FSSYNTH}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_FSSYNTH}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_FSSYNTH}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_FSSYNTH}
     echo "done" >> ${SLURM_FSSYNTH}
     echo "" >> ${SLURM_FSSYNTH}
     FSTR="${TKNIPATH}/pipelines/tkniFSSYNTH.sh"
@@ -257,8 +257,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_MALF}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_MALF}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_MALF}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_MALF}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_MALF}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_MALF}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_MALF}
     echo "done" >> ${SLURM_MALF}
     echo "" >> ${SLURM_MALF}
     FSTR="${TKNIPATH}/pipelines/tkniMALF.sh"
@@ -318,8 +318,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_MATS}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_MATS}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_MATS}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_MATS}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_MATS}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_MATS}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_MATS}
     echo "done" >> ${SLURM_MATS}
     echo "" >> ${SLURM_MATS}
     FSTR="${TKNIPATH}/pipelines/tkniMATS.sh"
@@ -384,8 +384,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_AMOD}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_AMOD}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_AMOD}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_AMOD}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_AMOD}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_AMOD}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_AMOD}
     echo "done" >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
     FSTR="${TKNIPATH}/pipelines/tkniAMOD.sh"
@@ -455,8 +455,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_QALAS}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QALAS}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_QALAS}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_QALAS}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_QALAS}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_QALAS}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_QALAS}
     echo "done" >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
     FSTR="${TKNIPATH}/pipelines/tkniQALAS.sh"
@@ -550,8 +550,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DPREP}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DPREP}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_DPREP}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_DPREP}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_DPREP}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_DPREP}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_DPREP}
     echo "done" >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
     FSTR="${TKNIPATH}/pipelines/tkniDPREP.sh"
@@ -610,8 +610,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DSCALE}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DSCALE}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_DSCALE}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_DSCALE}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_DSCALE}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_DSCALE}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_DSCALE}
     echo "done" >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
     FSTR="${TKNIPATH}/pipelines/tkniDSCALE.sh"
@@ -665,8 +665,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DMICRO}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DMICRO}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_DMICRO}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_DMICRO}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_DMICRO}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_DMICRO}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_DMICRO}
     echo "done" >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
     FSTR="${TKNIPATH}/pipelines/tkniDMICRO.sh"
@@ -735,8 +735,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_DTRACT}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_DTRACT}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_DTRACT}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_DTRACT}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_DTRACT}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_DTRACT}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_DTRACT}
     echo "done" >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
     FSTR="${TKNIPATH}/pipelines/tkniDTRACT.sh"
@@ -794,8 +794,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_PCASL}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_PCASL}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_PCASL}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_PCASL}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_PCASL}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_PCASL}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_PCASL}
     echo "done" >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
     FSTR="${TKNIPATH}/pipelines/tkniPCASL.sh"
@@ -868,8 +868,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_FUNK}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_FUNK}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_FUNK}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_FUNK}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_FUNK}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_FUNK}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_FUNK}
     echo "done" >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
     FSTR="${TKNIPATH}/pipelines/tkniFUNK.sh"
@@ -941,8 +941,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_FCON}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_FCON}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_FCON}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_FCON}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_FCON}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_FCON}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_FCON}
     echo "done" >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
     FSTR="${TKNIPATH}/pipelines/tkniFCON.sh"
@@ -998,8 +998,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_MRS}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_MRS}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_MRS}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_MRS}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_MRS}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_MRS}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_MRS}
     echo "done" >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
     FSTR="${TKNIPATH}/pipelines/tkniMRS.sh"
@@ -1058,8 +1058,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_QCANAT}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QCANAT}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_QCANAT}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_QCANAT}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_QCANAT}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_QCANAT}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_QCANAT}
     echo "done" >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
     FSTR="${TKNIPATH}/pipelines/tkniQCANAT.sh"
@@ -1130,8 +1130,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_QCDWI}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QCDWI}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_QCDWI}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_QCDWI}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_QCDWI}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_QCDWI}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_QCDWI}
     echo "done" >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
     FSTR="${TKNIPATH}/pipelines/tkniQCDWI.sh"
@@ -1190,8 +1190,8 @@ for (( i=1; i<${N}; i++ )); do
     echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_QCFUNC}
     echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_QCFUNC}
     echo 'for TCON in "${ND_CONTAINERS[@]}"; do' >> ${SLURM_QCFUNC}
-    echo "  cd /app/ni/neurocommand/containers/${TCON}" >> ${SLURM_QCFUNC}
-    echo "  source activate_${TCON}.simg.sh" >> ${SLURM_QCFUNC}
+    echo '  cd /app/ni/neurocommand/containers/${TCON}' >> ${SLURM_QCFUNC}
+    echo '  source activate_${TCON}.simg.sh' >> ${SLURM_QCFUNC}
     echo "done" >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
     FSTR="${TKNIPATH}/pipelines/tkniQCFUNC.sh"
