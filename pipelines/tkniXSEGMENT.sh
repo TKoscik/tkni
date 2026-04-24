@@ -154,53 +154,61 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '  --dir-project'
-  echo '  --id'
-  echo '  --dir-id'
-  echo '  --id-field'
-  echo '  --image'
-  echo '  --mask-brain'
-  echo '  --aniso-conductance'
-  echo '  --aniso-iter'
-  echo '  --dog_g1'
-  echo '  --dog_k'
-  echo '  --altitude'
-  echo '  --datum'
-  echo '  --no-merge'
-  echo ''
-  echo 'Procedure: '
-  echo '(1) Anisotropic Smooth'
-  echo '(2) Calculate Difference of Gaussians'
-  echo '    -default using K=1.6 to approximate the Laplacian of the'
-  echo '     Gaussian'
-  echo '    -k=5 might be a reasonable value as well which may'
-  echo '     approximate retinal ganglion cells'
-  echo '    -output zero-crossings'
-  echo '(3) Calculate the Signed Distance Transform to the the zero-'
-  echo '    crossings'
-  echo '(4) Watershed Clustering'
-  echo '    -threshold at desired "altitude" to produce non-connected'
-  echo '     clusters, default is >= 2 voxels from DoG zero-crossing'
-  echo '    -generate clusters with 6-neighbor connectivity'
-  echo '    -flood fill up to "datum", default is 1 voxel from zero-'
-  echo '     crossing'
-  echo '    -add smaller peaks that do not reach initial separating'
-  echo '     altitude'
-  echo '(5) Merge clusters, touching neighbors with significantly'
-  echo '    overlapping intensity probability distribution functions'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo ''
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${FCN_NAME}"
+    echo ' DESCRIPTION: UHR Ex-Vivo Watershed Segmentation & Cluster Merging'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA:'
+    echo '  --image <file/list>   Cleaned UHR image(s) to segment (default: swi)'
+    echo '  --mask <file/list>    Manual or refined brain mask(s)'
+    echo ''
+    echo ' SEGMENTATION STEPS & PARAMETERS:'
+    echo '  (1) Anisotropic Smoothing'
+    echo '      --no-anisosmooth    Skip smoothing prior to DoG'
+    echo '      --aniso-conduct <f> Conductance parameter (default: 0.5)'
+    echo '      --aniso-iter <int>  Smoothing iterations (default: 20)'
+    echo ''
+    echo '  (2) Difference of Gaussians (DoG)'
+    echo '      --dog_g1 <float>    Sigma for first Gaussian (default: 0)'
+    echo '      --dog_k <float>     Multiplier for second Gaussian (default: 1.6)'
+    echo '                          (1.6 approximates the Laplacian of the Gaussian)'
+    echo '                          -k=5 might be a reasonable value as well which may'
+    echo '                          approximate retinal ganglion cells'
+    echo ''
+    echo '  (3) Signed Distance Transform (SDT)'
+    echo '      Automatically calculates distance to DoG zero-crossings.'
+    echo ''
+    echo '  (4) Watershed Clustering'
+    echo '      --datum <float>     Altitude/threshold for initial cluster separation'
+    echo '                          (Default: 1 voxel from zero-crossing)'
+    echo ''
+    echo '  (5) Hierarchical Merging'
+    echo '      --no-merge          Skip the PDF-based cluster merging step'
+    echo '      --merge-thresh <f>  Overlap threshold for merging (default: 1.25)'
+    echo '      --merge-weights <l> Comma-separated weights for centrality moments'
+    echo '                          (Default: 1,2,1.5,1,1)'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help message'
+    echo '  -v | --verbose        Enable detailed console logging'
+    echo '  -n | --no-png         Disable generation of QC images'
+    echo '  -r | --no-rmd         Disable HTML report generation'
+    echo '  -k | --keep           Keep intermediates (Smooth, DoG, Distance)'
+    echo '  --force               Force re-run and overwrite existing results'
+    echo ''
+    echo ' PATHS:'
+    echo '  --dir-save <path>     Results location (default: label/xsegment)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override temporary workspace'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
 
 #===============================================================================
@@ -215,11 +223,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------

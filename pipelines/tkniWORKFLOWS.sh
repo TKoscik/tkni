@@ -89,6 +89,7 @@ if [[ -n "${HELP}" ]]; then
     echo '  Diffusion:   DPREP, DSCALE, DMICRO, DTRACT'
     echo '  Other:       PCASL, MRS'
     echo '  QC Reports:  QCANAT, QCDWI, QCFUNC'
+    echo '  Ex-vivo UHR: XINIT, XSEGMENT'
     echo ''
     echo ' NOTES:'
     echo '  - This script uses "afterok" SLURM dependencies to chain jobs.'
@@ -1244,125 +1245,124 @@ for (( i=1; i<${N}; i++ )); do
   fi
 
   ###############################################################################
-  ## Summarize - Summarize results and add to datasets
-  ###############################################################################
-#  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
-#    SLURM_****=${DIR_JOB}/****_${SLURM_SFX}.slurm
-#    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
-#    echo "#!/bin/bash" > ${SLURM_****}
-#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SFX}.txt" >> ${SLURM_****}
-#    echo "#SBATCH -p normal" >> ${SLURM_****}
-#    echo "#SBATCH -q normal" >> ${SLURM_****}
-#    echo "#SBATCH --nodes=1" >> ${SLURM_****}
-#    echo "#SBATCH --ntasks=1" >> ${SLURM_****}
-#    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_****}
-#    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo "# Load Neurocontainers ------" >> ${SLURM_****}
-#    echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_****}
-#    echo "               \"ants_2.6.5_20260225\" \\" >> ${SLURM_****}
-#    echo "               \"convert3d_1.1.0_20251212\" \\" >> ${SLURM_****}
-#    echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_****}
-#    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_****}
-#    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    FSTR="${TKNIPATH}/pipelines/tkni****.sh"
-#    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
-#    if [[ -n ${****_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${****_DIR_ID}"; fi
-#    if [[ -z ${****_} ]]; then  FSTR="${FSTR} --**** ${****_}"; fi
-#    if [[ -z ${****_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${****_DIR_SAVE}"; fi
-#    if [[ -z ${****_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${****_SCRATCH}"; fi
-#    if [[ -z ${****_FORCE} ]]; then  FSTR="${FSTR} --force ${****_}"; fi
-#    echo ${FSTR} >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_****}
-#    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_****}
-#    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#  fi
-
-  ###############################################################################
   ## tkniXINIT - Ex Vivo Preprocessing
   ###############################################################################
-#  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
-#    SLURM_****=${DIR_JOB}/****_${SLURM_SFX}.slurm
-#    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
-#    echo "#!/bin/bash" > ${SLURM_****}
-#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SFX}.txt" >> ${SLURM_****}
-#    echo "#SBATCH -p normal" >> ${SLURM_****}
-#    echo "#SBATCH -q normal" >> ${SLURM_****}
-#    echo "#SBATCH --nodes=1" >> ${SLURM_****}
-#    echo "#SBATCH --ntasks=1" >> ${SLURM_****}
-#    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_****}
-#    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo "# Load Neurocontainers ------" >> ${SLURM_****}
-#    echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_****}
-#    echo "               \"ants_2.6.5_20260225\" \\" >> ${SLURM_****}
-#    echo "               \"convert3d_1.1.0_20251212\" \\" >> ${SLURM_****}
-#    echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_****}
-#    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_****}
-#    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    FSTR="${TKNIPATH}/pipelines/tkni****.sh"
-#    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
-#    if [[ -n ${****_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${****_DIR_ID}"; fi
-#    if [[ -z ${****_} ]]; then  FSTR="${FSTR} --**** ${****_}"; fi
-#    if [[ -z ${****_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${****_DIR_SAVE}"; fi
-#    if [[ -z ${****_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${****_SCRATCH}"; fi
-#    if [[ -z ${****_FORCE} ]]; then  FSTR="${FSTR} --force ${****_}"; fi
-#    echo ${FSTR} >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_****}
-#    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_****}
-#    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#  fi
+  if [[ ${WORKFLOWS^^} == *"XINIT"* ]]; then
+    SLURM_XINIT=${DIR_JOB}/XINIT_${SLURM_SFX}.slurm
+    if [[ -z ${XINIT_NTHREADS} ]]; then XINIT_NTHREADS=16; fi
+    echo "#!/bin/bash" > ${SLURM_XINIT}
+    echo "#SBATCH --output=${DIR_LOG}/XINIT_${SLURM_SFX}.txt" >> ${SLURM_XINIT}
+    echo "#SBATCH -p normal" >> ${SLURM_XINIT}
+    echo "#SBATCH -q normal" >> ${SLURM_XINIT}
+    echo "#SBATCH --nodes=1" >> ${SLURM_XINIT}
+    echo "#SBATCH --ntasks=1" >> ${SLURM_XINIT}
+    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_XINIT}
+    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XINIT}
+    echo "" >> ${SLURM_XINIT}
+    echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XINIT}
+    echo "" >> ${SLURM_XINIT}
+    echo "# Load Neurocontainers ------" >> ${SLURM_XINIT}
+    echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_XINIT}
+    echo "               \"ants_2.6.5_20260225\" \\" >> ${SLURM_XINIT}
+    echo "               \"convert3d_1.1.0_20251212\" \\" >> ${SLURM_XINIT}
+    echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_XINIT}
+    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_XINIT}
+    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_XINIT}
+    echo "" >> ${SLURM_XINIT}
+    FSTR="${TKNIPATH}/pipelines/tkniXINIT.sh"
+    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${XINIT_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${XINIT_DIR_ID}"; fi
+    if [[ -n ${XINIT_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${XINIT_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
+    if [[ -z ${XINIT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field) IDFIELD}"; fi
+    if [[ -z ${XINIT_IMAGE} ]]; then  FSTR="${FSTR} --image) IMAGE}"; fi
+    if [[ -z ${XINIT_MOD} ]]; then  FSTR="${FSTR} --mod) MOD}"; fi
+    if [[ -z ${XINIT_REDO_MASK} ]]; then  FSTR="${FSTR} --redo-mask"; fi
+    if [[ -z ${XINIT_UHR_THRESH} ]]; then  FSTR="${FSTR} --uhr-thresh) UHR_THRESH}"; fi
+    if [[ -z ${XINIT_THREADS} ]]; then  FSTR="${FSTR} --threads) threads}"; fi
+    if [[ -z ${XINIT_SLAB_PLANE} ]]; then  FSTR="${FSTR} --slab-plane) SLAB_PLANE}"; fi
+    if [[ -z ${XINIT_SLAB_METRIC} ]]; then  FSTR="${FSTR} --slab-metric) SLAB_METRIC}"; fi
+    if [[ -z ${XINIT_SLAB_ORDER} ]]; then  FSTR="${FSTR} --slab-order) SLAB_ORDER}"; fi
+    if [[ -z ${XINIT_SLAB_SMOOTH} ]]; then  FSTR="${FSTR} --slab-smooth) SLAB_SMOOTH}"; fi
+    if [[ -z ${XINIT_N4_RESAMPLE} ]]; then  FSTR="${FSTR} --debias-resample) N4_RESAMPLE}"; fi
+    if [[ -z ${XINIT_N4_BSPLINE} ]]; then  FSTR="${FSTR} --debias-bspline) N4_BSPLINE}"; fi
+    if [[ -z ${XINIT_N4_SHRINK} ]]; then  FSTR="${FSTR} --debias-shrink) N4_SHRINK}"; fi
+    if [[ -z ${XINIT_N4_CONVERGENCE} ]]; then  FSTR="${FSTR} --debias-convergence) N4_CONVERGENCE}"; fi
+    if [[ -z ${XINIT_N4_HISTMATCH} ]]; then  FSTR="${FSTR} --debias-histmatch) N4_HISTMATCH}"; fi
+    if [[ -z ${XINIT_DN_MODEL} ]]; then  FSTR="${FSTR} --denoise-model) DN_MODEL}"; fi
+    if [[ -z ${XINIT_DN_SHRINK} ]]; then  FSTR="${FSTR} --denoise-shrink) DN_SHRINK}"; fi
+    if [[ -z ${XINIT_DN_PATCH} ]]; then  FSTR="${FSTR} --denoise-patch) DN_PATCH}"; fi
+    if [[ -z ${XINIT_DN_RADIUS} ]]; then  FSTR="${FSTR} --denoise-radius) DN_RADIUS}"; fi
+    if [[ -z ${XINIT_SOFTMASK_KERNEL} ]]; then  FSTR="${FSTR} --softmask-kernel) SOFTMASK_KERNEL}"; fi
+    if [[ -z ${XINIT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${XINIT_DIR_SAVE}"; fi
+    if [[ -z ${XINIT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${XINIT_SCRATCH}"; fi
+    if [[ -z ${XINIT_FORCE} ]]; then  FSTR="${FSTR} --force ${XINIT_}"; fi
+    echo ${FSTR} >> ${SLURM_XINIT}
+    echo "" >> ${SLURM_XINIT}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_XINIT}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_XINIT}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_XINIT}
+    echo "" >> ${SLURM_XINIT}
+  fi
 
   ###############################################################################
   ## tkniXSEGMENT - Ex vivo Watershed Segmentation
   ###############################################################################
-#  if [[ ${WORKFLOWS^^} == *"****"* ]]; then
-#    SLURM_****=${DIR_JOB}/****_${SLURM_SFX}.slurm
-#    if [[ -z ${****_NTHREADS} ]]; then ****_NTHREADS=4; fi
-#    echo "#!/bin/bash" > ${SLURM_****}
-#    echo "#SBATCH --output=${DIR_LOG}/****_${SLURM_SFX}.txt" >> ${SLURM_****}
-#    echo "#SBATCH -p normal" >> ${SLURM_****}
-#    echo "#SBATCH -q normal" >> ${SLURM_****}
-#    echo "#SBATCH --nodes=1" >> ${SLURM_****}
-#    echo "#SBATCH --ntasks=1" >> ${SLURM_****}
-#    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_****}
-#    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo "# Load Neurocontainers ------" >> ${SLURM_****}
-#    echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_****}
-#    echo "               \"ants_2.6.5_20260225\" \\" >> ${SLURM_****}
-#    echo "               \"convert3d_1.1.0_20251212\" \\" >> ${SLURM_****}
-#    echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_****}
-#    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_****}
-#    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    FSTR="${TKNIPATH}/pipelines/tkni****.sh"
-#    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
-#    if [[ -n ${****_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${****_DIR_ID}"; fi
-#    if [[ -z ${****_} ]]; then  FSTR="${FSTR} --**** ${****_}"; fi
-#    if [[ -z ${****_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${****_DIR_SAVE}"; fi
-#    if [[ -z ${****_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${****_SCRATCH}"; fi
-#    if [[ -z ${****_FORCE} ]]; then  FSTR="${FSTR} --force ${****_}"; fi
-#    echo ${FSTR} >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_****}
-#    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_****}
-#    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_****}
-#    echo "" >> ${SLURM_****}
-#  fi
-
+  if [[ ${WORKFLOWS^^} == *"XSEGMENT"* ]]; then
+    SLURM_XSEGMENT=${DIR_JOB}/XSEGMENT_${SLURM_SFX}.slurm
+    if [[ -z ${XSEGMENT_NTHREADS} ]]; then XSEGMENT_NTHREADS=4; fi
+    echo "#!/bin/bash" > ${SLURM_XSEGMENT}
+    echo "#SBATCH --output=${DIR_LOG}/XSEGMENT_${SLURM_SFX}.txt" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH -p normal" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH -q normal" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --nodes=1" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --ntasks=1" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XSEGMENT}
+    echo "" >> ${SLURM_XSEGMENT}
+    echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XSEGMENT}
+    echo "" >> ${SLURM_XSEGMENT}
+    echo "# Load Neurocontainers ------" >> ${SLURM_XSEGMENT}
+    echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_XSEGMENT}
+    echo "               \"ants_2.6.5_20260225\" \\" >> ${SLURM_XSEGMENT}
+    echo "               \"convert3d_1.1.0_20251212\" \\" >> ${SLURM_XSEGMENT}
+    echo "               \"freesurfer_7.4.1_20231214\" \\" >> ${SLURM_XSEGMENT}
+    echo "               \"mrtrix3_3.0.8_20260107\" \\" >> ${SLURM_XSEGMENT}
+    echo "               \"niimath_1.0.20250804_20251016\")" >> ${SLURM_XSEGMENT}
+    echo "" >> ${SLURM_XSEGMENT}
+    FSTR="${TKNIPATH}/pipelines/tkniXSEGMENT.sh"
+    FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${XSEGMENT_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${XSEGMENT_DIR_ID}"; fi
+    if [[ -n ${XSEGMENT_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${XSEGMENT_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
+    if [[ -z ${XSEGMENT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field ${XSEGMENT_IDFIELD}"; fi
+    if [[ -z ${XSEGMENT_IMAGE} ]]; then  FSTR="${FSTR} --image ${XSEGMENT_IMAGE}"; fi
+    if [[ -z ${XSEGMENT_MASK} ]]; then  FSTR="${FSTR} --mask ${XSEGMENT_MASK}"; fi
+    if [[ -z ${XSEGMENT_NO_ANISOSMOOTH} ]]; then  FSTR="${FSTR} --no-anisosmooth"; fi
+    if [[ -z ${XSEGMENT_SMOOTH_CONDUCTANCE} ]]; then  FSTR="${FSTR} --aniso-conductance ${XSEGMENT_SMOOTH_CONDUCTANCE}"; fi
+    if [[ -z ${XSEGMENT_SMOOTH_ITER} ]]; then  FSTR="${FSTR} --aniso-iter ${XSEGMENT_SMOOTH_ITER}"; fi
+    if [[ -z ${XSEGMENT_DOG_G1} ]]; then  FSTR="${FSTR} --dog_g1 ${XSEGMENT_DOG_G1}"; fi
+    if [[ -z ${XSEGMENT_DOG_K} ]]; then  FSTR="${FSTR} --dog_k ${XSEGMENT_DOG_K}"; fi
+    if [[ -z ${XSEGMENT_DATUM} ]]; then  FSTR="${FSTR} --datum ${XSEGMENT_DATUM}"; fi
+    if [[ -z ${XSEGMENT_NO_MERGE} ]]; then  FSTR="${FSTR} --no-merge"; fi
+    if [[ -z ${XSEGMENT_MERGE_THRESHOLD} ]]; then  FSTR="${FSTR} --merge-threshold ${XSEGMENT_MERGE_THRESHOLD}"; fi
+    if [[ -z ${XSEGMENT_MERGE_WEIGHTS} ]]; then  FSTR="${FSTR} --merge-weights ${XSEGMENT_MERGE_WEIGHTS}"; fi
+    if [[ -z ${XSEGMENT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${XSEGMENT_DIR_SAVE}"; fi
+    if [[ -z ${XSEGMENT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${XSEGMENT_SCRATCH}"; fi
+    if [[ -z ${XSEGMENT_FORCE} ]]; then  FSTR="${FSTR} --force ${XSEGMENT_}"; fi
+    echo ${FSTR} >> ${SLURM_XSEGMENT}
+    echo "" >> ${SLURM_XSEGMENT}
+    echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_XSEGMENT}
+    echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_XSEGMENT}
+    echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_XSEGMENT}
+    echo "" >> ${SLURM_XSEGMENT}
+  fi
 
   ###############################################################################
   ## SUBMIT JOBS WITH DEPENDENCIES
