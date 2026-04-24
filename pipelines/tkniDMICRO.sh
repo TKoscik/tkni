@@ -162,28 +162,57 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: DWI Microstructure Modeling (NODDI & SANDI via AMICO)'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT IMAGERY (DWI):'
+    echo '  --dwi <file>          Preprocessed DWI NIfTI'
+    echo '  --bval <file>         B-values file'
+    echo '  --bvec <file>         B-vectors file'
+    echo '  --mask <file>         Brain mask for DWI space'
+    echo ''
+    echo ' NODDI & SANDI PARAMETERS:'
+    echo '  --no-noddi            Skip NODDI model fitting'
+    echo '  --noddi-dpar <val>    Parallel diffusivity (default: 0.0017)'
+    echo '  --no-sandi            Skip SANDI model fitting'
+    echo '  --sandi-delta <val>   Large delta (ms) (default: 44.2)'
+    echo '  --sandi-te <val>      Echo time (ms) (default: 88.0)'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' IMPLEMENTATION DETAILS:'
+    echo '  Powered by AMICO (Accelerated Microstructure Imaging via Convex Optimization)'
+    echo '  https://github.com/daducci/AMICO/wiki'
+    echo ''
+    echo ' REFERENCES:'
+    echo '  [AMICO] Daducci A, Canales-Rodríguez EJ, Zhang H, Dyrby TB,'
+    echo '          Alexander DC, Thiran JP. Accelerated Microstructure Imaging'
+    echo '          via Convex Optimization (AMICO) from diffusion MRI data.'
+    echo '          NeuroImage. 2015;105. doi:10.1016/j.neuroimage.2014.10.026'
+    echo '  [NODDI] Zhang H, Schneider T, Wheeler-Kingshott CA, Alexander DC.'
+    echo '          NODDI: practical in vivo neurite orientation dispersion and'
+    echo '          density imaging of the human brain. Neuroimage. 2012;61:'
+    echo '          1000–1016. doi:10.1016/j.neuroimage.2012.03.072'
+    echo '  [SANDI] Palombo M, Ianus A, Guerreri M, Nunes D, Alexander DC,'
+    echo '          Shemesh N, et al. SANDI: A compartment-based model for non-'
+    echo '          invasive apparent soma and neurite imaging by diffusion MRI.'
+    echo '          Neuroimage. 2020;215: 116835.'
+    echo '          doi:10.1016/j.neuroimage.2020.116835'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

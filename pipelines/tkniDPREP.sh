@@ -145,28 +145,47 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: DWI Preprocessing (Denoise, Unring, Eddy, Topup, Coreg)'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT IMAGERY:'
+    echo '  --image-dwi <list>    Comma-separated DWI NIfTIs (searches raw/dwi if omitted)'
+    echo '  --image-ap <file>     Phase-encoding AP B0 image (for Topup)'
+    echo '  --image-pa <file>     Phase-encoding PA B0 image (for Topup)'
+    echo '  --image-anat <file>   Native T1w anatomical reference'
+    echo '  --mask-brain <file>   Anatomical brain mask'
+    echo ''
+    echo ' PREPROCESSING OPTIONS:'
+    echo '  --mask-b0-method <m>  B0 masking: mrtrix or afni,<clip> (default: mrtrix)'
+    echo '  --mask-dil <int>      Voxels to dilate anatomical mask (default: 2)'
+    echo '  --rpenone             Flag: Assume no reverse-phase encoding available'
+    echo ''
+    echo ' PATHING & DIRECTORIES:'
+    echo '  --dir-save <path>     Directory for derivatives (default: derivatives/tkni)'
+    echo '  --dir-mrtrix <path>   Directory for .mif formatted outputs'
+    echo '  --dir-anat <path>     Path to anatomical inputs'
+    echo '  --dir-dwi <path>      Path to DWI inputs'
+    echo '  --dir-xfm <path>      Path to registration transforms'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --loquacious          Enable extreme ANTs/MRtrix verbosity'
+    echo '  -n | --no-png         Disable generation of QC images'
+    echo '  -r | --no-rmd         Disable HTML report generation'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

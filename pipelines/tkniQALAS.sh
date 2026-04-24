@@ -55,7 +55,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hv --long pi:,project:,dir-project:,\
+OPTS=$(getopt -o hvnr --long pi:,project:,dir-project:,\
 id:,dir-id:,qalas:,b1:,native:,brain:,csf:,\
 opt-tr:,opt-fa:,opt-turbo:,opt-echo-spacing:,opt-t2prep:,opt-t1init:,opt-m0init:,\
 no-b1,b1k:,do-n4,\
@@ -124,7 +124,7 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
-    -n | --no-rmd) NO_PNG=true ; shift ;;
+    -r | --no-rmd) NO_PNG=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
@@ -161,37 +161,54 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id'
-  echo '  --dir-id'
-  echo '  --qalas'
-  echo '  --b1'
-  echo '  --native'
-  echo '  --csf'
-  echo '  --atlas'
-  echo '  --atlas-xfm'
-  echo '  --synth'
-  echo '  --force'
-  echo '  --requires'
-  echo '  --dir-save'
-  echo '  --dir-project'
-  echo '  --dir-scratch'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: QALAS qMRI Processing & Sequence Synthesis'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT IMAGERY:'
+    echo '  --qalas <file>        Raw QALAS 4D NIfTI'
+    echo '  --b1 <file>           B1 transmit field map (for bias correction)'
+    echo '  --native <file>       Native T1w anatomical reference'
+    echo '  --brain <file>        Manual brain mask for reference image'
+    echo '  --csf <file>          Existing CSF mask for PD rescaling'
+    echo ''
+    echo ' QALAS SEQUENCE PARAMETERS:'
+    echo '  --opt-tr <float>      Repetition Time (s) (default: 4.5)'
+    echo '  --opt-fa <int>        Flip Angle (deg) (default: 4)'
+    echo '  --opt-turbo <int>     Turbo factor (default: 5)'
+    echo '  --opt-echo-spacing <f> Echo spacing (s) (default: 0.0023)'
+    echo '  --opt-t2prep <float>  T2 prep time (s) (default: 0.9)'
+    echo ''
+    echo ' BIAS & NOISE CORRECTION:'
+    echo '  --no-b1               Skip B1-based bias correction'
+    echo '  --b1k <int>           Gaussian kernel for B1 smoothing (default: 10mm)'
+    echo '  --do-n4               Use N4 field estimation instead of B1 map'
+    echo '  --no-denoise          Skip Rician denoising of raw volumes'
+    echo ''
+    echo ' SYNTHESIS OPTIONS:'
+    echo '  --synth <list>        Semicolon-separated list of sequences to create'
+    echo '                        (default: t2w-fse;t1w-gre;t1w-mp2rage;t2w-flair;dir;tbe)'
+    echo '                        Example: "t2w-flair,ti,2.1,te,0.08"'
+    echo ''
+    echo ' PATHS & GLOBAL:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  -n | --no-png         Disable QC image generation'
+    echo '  -r | --no-rmd         Disable HTML report generation'
+    echo '  --force               Force re-run and overwrite status'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

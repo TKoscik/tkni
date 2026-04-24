@@ -110,9 +110,9 @@ while true; do
     --label) LABEL="$2" ; shift 2 ;;
     --lut-orig) LUT_ORIG="$2" ; shift 2 ;;
     --lut-sort) LUT_SORT="$2" ; shift 2 ;;
-    --keep-10mil) KEEP_10MIL="true" ; shift 2 ;;
-    --no-afd) NO_AFD="true" ; shift 2 ;;
-    --no-tract) NO_TRACT="true" ; shift 2 ;;
+    --keep-10mil) KEEP_10MIL="true" ; shift ;;
+    --no-afd) NO_AFD="true" ; shift ;;
+    --no-tract) NO_TRACT="true" ; shift ;;
     --dir-mrtrix) DIR_MRTRIX="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
@@ -125,28 +125,47 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Whole-Brain Tractography & Connectome Construction'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT IMAGERY & ACT:'
+    echo '  --image-dwi <file>    Preprocessed DWI image (.mif format)'
+    echo '  --posterior-5tt <f>   5-Tissue-Type image for ACT guidance'
+    echo '                        (Auto-generated from T1 if omitted)'
+    echo '  --image-t1-dwi <f>    T1w anatomical resampled to DWI spacing'
+    echo '  --image-t1-native <f> T1w anatomical in native space'
+    echo '  --mask-brain-native <f> Brain mask in native T1w space'
+    echo ''
+    echo ' CONNECTOME SETTINGS:'
+    echo '  --label <file>        Atlas parcellation for connectome nodes'
+    echo '                        (Default: hcpmmp1+MALF)'
+    echo '  --lut-orig <file>     Original Lookup Table for the atlas'
+    echo '  --lut-sort <file>     TKNI-ordered LUT for matrix sorting'
+    echo ''
+    echo ' PROCESSING OPTIONS:'
+    echo '  --keep-10mil          Do not delete the initial 10M streamline file'
+    echo '                        (Warning: These files are very large)'
+    echo '  --no-afd              Skip calculation of Apparent Fiber Density (AFD)'
+    echo '  --no-tract            Skip tractography and connectome generation'
+    echo ''
+    echo ' PATHS & GLOBAL:'
+    echo '  --dir-save <path>     Directory for derivatives (default: derivatives/tkni)'
+    echo '  --dir-mrtrix <path>   Directory for MRTRIX work files'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

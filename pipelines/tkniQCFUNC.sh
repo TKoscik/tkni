@@ -45,7 +45,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
+OPTS=$(getopt -o hvnr --long pi:,project:,dir-project:,id:,dir-id:,\
 dir-raw:,dir-clean:,dir-residual:,dir-regressor:,dir-mask:,dir-mean:,dir-xfm:,\
 mask-brain:,redo-frame,\
 dir-save:,dir-scratch:,requires:,\
@@ -123,28 +123,51 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo 'WTF'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Post-Processing QC Report for Functional Images'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA STAGES:'
+    echo '  The script automatically searches for and evaluates:'
+    echo '  1. RAW BOLD        (Native raw data pushed to native T1 space)'
+    echo '  2. CLEAN BOLD      (Motion corrected and denoised images)'
+    echo '  3. RESIDUAL BOLD   (Nuisance regressed time-series)'
+    echo ''
+    echo ' DIRECTORY OVERRIDES (Defaults to project derivatives/tkni/func):'
+    echo '  --dir-raw <path>      Location of raw functional images'
+    echo '  --dir-clean <path>    Location of cleaned functional images'
+    echo '  --dir-residual <p>    Location of residual functional images'
+    echo '  --dir-regressor <p>   Location of motion/nuisance regressor files'
+    echo '  --dir-mask <path>     Location of brain/frame masks'
+    echo '  --dir-mean <path>     Location of mean-BOLD reference images'
+    echo ''
+    echo ' QC OPTIONS & FLAGS:'
+    echo '  --mask-brain <file>   Brain mask for metric calculation'
+    echo '  --redo-frame          Force regeneration of frame masks'
+    echo '  --reset-csv           Archive existing QC CSVs and start new ones'
+    echo '                        (Requires manual [y/n] confirmation)'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' METRICS CALCULATED:'
+    echo '  - Spatial: EFC, FBER, SNR, Ghosting (X,Y,Z), FWHM (Smoothness)'
+    echo '  - Temporal: DVARS, Framewise Displacement (FD), Spike Percentage'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

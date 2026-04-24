@@ -55,28 +55,49 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ -n "${HELP}" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  --help                    display command help'
-  echo '  --pi          <REQUIRED>  PI name, e.g., evanderplas'
-  echo '  --project     <REQUIRED>  project name, preferrable camel case'
-  echo '  --dir-project <REQUIRED>  project directory'
-  echo '                              e.g., /data/x/projects/${PI}/${PROJECT}'
-  echo '  --id          <REQUIRED>  file prefix, usually participant identifier'
-  echo '                            string, e.g., sub-123_ses-20230111'
-  echo '                            "all" will run all available participants'
-  echo '  --idvars                  names of variables in standard participant.tsv'
-  echo '  --idflag                  flags for BIDS-like filename'
-  echo '  --workflows   <REQUIRED>  names of workflows to run'
-  echo '  --<var-name>              converted to VAR_NAME for use in setting up'
-  echo '                            and deploy tkni workflows on the ACRI-HPC'
-  echo '  Note: "-" flags are not supported only "--"'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo ''
+    echo '------------------------------------------------------------------------'
+    echo " TKNI HPC MASTER PIPELINE: ${FCN_NAME}"
+    echo ' DESCRIPTION: Deploy TKNI workflows via SLURM with dependency tracking'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --id <string>         Participant identifier (or "all" to parse TSV)'
+    echo '  --workflows <list>    Comma-separated workflows to deploy'
+    echo '                        (e.g., AINIT,MALF,DPREP,DSCALE,QCDWI)'
+    echo ''
+    echo ' DYNAMIC OVERRIDES (--<WORKFLOW>_<VARIABLE>):'
+    echo '  You can override any internal script variable by prefixing it with'
+    echo '  the workflow name. Examples:'
+    echo '  --ainit-force         Force re-run for AINIT only'
+    echo '  --funk-do-gsr         Enable Global Signal Regression in FUNK'
+    echo '  --mats-nthreads 8     Request 8 CPUs for the MATS SLURM job'
+    echo ''
+    echo ' IDENTIFIER OPTIONS (BIDS/TSV Parsing):'
+    echo '  --idvars <list>       TSV column names for ID (default: participant_id,session_id)'
+    echo '  --idflag <list>       BIDS prefix keys (default: sub,ses)'
+    echo ''
+    echo ' HPC & PATHING:'
+    echo '  --dir-job <path>      Where to save generated .slurm scripts'
+    echo '  --dir-log <path>      Where SLURM should write console logs'
+    echo ''
+    echo ' SUPPORTED WORKFLOWS:'
+    echo '  Anatomical:  AINIT, AMOD, MALF, MATS, QALAS, FSSYNTH'
+    echo '  Functional:  FUNK, FCON'
+    echo '  Diffusion:   DPREP, DSCALE, DMICRO, DTRACT'
+    echo '  Other:       PCASL, MRS'
+    echo '  QC Reports:  QCANAT, QCDWI, QCFUNC'
+    echo ''
+    echo ' NOTES:'
+    echo '  - This script uses "afterok" SLURM dependencies to chain jobs.'
+    echo '  - ONLY "--" flags are supported; single "-" flags will throw an error.'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 # Check Required Inputs --------------------------------------------------------
 if [[ -z ${WORKFLOWS} ]]; then
@@ -239,7 +260,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
    if [[ ${WORKFLOWS^^} == *"MALF"* ]]; then
     SLURM_MALF=${DIR_JOB}/MALF_${SLURM_SFX}.slurm
-    if [[ -z ${MALF_NTHREADS} ]]; then MALF_NTHREADS=4; fi
+    if [[ -z ${MALF_NTHREADS} ]]; then MALF_NTHREADS=8; fi
     echo "#!/bin/bash" > ${SLURM_MALF}
     echo "#SBATCH --output=${DIR_LOG}/MALF_${SLURM_SFX}.txt" >> ${SLURM_MALF}
     echo "#SBATCH -p normal" >> ${SLURM_MALF}
@@ -364,14 +385,14 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"AMOD"* ]]; then
     SLURM_AMOD=${DIR_JOB}/AMOD_${SLURM_SFX}.slurm
-    if [[ -z ${AMOD_NTHREADS} ]]; then AMOD_NTHREADS=1; fi
+    if [[ -z ${AMOD_NTHREADS} ]]; then AMOD_NTHREADS=2; fi
     echo "#!/bin/bash" > ${SLURM_AMOD}
     echo "#SBATCH --output=${DIR_LOG}/AMOD_${SLURM_SFX}.txt" >> ${SLURM_AMOD}
     echo "#SBATCH -p normal" >> ${SLURM_AMOD}
     echo "#SBATCH -q normal" >> ${SLURM_AMOD}
     echo "#SBATCH --nodes=1" >> ${SLURM_AMOD}
     echo "#SBATCH --ntasks=1" >> ${SLURM_AMOD}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_AMOD}
+    echo "#SBATCH --cpus-per-task=${AMOD_NTHREADS}" >> ${SLURM_AMOD}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_AMOD}
@@ -530,7 +551,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"DPREP"* ]]; then
     SLURM_DPREP=${DIR_JOB}/DPREP_${SLURM_SFX}.slurm
-    if [[ -z ${DPREP_NTHREADS} ]]; then DPREP_NTHREADS=4; fi
+    if [[ -z ${DPREP_NTHREADS} ]]; then DPREP_NTHREADS=8; fi
     echo "#!/bin/bash" > ${SLURM_DPREP}
     echo "#SBATCH --output=${DIR_LOG}/DPREP_${SLURM_SFX}.txt" >> ${SLURM_DPREP}
     echo "#SBATCH -p normal" >> ${SLURM_DPREP}
@@ -715,7 +736,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"DTRACT"* ]]; then
     SLURM_DTRACT=${DIR_JOB}/DTRACT_${SLURM_SFX}.slurm
-    if [[ -z ${DTRACT_NTHREADS} ]]; then DTRACT_NTHREADS=4; fi
+    if [[ -z ${DTRACT_NTHREADS} ]]; then DTRACT_NTHREADS=8; fi
     echo "#!/bin/bash" > ${SLURM_DTRACT}
     echo "#SBATCH --output=${DIR_LOG}/DTRACT_${SLURM_SFX}.txt" >> ${SLURM_DTRACT}
     echo "#SBATCH -p normal" >> ${SLURM_DTRACT}
@@ -1038,7 +1059,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QCANAT"* ]]; then
     SLURM_QCANAT=${DIR_JOB}/QCANAT_${SLURM_SFX}.slurm
-    if [[ -z ${QCANAT_NTHREADS} ]]; then QCANAT_NTHREADS=4; fi
+    if [[ -z ${QCANAT_NTHREADS} ]]; then QCANAT_NTHREADS=1; fi
     echo "#!/bin/bash" > ${SLURM_QCANAT}
     echo "#SBATCH --output=${DIR_LOG}/QCANAT_${SLURM_SFX}.txt" >> ${SLURM_QCANAT}
     echo "#SBATCH -p normal" >> ${SLURM_QCANAT}
@@ -1110,7 +1131,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QCDWI"* ]]; then
     SLURM_QCDWI=${DIR_JOB}/QCDWI_${SLURM_SFX}.slurm
-    if [[ -z ${QCDWI_NTHREADS} ]]; then QCDWI_NTHREADS=4; fi
+    if [[ -z ${QCDWI_NTHREADS} ]]; then QCDWI_NTHREADS=1; fi
     echo "#!/bin/bash" > ${SLURM_QCDWI}
     echo "#SBATCH --output=${DIR_LOG}/QCDWI_${SLURM_SFX}.txt" >> ${SLURM_QCDWI}
     echo "#SBATCH -p normal" >> ${SLURM_QCDWI}
@@ -1170,7 +1191,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   if [[ ${WORKFLOWS^^} == *"QCFUNC"* ]]; then
     SLURM_QCFUNC=${DIR_JOB}/QCFUNC_${SLURM_SFX}.slurm
-    if [[ -z ${QCFUNC_NTHREADS} ]]; then QCFUNC_NTHREADS=4; fi
+    if [[ -z ${QCFUNC_NTHREADS} ]]; then QCFUNC_NTHREADS=1; fi
     echo "#!/bin/bash" > ${SLURM_QCFUNC}
     echo "#SBATCH --output=${DIR_LOG}/QCFUNC_${SLURM_SFX}.txt" >> ${SLURM_QCFUNC}
     echo "#SBATCH -p normal" >> ${SLURM_QCFUNC}

@@ -131,27 +131,51 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Post-Processing QC Report for Diffusion Images'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA STAGES:'
+    echo '  The script automatically evaluates shells from:'
+    echo '  1. RAW DWI          (Native raw data pushed to native T1 space)'
+    echo '  2. CLEAN DWI        (Preprocessed images from tkniDPREP)'
+    echo '  3. FA SCALARS       (Integrity check for NaNs/degenerate voxels)'
+    echo ''
+    echo ' DIRECTORY OVERRIDES (Defaults to project derivatives/tkni/dwi):'
+    echo '  --dir-raw <path>      Location of raw diffusion images'
+    echo '  --dir-clean <path>    Location of cleaned/preprocessed images'
+    echo '  --dir-scalar <path>   Location of diffusion scalar maps (FA, etc.)'
+    echo '  --dir-mask <path>     Location of anatomical/frame masks'
+    echo '  --dir-label <path>    Location of atlas labels'
+    echo '  --dir-xfm <path>      Location of registration transforms'
+    echo ''
+    echo ' QC MASKS & OPTIONS:'
+    echo '  --mask-fg <file>      Foreground mask for SNR calculation'
+    echo '  --mask-brain <file>   Full brain mask'
+    echo '  --mask-cc <file>      Corpus Callosum mask (for white matter SNR)'
+    echo '  --redo-frame          Force regeneration of frame masks'
+    echo '  --reset-csv           Archive existing QC CSVs and start new ones'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' METRICS CALCULATED (By Shell):'
+    echo '  - Compartmental SNR: Frame, FG, Brain, CC, & Dietrich'
+    echo '  - Image Quality: EFC, FBER, Smoothness (FWHM), PIESNO'
+    echo '  - Map Integrity: % NaNs, % Degenerate voxels, % Spike slices'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

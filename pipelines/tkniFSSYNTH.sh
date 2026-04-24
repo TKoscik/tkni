@@ -109,27 +109,41 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "${PIPE^^}:${FLOW}"
-  echo '----------------------------anat--------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE^^}:${FLOW}"
+    echo ' DESCRIPTION: FreeSurfer recon-all-clinical & Surface Reconstruction'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT & PERFORMANCE:'
+    echo '  --image <file>        Input image (default: native T1w)'
+    echo '  --mod <string>        Input modality label (default: T1w)'
+    echo '  --nthreads <int>      Number of CPU threads to use (default: 4)'
+    echo ''
+    echo ' ATLAS & LABELLING:'
+    echo '  --labels <list>       Space-separated labels to convert'
+    echo '                        (default: aparc.a2009s+aseg, aparc.DKTatlas+aseg,'
+    echo '                        aparc+aseg, wmparc)'
+    echo ''
+    echo ' PATHING & DIRECTORIES:'
+    echo '  --dir-fs <path>       Directory for FreeSurfer subject data'
+    echo '  --dir-save <path>     Directory for TKNI derivatives'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help message'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  -n | --no-png         Disable generation of QC images & renderings'
+    echo '  -r | --no-rmd         Disable HTML report generation'
+    echo '  --force               Force re-run and overwrite existing status'
+    echo '  --requires <list>     Prerequisite workflows (default: tkniDICOM,tkniAINIT)'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
 
 #===============================================================================
