@@ -157,8 +157,12 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_AINIT}
     FSTR="${TKNIPATH}/pipelines/tkniAINIT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${AINIT_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${AINIT_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${AINIT_DIR_ID} ]]; then       FSTR="${FSTR} --dir-id ${AINIT_DIR_ID}"; fi
-    if [[ -n ${AINIT_DIR_PROJECT} ]]; then  FSTR="${FSTR} --dir-project ${AINIT_DIR_PROJECT}"; fi
     if [[ -n ${AINIT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${AINIT_DIR_SAVE}"; fi
     if [[ -n ${AINIT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${AINIT_DIR_SCRATCH}"; fi
     if [[ -n ${AINIT_BASE_IMG} ]]; then     FSTR="${FSTR} --base-img ${AINIT_BASE_IMG}"; fi
@@ -200,6 +204,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_FSSYNTH}
     FSTR="${TKNIPATH}/pipelines/tkniFSSYNTH.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${FSSYNTH_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${FSSYNTH_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${FSSYNTH_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${FSSYNTH_DIR_ID}"; fi
     if [[ -z ${FSSYNTH_IMAGE} ]]; then       FSTR="${FSTR} --image ${FSSYNTH_IMAGE}"; fi
     if [[ -z ${FSSYNTH_MOD} ]]; then         FSTR="${FSTR} --mod ${FSSYNTH_MOD}"; fi
@@ -242,6 +251,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_MALF}
     FSTR="${TKNIPATH}/pipelines/tkniMALF.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${MALF_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${MALF_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${MALF_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${MALF_DIR_ID}"; fi
     if [[ -z ${MALF_IMAGE} ]]; then         FSTR="${FSTR} --image ${MALF_IMAGE}"; fi
     if [[ -z ${MALF_MOD} ]]; then           FSTR="${FSTR} --mod ${MALF_MOD}"; fi
@@ -294,6 +308,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_MATS}
     FSTR="${TKNIPATH}/pipelines/tkniMATS.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${MATS_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${MATS_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${MATS_DIR_ID} ]]; then       FSTR="${FSTR} --dir-id ${MATS_DIR_ID}"; fi
     if [[ -z ${MATS_SRC_ANAT} ]]; then     FSTR="${FSTR} --src-anat ${MATS_SRC_ANAT}"; fi
     if [[ -z ${MATS_IMAGE} ]]; then        FSTR="${FSTR} --image ${MATS_IMAGE}"; fi
@@ -351,6 +370,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_AMOD}
     FSTR="${TKNIPATH}/pipelines/tkniAMOD.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${AMOD_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${AMOD_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${AMOD_DIR_ID} ]]; then       FSTR="${FSTR} --dir-id ${AMOD_DIR_ID}"; fi
     if [[ -z ${AMOD_BASE_MOD} ]]; then     FSTR="${FSTR} --base-mod ${AMOD_BMOD}"; fi
     if [[ -z ${AMOD_BASE_DIR} ]]; then     FSTR="${FSTR} --base-dir ${AMOD_BDIR}"; fi
@@ -413,6 +437,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_QALAS}
     FSTR="${TKNIPATH}/pipelines/tkniQALAS.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${QALAS_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${QALAS_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${QALAS_DIR_ID} ]]; then            FSTR="${FSTR} --dir-id ${QALAS_DIR_ID}"; fi
     if [[ -z ${QALAS_QALAS} ]]; then             FSTR="${FSTR} --qalas ${QALAS_QALAS}"; fi
     if [[ -z ${QALAS_OPT_TR} ]]; then            FSTR="${FSTR} --opt-tr ${QALAS_OPT_TR}"; fi
@@ -434,7 +463,6 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${QALAS_ATLAS} ]]; then             FSTR="${FSTR} --atlas ${QALAS_ATLAS}"; fi
     if [[ -z ${QALAS_ATLAS_XFM} ]]; then         FSTR="${FSTR} --atlas-xfm ${QALAS_ATLAS_XFM}"; fi
     if [[ -z ${QALAS_SYNTH} ]]; then             FSTR="${FSTR} --synth ${QALAS_SYNTH}"; fi
-    if [[ -z ${QALAS_DIR_PROJECT} ]]; then       FSTR="${FSTR} --dir-project ${QALAS_DIR_PROJECT}"; fi
     if [[ -z ${QALAS_DIR_SAVE} ]]; then          FSTR="${FSTR} --dir-save ${QALAS_DIR_SAVE}"; fi
     if [[ -z ${QALAS_DIR_SCRATCH} ]]; then       FSTR="${FSTR} --dir-scratch ${QALAS_DIR_SCRATCH}"; fi
     if [[ -z ${QALAS_FORCE} ]]; then             FSTR="${FSTR} --force"; fi
@@ -467,8 +495,6 @@ for (( i=1; i<${N}; i++ )); do
       echo "  -t ${TDIR}/xfm/${IDDIR}/${IDPFX}_from-native_to-HCPYAX_xfm-affine.mat" >> ${SLURM_QALAS}
       echo "" >> ${SLURM_QALAS}
     fi
-
-
     echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_QALAS}
     echo 'ELAPSED=$(echo "$PROC_END - $PROC_START" | bc)' >> ${SLURM_QALAS}
     echo 'echo -e "Processing Time:\t${ELAPSED}s"' >> ${SLURM_QALAS}
@@ -502,6 +528,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_DPREP}
     FSTR="${TKNIPATH}/pipelines/tkniDPREP.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${DPREP_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${DPREP_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${DPREP_DIR_ID} ]]; then         FSTR="${FSTR} --dir-id ${DPREP_DIR_ID}"; fi
     if [[ -z ${DPREP_IMAGE_DWI} ]]; then      FSTR="--image-dwi ${DPREP_IMAGE_DWI}"; fi
     if [[ -z ${DPREP_IMAGE_AP} ]]; then       FSTR="--image-ap ${DPREP_IMAGE_AP}"; fi
@@ -515,7 +546,6 @@ for (( i=1; i<${N}; i++ )); do
     if [[ -z ${DPREP_DIR_DWI} ]]; then        FSTR="--dir-dwi ${DPREP_DIR_DWI}"; fi
     if [[ -z ${DPREP_DIR_XFM} ]]; then        FSTR="--dir-xfm ${DPREP_DIR_XFM}"; fi
     if [[ -z ${DPREP_DIR_MRTRIX} ]]; then     FSTR="--dir-mrtrix ${DPREP_DIR_MRTRIX}"; fi
-    if [[ -z ${DPREP_DIR_PROJECT} ]]; then    FSTR="${FSTR} --dir-scratch ${DPREP_DIR_PROJECT}"; fi
     if [[ -z ${DPREP_DIR_SAVE} ]]; then       FSTR="${FSTR} --dir-save ${DPREP_DIR_SAVE}"; fi
     if [[ -z ${DPREP_DIR_SCRATCH} ]]; then    FSTR="${FSTR} --dir-scratch ${DPREP_DIR_SCRATCH}"; fi
     if [[ -z ${DPREP_FORCE} ]]; then          FSTR="${FSTR} --force"; fi
@@ -554,6 +584,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_DSCALE}
     FSTR="${TKNIPATH}/pipelines/tkniDSCALE.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${DSCALE_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${DSCALE_DIR_ID}"; fi
     if [[ -z ${DSCALE_IMAGE_DWI} ]]; then   FSTR="${FSTR} --image-dwi ${DSCALE_IMAGE_DWI}"; fi
     if [[ -z ${DSCALE_MASK_ROI} ]]; then    FSTR="${FSTR} --mask-roi ${DSCALE_MASK_ROI}"; fi
@@ -600,6 +635,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_DMICRO}
     FSTR="${TKNIPATH}/pipelines/tkniDMICRO.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${DMICRO_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${DMICRO_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${DMICRO_DIR_ID} ]]; then           FSTR="${FSTR} --dir-id ${DMICRO_DIR_ID}"; fi
     if [[ -z ${DMICRO_DIR_DWI} ]]; then          FSTR="${FSTR} --dir-dwi ${DMICRO_DIR_DWI}"; fi
     if [[ -z ${DMICRO_BVAL} ]]; then             FSTR="${FSTR} --bval ${DMICRO_BVAL}"; fi
@@ -661,6 +701,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_DTRACT}
     FSTR="${TKNIPATH}/pipelines/tkniDTRACT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${DTRACT_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${DTRACT_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${DTRACT_DIR_ID} ]]; then            FSTR="${FSTR} --dir-id ${DTRACT_DIR_ID}"; fi
     if [[ -z ${DTRACT_IMAGE_DWI} ]]; then         FSTR="${FSTR} --image-dwi ${DTRACT_IMAGE_DWI}"; fi
     if [[ -z ${DTRACT_POST_5TT} ]]; then          FSTR="${FSTR} --posterior-5tt ${DTRACT_POST_5TT}"; fi
@@ -711,6 +756,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_PCASL}
     FSTR="${TKNIPATH}/pipelines/tkniPCASL.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${PCASL_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${PCASL_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${PCASL_DIR_ID} ]]; then         FSTR="${FSTR} --dir-id ${PCASL_DIR_ID}"; fi
     if [[ -z ${PCASL_ASL} ]]; then            FSTR="${FSTR} --asl ${PCASL_ASL}"; fi
     if [[ -z ${PCASL_ASL_TYPE} ]]; then       FSTR="${FSTR} --asl-type ${PCASL_ASL_TYPE}"; fi
@@ -776,6 +826,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_FUNK}
     FSTR="${TKNIPATH}/pipelines/tkniFUNK.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${FUNK_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${FUNK_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${FUNK_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${FUNK_DIR_ID}"; fi
     if [[ -z ${FUNK_TS} ]]; then            FSTR="${FSTR} --ts ${FUNK_TS}"; fi;
     if [[ -z ${FUNK_BEX_MODE} ]]; then      FSTR="${FSTR} --bex-mode ${FUNK_BEX_MODE}"; fi
@@ -840,6 +895,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_FCON}
     FSTR="${TKNIPATH}/pipelines/tkniFCON.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${FCON_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${FCON_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${FCON_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${FCON_DIR_ID}"; fi
     if [[ -z ${FCON_TS} ]]; then          FSTR="${FSTR} --ts ${FCON_TS}"; fi
     if [[ -z ${FCON_LABEL} ]]; then       FSTR="${FSTR} --label ${FCON_LABEL}"; fi
@@ -888,6 +948,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_MRS}
     FSTR="${TKNIPATH}/pipelines/tkniMRS.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${MRS_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${MRS_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${MRS_DIR_ID} ]]; then           FSTR="${FSTR} --dir-id ${MRS_DIR_ID}"; fi
     if [[ -z ${MRS_MRS} ]]; then              FSTR="${FSTR} --mrs ${MRS_MRS}"; fi
     if [[ -z ${MRS_MRS_LOC} ]]; then          FSTR="${FSTR} --mrs-loc ${MRS_MRS_LOC}"; fi
@@ -939,6 +1004,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_QCANAT}
     FSTR="${TKNIPATH}/pipelines/tkniQCANAT.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${QCANAT_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${QCANAT_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${QCANAT_DIR_ID} ]]; then           FSTR="${FSTR} --dir-id ${QCANAT_DIR_ID}"; fi
     if [[ -z ${QCANAT_RESET_CSV} ]]; then        FSTR="${FSTR} --reset-csv"; fi
     if [[ -z ${QCANAT_DIR_RAW} ]]; then          FSTR="${FSTR} --dir-raw ${QCANAT_DIR_RAW}"; fi
@@ -1002,6 +1072,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_QCDWI}
     FSTR="${TKNIPATH}/pipelines/tkniQCDWI.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${QCDWI_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${QCDWI_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${QCDWI_DIR_ID} ]]; then      FSTR="${FSTR} --dir-id ${QCDWI_DIR_ID}"; fi
     if [[ -z ${QCDWI_DIR_RAW} ]]; then     FSTR="${FSTR} --dir-raw ${QCDWI_DIR_RAW}"; fi
     if [[ -z ${QCDWI_DIR_CLEAN} ]]; then   FSTR="${FSTR} --dir-clean ${QCDWI_DIR_CLEAN}"; fi
@@ -1053,6 +1128,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_QCFUNC}
     FSTR="${TKNIPATH}/pipelines/tkniQCFUNC.sh"
     FSTR="${FSTR} --pi ${PI} --project ${PROJECT} --id ${IDPFX} --requires null"
+    if [[ -n ${QCFUNC_DIR_PROJECT} ]]; then
+      FSTR="${FSTR} --dir-project ${QCFUNC_DIR_PROJECT}"
+    else
+      FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
+    fi
     if [[ -n ${QCFUNC_DIR_ID} ]]; then        FSTR="${FSTR} --dir-id ${QCFUNC_DIR_ID}"; fi
     if [[ -z ${QCFUNC_DIR_RAW} ]]; then       FSTR="${FSTR} --dir-raw ${QCFUNC_DIR_RAW}"; fi
     if [[ -z ${QCFUNC_DIR_CLEAN} ]]; then     FSTR="${FSTR} --dir-clean ${QCFUNC_DIR_CLEAN}"; fi
