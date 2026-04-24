@@ -94,7 +94,7 @@ while true; do
     --mask-roi) MASK_ROI="$2" ; shift 2 ;;
     --no-scalar) DO_SCALAR="false" ; shift ;;
     --no-tensor) DO_TENSOR="false" ; shift ;;
-    --no-kurtosis) DO_KURTOSIS="false" ; shift 2 ;;
+    --no-kurtosis) DO_KURTOSIS="false" ; shift ;;
     --do-b0) DO_B0="true" ; shift 2 ;;
     --dir-mrtrix) DIR_MRTRIX="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
@@ -108,28 +108,43 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Extract Diffusion Tensors and Scalars (FA, ADC, AD, RD)'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUTS & MASKS:'
+    echo '  --image-dwi <file>    Preprocessed DWI image in MRTRIX .mif format'
+    echo '                        (Default: dwi_preproc_coreg.mif in mrtrix dir)'
+    echo '  --mask-roi <file>     Brain mask for tensor calculation (.mif or .nii)'
+    echo '                        (Default: b0_mask_coreg.mif in mrtrix dir)'
+    echo ''
+    echo ' PROCESSING OPTIONS:'
+    echo '  --no-scalar           Skip generation of DTI scalars (FA, ADC, etc.)'
+    echo '  --no-tensor           Skip generation of the 4D diffusion tensor image'
+    echo '  --no-kurtosis         Skip generation of the kurtosis tensor'
+    echo '  --do-b0               Save the extracted B0 image to the scalar folder'
+    echo ''
+    echo ' PATHING & DIRECTORIES:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  --dir-mrtrix <path>   Directory containing preprocessed .mif files'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help message'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force calculation and overwrite existing results'
+    echo '  --requires <list>     Prerequisites (default: tkniDICOM,tkniAINIT,tkniDPREP)'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

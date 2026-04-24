@@ -157,28 +157,52 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}${FLOW}"
+    echo ' DESCRIPTION: Multi-Approach Tissue Segmentation & Cortical Thickness'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT & PATHING:'
+    echo '  --image <file>        Participant image (default: native T1w)'
+    echo '  --mask <file>         Brain mask for participant image'
+    echo '  --src-anat <path>     Path to search for native images/masks'
+    echo '  --mod <string>        Image modality label (default: T1w)'
+    echo '  --dir-save <path>     Directory to save derivatives (default: derivatives/tkni)'
+    echo ''
+    echo ' SEGMENTATION METHODS:'
+    echo '  --method <list>       Comma-separated tools: ants, 5tt, synthseg'
+    echo '                        (default: all three)'
+    echo '  --k-class <int>       Number of tissue classes (default: 3)'
+    echo '  --pthresh <float>     Probability threshold for MostLikely labels'
+    echo '  --fmed <int>          Radius for median filter (default: 3, 0 to skip)'
+    echo ''
+    echo ' WEIGHTING (Relative Importance):'
+    echo '  --weight-ants <int>   Weight for ANTs posteriors'
+    echo '  --weight-5tt <int>    Weight for 5TT (MRTrix/FSL) posteriors'
+    echo '  --weight-synth <int>  Weight for SynthSeg posteriors'
+    echo ''
+    echo ' REFINEMENT & OUTCOMES:'
+    echo '  --refine <list>       Labels to refine using MATS segmentation'
+    echo '                        (e.g., DKT+MALF,wmparc+MALF)'
+    echo '  --no-thickness        Skip calculation of KellyKapowski thickness'
+    echo '  --no-jac              Skip Jacobian determinant calculation'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help message'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  -l | --loquacious     Enable verbose output for ANTs tools'
+    echo '  -n | --no-png         Disable generation of QC images'
+    echo '  --no-keep             Do not keep approach-specific (preliminary) parts'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

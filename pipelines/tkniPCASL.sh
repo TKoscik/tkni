@@ -130,7 +130,7 @@ while true; do
     -h | --help) HELP=true ; shift ;;
     -v | --verbose) VERBOSE=true ; shift ;;
     -n | --no-png) NO_PNG=true ; shift ;;
-    -n | --no-rmd) NO_PNG=true ; shift ;;
+    -r | --no-rmd) NO_PNG=true ; shift ;;
     --pi) PI="$2" ; shift 2 ;;
     --project) PROJECT="$2" ; shift 2 ;;
     --id) IDPFX="$2" ; shift 2 ;;
@@ -174,54 +174,52 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  -r | --no-rmd      disable RMD/HTML output'
-  echo '  --force            force rerun'
-  echo '  --requires         prerequisites for running, use force to override'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       e.g., tkoscik'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       e.g., projectName'
-  echo '  --dir-project      project directory, used to check for status files'
-  echo '                     of prior runs and sets default file paths'
-  echo '                       default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --dir-save         save file path'
-  echo '  --dir-scratch      location for processing preliminaries'
-  echo '  --id'
-  echo '  --dir-id'
-  echo '  --asl'
-  echo '  --asl-type'
-  echo '  --pwi'
-  echo '  --pwi-label'
-  echo '  --native'
-  echo '  --native-mask'
-  echo '  --label'
-  echo '  --opt-brainblood'
-  echo '  --opt-t1blood'
-  echo '  --opt-efficiency'
-  echo '  --opt-duration'
-  echo '  --opt-delay'
-  echo '  --coreg-recipe'
-  echo '  --dir-xfm'
-  echo '  --norm-ref'
-  echo '  --norm-xfm-mat'
-  echo '  --norm-xfm-syn'
-  echo '  --no-pwi'
-  echo '  --no-reorient'
-  echo '  --no-denoise'
-  echo '  --no-debias'
-  echo '  --no-norm'
-  echo '  --no-summary'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: ASL Perfusion Processing & CBF Quantification'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' ASL INPUT DATA:'
+    echo '  --asl <file>          Raw ASL 4D NIfTI (Control/Label pairs)'
+    echo '  --asl-json <file>     BIDS JSON sidecar (required for PLD/Duration)'
+    echo '  --asl-type <str>      ASL type: pcasl or pasl (default: pcasl)'
+    echo '  --asl-ctl <str>       Control volume order: even, odd, or list'
+    echo '                        (default: even)'
+    echo '  --asl-m0 <int/bool>   Volume index of M0 image (if contained in ASL)'
+    echo '                        (default: false)'
+    echo ''
+    echo ' ANATOMICAL GUIDANCE:'
+    echo '  --native <file>       Native T1w anatomical reference'
+    echo '  --native-mask <file>  Brain mask for native T1w'
+    echo '  --label <path/list>   Parcellation(s) for ROI-wise CBF summary'
+    echo ''
+    echo ' QUANTIFICATION OPTIONS:'
+    echo '  --opt-brainblood <f>  Blood-brain partition coeff (default: 0.9)'
+    echo '  --opt-t1blood <ms>    T1 of arterial blood (default: 1650)'
+    echo '  --opt-efficiency <f>  Labeling efficiency (default: 0.85)'
+    echo '  --opt-duration <ms>   Labeling duration (tau)'
+    echo '  --opt-delay <ms>      Post-labeling delay (PLD)'
+    echo ''
+    echo ' PIPELINE CONTROL:'
+    echo '  --no-denoise          Skip Rician denoising of pairs'
+    echo '  --no-reorient         Skip RPI reorientation'
+    echo '  --no-norm             Skip normalization to template space'
+    echo '  --pwi <file>          Input pre-calculated PWI from scanner'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function

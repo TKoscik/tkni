@@ -48,7 +48,7 @@ id:,dir-id:,\
 image:,mask:,mod:,mask-dil:,\
 atlas-name:,atlas-ref:,atlas-mask:,atlas-ex:,atlas-label:,atlas-dil:,\
 no-premask,mask-restrict,no-jac,no-png,no-rmd,\
-dir-scratch:,requires:,\
+--dir-save:,dir-scratch:,requires:,\
 help,verbose,loquacious,force,keep -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
   echo "Failed parsing options" >&2
@@ -61,6 +61,7 @@ PI=
 PROJECT=
 DIR_PROJECT=
 DIR_SCRATCH=
+DIR_SAVE=
 IDPFX=
 IDDIR=
 
@@ -123,6 +124,7 @@ while true; do
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-project) DIR_PROJECT="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
     * ) break ;;
@@ -131,28 +133,53 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "${PIPE}${FLOW}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}${FLOW}"
+    echo ' DESCRIPTION: Multi-Atlas Normalization and Joint Label Fusion (JLF)'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT IMAGERY:'
+    echo '  --image <file>        Participant image to label (default: native T1w)'
+    echo '  --mask <file>         Brain mask for participant image'
+    echo '  --mod <string>        Image modality label (default: T1w)'
+    echo '  --mask-dil <int>      Voxels to dilate participant mask (default: 2)'
+    echo ''
+    echo ' ATLAS CONFIGURATION:'
+    echo '  --atlas-name <str>    Name of the atlas (default: HCPYAX)'
+    echo '  --atlas-ref <file>    Template reference image'
+    echo '  --atlas-mask <file>   Brain mask for the atlas template'
+    echo '  --atlas-ex <list>     Comma-separated paths to atlas exemplar images'
+    echo '  --atlas-label <list>  Comma-separated labels to fuse (DKT, wmparc, etc.)'
+    echo '  --atlas-dil <int>     Voxels to dilate atlas mask (default: 2)'
+    echo ''
+    echo ' ALIGNMENT & FUSION OPTIONS:'
+    echo '  --no-premask          Do not mask images prior to ANTs normalization'
+    echo '  --mask-restrict <str> Stage to apply mask restriction (rigid, affine, syn)'
+    echo '                        (default: syn)'
+    echo '  --no-jac              Skip calculation of Jacobian determinants'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help message'
+    echo '  -v | --verbose        Enable standard console logging'
+    echo '  -l | --loquacious     Enable extreme ANTs/JLF verbose output'
+    echo '  -n | --no-png         Disable generation of QC images'
+    echo '  -r | --no-rmd         Disable HTML report generation'
+    echo '  -k | --keep           Keep all intermediate files in the prep directory'
+    echo '  --force               Force re-run and overwrite existing results'
+    echo ''
+    echo ' PATHS:'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-save <path>     Directory to save derivatives (default: derivatives/tkni)'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
