@@ -180,9 +180,6 @@ fi
 if [[ -z ${DIR_SAVE} ]]; then
   DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
 fi
-if [[ -z ${DIR_RAW} ]]; then
-  DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}/anat
-fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
@@ -204,6 +201,10 @@ if [[ -z ${IDDIR} ]]; then
   if [[ -n ${TSES} ]]; then
     IDDIR="${IDDIR}/ses-${TSES}"
   fi
+fi
+
+if [[ -z ${DIR_RAW} ]]; then
+  DIR_RAW=${DIR_PROJECT}/rawdata/${IDDIR}/anat
 fi
 
 ## Check if Prerequisites are run and QC'd -------------------------------------
