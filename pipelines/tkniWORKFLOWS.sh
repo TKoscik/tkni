@@ -34,7 +34,7 @@ while [[ "$#" -gt 0 ]]; do
     --*)
       flag_name="${1#--}"
       var_name="${flag_name^^}"
-      var_name="${var_name/-/_}"
+      var_name="${var_name//-/_}"
       if [[ -n "$2" && "$2" != -* ]]; then
         printf -v "$var_name" "%s" "$2"
         shift 2
