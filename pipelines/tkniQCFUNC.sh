@@ -86,7 +86,7 @@ NO_LOG="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
-FLOW=${FCN_NAME//\.sh}
+#FLOW=${FCN_NAME//\.sh}
 REQUIRES=""
 FORCE=false
 
