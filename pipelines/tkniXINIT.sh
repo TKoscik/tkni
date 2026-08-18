@@ -49,6 +49,7 @@ trap egress EXIT
 OPTS=$(getopt -o hkvn --long pi:,project:,dir-project:,\
 id:,dir-id:,id-field:,\
 image:,mod:,redo-mask,uhr-thresh:,\
+slab-plane:,slab-metric:,slab-order:,slab-smooth:,\
 debias-resample:,debias-bspline:,debias-shrink:,debias-convergence:,debias-histmatch:\
 denoise-model:,denoise-shrink:,denoise-patch:,denoise-radius:,\
 softmask-kernel:,\
@@ -72,6 +73,10 @@ IMAGE=
 MOD="swi"
 REDO_MASK="false"
 UHR_THRESH=0.1
+SLAB_PLANE="z"
+SLAB_METRIC="median"
+SLAB_ORDER=3
+SLAB_SMOOTH=1
 N4_RESAMPLE=1
 N4_BSPLINE="[85,3]"
 N4_SHRINK=4
@@ -116,6 +121,10 @@ while true; do
     --redo-mask) REDO_MASK="true" ; shift ;;
     --uhr-thresh) UHR_THRESH="$2" ; shift 2 ;;
     --threads) threads="$2" ; shift 2 ;;
+    --slab-plane) SLAB_PLANE="$2" ; shift 2 ;;
+    --slab-metric) SLAB_METRIC="$2" ; shift 2 ;;
+    --slab-order) SLAB_ORDER="$2" ; shift 2 ;;
+    --slab-smooth) SLAB_SMOOTH="$2" ; shift 2 ;;
     --debias-resample) N4_RESAMPLE="$2" ; shift 2 ;;
     --debias-bspline) N4_BSPLINE="$2" ; shift 2 ;;
     --debias-shrink) N4_SHRINK="$2" ; shift 2 ;;
@@ -135,31 +144,57 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '  --dir-project'
-  echo '  --id'
-  echo '  --dir-id'
-  echo '  --id-field'
-  echo '  --image'
-  echo ''
-  echo 'Procedure: '
-  echo '(1) nnUNet Brain Mask'
-  echo '(2) Debias'
-  echo '(3) Denoise'
-  echo '(4) Rescale Intensity'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${FCN_NAME}"
+    echo ' DESCRIPTION: Initial UHR Ex-Vivo MRI Cleaning & Brain Masking'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA & FILTERING:'
+    echo '  --image <file/list>   Comma-separated list of images or directories'
+    echo '  --mod <string>        Modality label to search for (default: swi)'
+    echo '  --uhr-thresh <float>  Resolution threshold in mm3 (default: 0.1)'
+    echo '                        (Only images smaller than this are processed)'
+    echo '  --id-field <list>     BIDS keys for directory tree (default: pid,ses)'
+    echo ''
+    echo ' SLAB BOUNDARY (1D DEBIAS):'
+    echo '  --slab-plane <char>   Plane of slab acquisition (default: z)'
+    echo '  --slab-metric <str>   Correction metric: mean or median (default: median)'
+    echo '  --slab-order <int>    Polynomial order for fit (default: 3)'
+    echo '  --slab-smooth <int>   Gaussian smoothing for 1D profile (default: 1)'
+    echo ''
+    echo ' BIAS FIELD CORRECTION (N4):'
+    echo '  --debias-resample <f> Resampling factor for N4 (default: 1)'
+    echo '  --debias-bspline <str> Spline parameters (default: [85,3])'
+    echo '  --debias-shrink <int>  Shrink factor (default: 4)'
+    echo '  --debias-convergence <c> Convergence criteria (default: [100x100x100x100,0.001])'
+    echo ''
+    echo ' DENOISING (ANTs):'
+    echo '  --denoise-model <str> Noise model: Rician or Gaussian (default: Rician)'
+    echo '  --denoise-patch <int> Patch radius for denoising (default: 1)'
+    echo '  --denoise-radius <int> Search radius for denoising (default: 2)'
+    echo ''
+    echo ' PIPELINE FLAGS:'
+    echo '  -h | --help           Display this help message'
+    echo '  -v | --verbose        Enable detailed console logging'
+    echo '  -n | --no-png         Disable generation of QC images'
+    echo '  -r | --no-rmd         Disable HTML report generation'
+    echo '  -k | --keep           Do not delete intermediate "tmp" files'
+    echo '  --redo-mask           Force recalculation of brain extraction'
+    echo '  --force               Force re-run and overwrite existing results'
+    echo ''
+    echo ' PATHS & DIRECTORIES:'
+    echo '  --dir-save <path>     Directory for derivatives (default: derivatives/tkni/anat)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
@@ -173,11 +208,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -322,6 +371,23 @@ for (( i=0; i<${NIMG}; i++ )); do
     mv ${DIRTMP}/${PFX}_mask-brain.nii.gz ${MASK}
   fi
   echo ">>>>>>Brain Extraction Complete"
+
+  ## 1D Slab Debias ------------------------------------------------------------
+  echo 1
+  JSON=${IMAGE[${i}]//.nii.gz/.json}
+  echo $JSON
+  SLICE_SPACING=$(jq -r '.SpacingBetweenSlices // 0' ${JSON})
+  echo "SLICE SPACING: ${SLICE_SPACING}"
+  SLICE_THICKNESS=$(jq -r '.SliceThickness // 0' ${JSON})
+  echo "SLICE THICKNESS: ${SLICE_THICKNESS}"
+  IS_MULTISLAB=$(echo "${SLICE_SPACING} > (${SLICE_THICKNESS} * 2)" | bc -l)
+  echo "IS MULTISLAB: ${IS_MULTISLAB}"
+  if [[ "${IS_MULTISLAB}" -eq 1 ]]; then
+    echo ">>>>>>Multislab acquisition identified"
+    slabDebias.py --input ${IMG} --mask ${MASK} --output ${IMG} \
+      --order ${SLAB_ORDER} --smoothness ${SLAB_SMOOTH}
+    echo ">>>>>>1D Slab Debiased"
+  fi
 
   ## Debias --------------------------------------------------------------------
   N4BiasFieldCorrection -d 3 -i ${IMG} -x ${MASK} -o ${IMG} \

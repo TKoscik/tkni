@@ -23,6 +23,15 @@ def run_watershed(input_path, datum, output_path, mask_path=None):
         mask_data = dist_map > 0
 
     # 3. Create Basin Markers
+    ## Calculate datum from spacing if not provided ---
+    if datum is None:
+        dx, dy, dz = img.header.get_zooms()[:3]
+        # Calculate distances between (dx,0,0), (0,dy,0), and (0,0,dz)
+        d_xy = np.sqrt(dx**2 + dy**2)
+        d_xz = np.sqrt(dx**2 + dz**2)
+        d_yz = np.sqrt(dy**2 + dz**2)
+        datum = 2 * min(d_xy, d_xz, d_yz)
+        print(f"-> Datum calculated (2x min pairwise distance between voxel centers): {datum:.4f}")
     print(f"-> Extracting basins (dist >= {datum})...")
     core_mask = dist_map >= datum
     markers, _ = ndi.label(core_mask)
@@ -55,11 +64,27 @@ def run_watershed(input_path, datum, output_path, mask_path=None):
     print(f"Done! Found {len(sorted_labels)} clusters. Total time: {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="NIFTI Watershed: Datum + Sorted")
-    parser.add_argument("-i", "--input", required=True)
-    parser.add_argument("-d", "--datum", type=float, default=2.0)
-    parser.add_argument("-k", "--mask", help="Optional mask")
-    parser.add_argument("-o", "--output", required=True)
-
+    parser = argparse.ArgumentParser(
+        description="""
+TKNI Watershed Segmentation
+--------------------------------------------------------------------------------
+This tool performs watershed segmentation on NIfTI distance maps (EDT).
+It identifies seed points (basins) based on a distance threshold,
+propagates labels, and re-ranks the resulting clusters by volume
+(Label 1 = Largest Cluster).
+        """,
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument("-i", "--input", required=True,
+                        help="Input NIfTI distance map (e.g., Euclidean Distance Transform).")
+    parser.add_argument("-d", "--datum", type=float,
+                        help="Distance threshold for seed extraction.\n"
+                             "If omitted, defaults to 2x min voxel spacing.\n"
+                             "Increasing this value results in fewer, larger seeds.")
+    parser.add_argument("-k", "--mask",
+                        help="Optional binary mask NIfTI to restrict the watershed growth.\n"
+                             "If omitted, the script uses all voxels > 0 in the input.")
+    parser.add_argument("-o", "--output", required=True,
+                        help="Output path for the sorted label NIfTI volume.")
     args = parser.parse_args()
     run_watershed(args.input, args.datum, args.output, args.mask)

@@ -140,36 +140,53 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id'
-  echo '  --dir-id'
-  echo '  --mrs'
-  echo '  --native'
-  echo '  --native-mask'
-  echo '  --tissue'
-  echo '  --tissue-val'
-  echo '  --no-hsvd'
-  echo '  --no-eddy'
-  echo '  --no-dfp'
-  echo '  --dir-xfm'
-  echo '  --dir-save'
-  echo '  --dir-scratch'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: MRS Processing (Coreg, Partial Volumes, & Spectral Fitting)'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' MRS DATA INPUTS:'
+    echo '  --mrs <file>          MRS data file (Siemens .dat/TWIX)'
+    echo '                        (Default: *PRESS35.dat in mrs raw directory)'
+    echo '  --mrs-loc <file>      MRS localizer T2w image'
+    echo '  --mrs-mask <file>     Brain mask for localizer (auto-synth if omitted)'
+    echo '  --mrs-unsuppressed    Flag: Use unsuppressed water data for reference'
+    echo ''
+    echo ' ANATOMICAL & TISSUE REFERENCE:'
+    echo '  --native <file>       Native T1w anatomical reference'
+    echo '  --native-mask <file>  Brain mask for native T1w'
+    echo '  --tissue <file>       Tissue segmentation (e.g., label-tissue.nii.gz)'
+    echo '  --tissue-val <str>    Label mapping for CSF;GM;WM (default: "1;2,3;4")'
+    echo ''
+    echo ' SPECTRAL PROCESSING OPTIONS:'
+    echo '  --coreg-recipe <str>  Recipe for localizer coreg (default: intermodalSyn)'
+    echo '  --no-hsvd             Skip HSVD water removal'
+    echo '  --no-eddy             Skip eddy current correction'
+    echo '  --no-dfp              Skip dynamic frequency and phase correction'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  -n | --no-png         Disable generation of QC images'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' REFERENCES:'
+    echo '  [ABfit] Wilson M. (2021). Adaptive baseline fitting for 1H MRS.'
+    echo '          Magn Reson Med, 85(1). doi:10.1002/mrm.28385'
+    echo '  [spant] Wilson M. (2021). spant: R package for MRS analysis.'
+    echo '          J Open Source Soft, 6(67). doi:10.21105/joss.03646'
+    echo '  [Retro] Wilson M. (2019). Retrospective frequency/phase correction.'
+    echo '          Magn Reson Med, 81(5). doi:10.1002/mrm.27605'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
@@ -183,11 +200,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -204,13 +235,13 @@ if [[ -z ${IDDIR} ]]; then
   fi
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -221,14 +252,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -239,7 +269,6 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
@@ -266,7 +295,7 @@ fi
 if [[ -z ${MRS_LOC} ]]; then
   MRS_LOC=($(ls ${DIR_PROJECT}/rawdata/${IDDIR}/mrs/${IDPFX}_acq-mrsLoc+axi_T2w.nii.gz))
 fi
-if [[ ! -f ${MRS} ]]; then
+if [[ ! -f ${MRS_LOC} ]]; then
   echo -e "\tERROR [${PIPE}:${FLOW}] MRS localizer image not found."
   exit 1
 fi
@@ -303,20 +332,28 @@ if [[ ! -f ${TISSUE} ]]; then
 fi
 
 # set directories --------------------------------------------------------------
-if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}; fi
 mkdir -p ${DIR_SCRATCH}
 
 # Copy data to scratch and gunzip as needed ------------------------------------
-#cp ${MRS} ${DIR_SCRATCH}/
-#MRS=($(ls ${DIR_SCRATCH}/*PRESS35.dat))
+cp ${MRS} ${DIR_SCRATCH}/
+cp ${MRS_LOC} ${DIR_SCRATCH}/mrs_localizer.nii.gz
+cp ${NATIVE} ${DIR_SCRATCH}/native.nii.gz
+cp ${NATIVE_MASK} ${DIR_SCRATCH}/native_mask.nii.gz
+cp ${TISSUE} ${DIR_SCRATCH}/tissue.nii.gz
+MRS=${DIR_SCRATCH}/$(basename ${MRS})
+NATIVE=${DIR_SCRATCH}/native.nii.gz
+NATIVE_MASK=${DIR_SCRATCH}/native_mask.nii.gz
+TISSUE=${DIR_SCRATCH}/tissue.nii.gz
 
 # Coregister anatomical localizer to NATIVE ------------------------------------
 ## get brain mask for localizer to focus registration, if not provided
 if [[ -z ${MRS_MASK} ]]; then
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>generating brain mask for localizer"; fi
-  MRS_MASK=${DIR_SCRATCH}/mrs-localizer_mask-brain.nii.gz
-  mri_synthstrip -i ${MRS_LOC} -m ${MRS_MASK}
+  mri_synthstrip -i ${MRS_LOC} -m ${DIR_SCRATCH}/mrs_mask.nii.gz
+else
+  cp ${MRS_MASK} ${DIR_SCRATCH}/mrs_mask.nii.gz
 fi
+MRS_MASK=${DIR_SCRATCH}/mrs_mask.nii.gz
 
 ## run coregistation
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>coregistering localizer to native anatomical"; fi
@@ -440,8 +477,7 @@ Rscript ${TKNIPATH}/R/fitMRS_spant.R "mrs" ${MRS} \
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
-  RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
+  RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
   echo '```{r setup, include=FALSE}' >> ${RMD}
@@ -805,11 +841,12 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   ## knit RMD
   Rscript -e "Sys.setenv(RSTUDIO_PANDOC=\"/usr/bin/pandoc\"); rmarkdown::render('${RMD}')"
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
-  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.html ${DIR_SAVE}/qc/${PIPE}${FLOW}/
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
-    echo -e "\t${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
+    echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
 fi
 
@@ -828,8 +865,8 @@ mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
 cp ${DIR_SCRATCH}/xfm/* ${DIR_SAVE}/xfm/${IDDIR}/
 
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi

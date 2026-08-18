@@ -118,7 +118,7 @@ while true; do
     --do-rsfc) DO_RSFC="true" ; shift ;;
     --no-z) NO_Z="true" ; shift ;;
     --z-lo) Z_LO="$2" ; shift 2 ;;
-    --x-hi) Z_HI="$2" ; shift 2 ;;
+    --z-hi) Z_HI="$2" ; shift 2 ;;
     --force) FORCE="true" ; shift ;;
     --requires) REQUIRES="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
@@ -130,28 +130,48 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '                       e.g., sub-123/ses-20230111T1234'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: ROI Time-series Extraction & Functional Connectivity'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUTS & LABELING:'
+    echo '  --ts <file>           Residual BOLD time-series (NIfTI)'
+    echo '                        (Default: task-rest_residual in derivatives)'
+    echo '  --label <file/str>    Label set/Atlas for extraction'
+    echo '                        (Default: hcpmmp1+MALF)'
+    echo '  --label-name <str>    Base name for labeling (e.g., DKT)'
+    echo '  --lut-orig <file>     Original Lookup Table (LUT) for label conversion'
+    echo '  --lut-sort <file>     Target ordered LUT for matrix sorting'
+    echo '                        (Use "rank" to sort by label frequency)'
+    echo ''
+    echo ' CONNECTIVITY OPTIONS:'
+    echo '  --con-metric <list>   Connectivity metrics: pearson, mutualInformation,'
+    echo '                        transferEntropy, dynamicTimeWarping, etc.'
+    echo '                        (Default: pearson)'
+    echo '  --do-rsfc             Enable AFNI 3dRSFC parameters (ALFF, fALFF, RSFA)'
+    echo ''
+    echo ' TEMPORAL METRICS:'
+    echo '  --no-z                Skip temporal Z-score calculation'
+    echo '  --z-lo <float>        Lower bound for tensorZ clipping (default: 0)'
+    echo '  --z-hi <float>        Upper bound for tensorZ clipping (default: 1)'
+    echo ''
+    echo ' PATHS & GLOBAL:'
+    echo '  --dir-save <path>     Directory to save derivatives (default: derivatives/tkni)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
@@ -167,17 +187,23 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
-  DIR_SCRATCH=${TKNI_SCRATCH}/${PIPE}${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+  DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
 fi
-
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
 if [[ ${VERBOSE} == "true" ]]; then
   echo "Running ${PIPE}${FLOW}"
   echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
   echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
   echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
   echo -e "Start Time:\t${PROC_START}"
 fi
@@ -201,13 +227,13 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e "SUBDIR:\t${IDDIR}"
 fi
 
-## Check if Prerequisites are run and QC'd -------------------------------------
+# Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
   ERROR_STATE=0
   for (( i=0; i<${#REQUIRES[@]}; i++ )); do
     REQ=${REQUIRES[${i}]}
-    FCHK=${DIR_PROJECT}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
+    FCHK=${DIR_SAVE}/status/${REQ}/DONE_${REQ}_${IDPFX}.txt
     if [[ ! -f ${FCHK} ]]; then
       echo -e "${IDPFX}\n\tERROR [${PIPE}:${FLOW}] Prerequisite WORKFLOW: ${REQ} not run."
       ERROR_STATE=1
@@ -218,14 +244,13 @@ if [[ ${REQUIRES} != "null" ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Prerequisites COMPLETE: ${REQUIRES[@]}"
 fi
 
 # Check if has already been run, and force if requested ------------------------
-FCHK=${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
-FDONE=${DIR_PROJECT}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
+FCHK=${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+FDONE=${DIR_SAVE}/status/${PIPE}${FLOW}/DONE_${PIPE}${FLOW}_${IDPFX}.txt
 echo -e "${IDPFX}\n\tRUNNING [${PIPE}:${FLOW}]"
 if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
   echo -e "\tWARNING [${PIPE}:${FLOW}] already run"
@@ -236,16 +261,16 @@ if [[ -f ${FCHK} ]] || [[ -f ${FDONE} ]]; then
     exit 1
   fi
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> Previous Runs CHECKED"
 fi
 
 # Set Up Directories -----------------------------------------------------------
-DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PIPE}/func
-fi
+#DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
+#if [[ -z ${DIR_SAVE} ]]; then
+#  DIR_SAVE=${DIR_PIPE}/func
+#fi
+mkdir -p ${DIR_SCRATCH}
 
 if [[ -z ${TS} ]]; then
   TS=${DIR_PIPE}/func/residual_native/${IDPFX}_task-rest_residual.nii.gz
@@ -255,6 +280,8 @@ if [[ ! -f ${TS} ]]; then
   echo -e ${TS}
   exit 1
 fi
+cp ${TS} ${DIR_SCRATCH}/
+TS=${DIR_SCRATCH}/$(basename ${TS})
 
 if [[ ! -f ${LABEL} ]]; then
   TLAB=(${LABEL//\+/ })
@@ -269,8 +296,6 @@ if [[ ! -f ${LABEL} ]]; then
   echo "ERROR [TKNI: ${FCN_NAME}] LABEL file not found."
   exit 2
 fi
-
-mkdir -p ${DIR_SCRATCH}
 
 # Extract Time-series ----------------------------------------------------------
 ## order labels
@@ -288,18 +313,24 @@ elif [[ ${LUT_ORIG} == "default" ]]; then
       TLAB=(${TLAB//+/ })
       LUT_SORT=${TKNIPATH}/lut/${LABEL_NAME}_ordered_tkni.txt
     fi
+    cp ${LUT_ORIG} ${DIR_SCRATCH}/lut_orig.txt
+    cp ${LUT_SORT} ${DIR_SCRATCH}/lut_sort.txt
     labelconvert ${DIR_SCRATCH}/labels.nii.gz \
-      ${LUT_ORIG} ${LUT_SORT} \
+      ${DIR_SCRATCH}/lut_orig.txt \
+      ${DIR_SCRATCH}/lut_sort.txt \
       ${DIR_SCRATCH}/labels.nii.gz -force
     echo "default"
 else
+  cp ${LUT_ORIG} ${DIR_SCRATCH}/lut_orig.txt
+  cp ${LUT_SORT} ${DIR_SCRATCH}/lut_sort.txt
   labelconvert ${DIR_SCRATCH}/labels.nii.gz \
-    ${LUT_ORIG} ${LUT_SORT} \
+    ${DIR_SCRATCH}/lut_orig.txt \
+    ${DIR_SCRATCH}/lut_sort.txt \
     ${DIR_SCRATCH}/labels.nii.gz -force
   echo "manual"
 fi
 ## push labels to fMRI space
-fslroi ${TS} ${DIR_SCRATCH}/ref.nii.gz 0 1
+3dcalc -a ${TS}[0] -expr a -prefix ${DIR_SCRATCH}/ref.nii.gz
 antsApplyTransforms -d 3 -n MultiLabel \
   -i ${DIR_SCRATCH}/labels.nii.gz \
   -o ${DIR_SCRATCH}/labels.nii.gz \
@@ -308,58 +339,57 @@ antsApplyTransforms -d 3 -n MultiLabel \
 ## extract time series
 roiTS --ts-bold ${TS} --label ${DIR_SCRATCH}/labels.nii.gz \
   --label-text ${LABEL_NAME} \
-  --dir-save ${DIR_SAVE}/ts_${LABEL_NAME}
+  --dir-save ${DIR_SCRATCH}/ts_${LABEL_NAME}
 
 # calculate connectivity metrics -----------------------------------------------
 PFX=$(getBidsBase -i ${TS} -s)
-mkdir -p ${DIR_SAVE}/connectivity
+mkdir -p ${DIR_SCRATCH}/connectivity
 Rscript ${TKNIPATH}/R/connectivity.R \
-  "ts" ${DIR_SAVE}/ts_${LABEL_NAME}/${PFX}_ts-${LABEL_NAME}.csv \
+  "ts" ${DIR_SCRATCH}/ts_${LABEL_NAME}/${PFX}_ts-${LABEL_NAME}.csv \
   ${CON_METRIC//,/ } \
-  "dirsave" ${DIR_SAVE}/connectivity
+  "dirsave" ${DIR_SCRATCH}/connectivity
 
 # Get temporal Z-score ---------------------------------------------------------
 if [[ ${NO_Z} == "false" ]]; then
-  tensorZ --image ${TS} --lo ${Z_LO} --hi ${Z_HI} --dir-save ${DIR_SAVE}/tensorZ
-  niimath ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
-    -nan ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz
+  tensorZ --image ${TS} --lo ${Z_LO} --hi ${Z_HI} --dir-save ${DIR_SCRATCH}/tensorZ
+  niimath ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
+    -nan ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz
 
   niimath ${DIR_SCRATCH}/labels.nii.gz -bin ${DIR_SCRATCH}/mask.nii.gz -odt char
   3dmaskave -quiet -mask ${DIR_SCRATCH}/mask.nii.gz \
-    ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
-    > ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_mean.1D
+    ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
+    > ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_mean.1D
   3dmaskave -quiet -sigma -mask ${DIR_SCRATCH}/mask.nii.gz \
-    ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
+    ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
     > ${DIR_SCRATCH}/tmp.1D
-  cut -d\  -f2- ${DIR_SCRATCH}/tmp.1D > ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_sigma.1D
-  sed -i -r 's/\s+//g' ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_sigma.1D
+  cut -d\  -f2- ${DIR_SCRATCH}/tmp.1D > ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_sigma.1D
+  sed -i -r 's/\s+//g' ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_sigma.1D
   3dmaskave -quiet -enorm -mask ${DIR_SCRATCH}/mask.nii.gz \
-    ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
-    > ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_enorm.1D
+    ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
+    > ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_enorm.1D
   3dmaskave -quiet -median -mask ${DIR_SCRATCH}/mask.nii.gz \
-    ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
-    > ${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_median.1D
+    ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z.nii.gz \
+    > ${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_median.1D
 
-  PLOTLS="${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_mean.1D"
-  PLOTLS="${PLOTLS},${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_sigma.1D"
-  PLOTLS="${PLOTLS},${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_enorm.1D"
-  PLOTLS="${PLOTLS},${DIR_SAVE}/tensorZ/${PFX}_mod-residual_tensor-z_median.1D"
+  PLOTLS="${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_mean.1D"
+  PLOTLS="${PLOTLS},${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_sigma.1D"
+  PLOTLS="${PLOTLS},${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_enorm.1D"
+  PLOTLS="${PLOTLS},${DIR_SCRATCH}/tensorZ/${PFX}_mod-residual_tensor-z_median.1D"
   regressorPlot --regressor ${PLOTLS} --title 'Time-series Metrics'
 fi
 
 # Extract FC Metrics (if requested) --------------------------------------------
 if [[ ${DO_RSFC} == "true" ]]; then
   if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == "false" ]]; then
-    mapRSFC --ts ${TS} --dir-save ${DIR_SAVE}/rsfc_parameters
+    mapRSFC --ts ${TS} --dir-save ${DIR_SCRATCH}/rsfc_parameters
   else
-    mapRSFC --ts ${TS} --dir-save ${DIR_SAVE}/rsfc_parameters --no-png
+    mapRSFC --ts ${TS} --dir-save ${DIR_SCRATCH}/rsfc_parameters --no-png
   fi
 fi
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}
-  RMD=${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.Rmd
+  RMD=${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd
 
   echo -e '---\ntitle: "&nbsp;"\noutput: html_document\n---\n' > ${RMD}
   echo '```{r setup, include=FALSE}' >> ${RMD}
@@ -401,7 +431,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # ts-processing
   echo '## Time-series Preprocessing {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SAVE}/qc/${IDDIR}/${IDPPFX}*ts-processing.png))
+  TPNG=($(ls ${DIR_SAVE}/func/qc/${IDDIR}/${IDPPFX}*ts-processing.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]} -s)
     BNAME=${BNAME//${IDPFX}_}
@@ -413,8 +443,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # coregistration
   echo '## Connectivity {.tabset}' >> ${RMD}
   unset TPNG TCSV
-  TCSV=($(ls ${DIR_SAVE}/connectivity/${IDPFX}*.csv))
-  TPNG=($(ls ${DIR_SAVE}/connectivity/${IDPFX}*.png))
+  TCSV=($(ls ${DIR_SCRATCH}/connectivity/${IDPFX}*.csv))
+  TPNG=($(ls ${DIR_SCRATCH}/connectivity/${IDPFX}*.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[${i}]})
     BNAME=${BNAME//${IDPFX}_}
@@ -436,7 +466,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   if [[ ${NO_Z} == "false" ]]; then
     echo '## Time-series Metrics {.tabset}' >> ${RMD}
-    TPNG=($(ls ${DIR_SAVE}/tensorZ/${IDPFX}*.png))
+    TPNG=($(ls ${DIR_SCRATCH}/tensorZ/${IDPFX}*.png))
     for (( i=0; i<${#TPNG[@]}; i++ )); do
       BNAME=$(getBidsBase -i ${TPNG[$i]})
       BNAME=${BNAME//${IDPFX}_}
@@ -449,7 +479,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # Extract FC Metrics (if requested) --------------------------------------------
   if [[ ${DO_RSFC} == "true" ]]; then
     echo '## RSFC Parameters {.tabset}' >> ${RMD}
-    TPNG=($(ls ${DIR_SAVE}/rsfc_parameters/${IDPFX}*.png))
+    TPNG=($(ls ${DIR_SCRATCH}/rsfc_parameters/${IDPFX}*.png))
     for (( i=0; i<${#TPNG[@]}; i++ )); do
       BNAME=$(getBidsBase -i ${TPNG[$i]})
       BNAME=${BNAME//${IDPFX}_}
@@ -461,12 +491,27 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
-  mkdir -p ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd
-  mv ${RMD} ${DIR_PROJECT}/qc/${PIPE}${FLOW}/Rmd/
+  mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.html ${DIR_SAVE}/qc/${PIPE}${FLOW}/
+  mv ${DIR_SCRATCH}/${IDPFX}_${PIPE}${FLOW}_${DATE_SUFFIX}.Rmd ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd/
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> HTML summary of ${PIPE}${FLOW} generated:"
-    echo -e "\t${DIR_PROJECT}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
+    echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
+fi
+
+# Save Output ------------------------------------------------------------------
+mkdir -p ${DIR_SAVE}/func/ts_${LABEL_NAME}
+mv ${DIR_SCRATCH}/ts_${LABEL_NAME}/* ${DIR_SAVE}/func/
+mkdir -p ${DIR_SAVE}/func/connectivity
+mv ${DIR_SCRATCH}/connectivity/* ${DIR_SAVE}/func/connectivity/
+if [[ ${NO_Z} == "false" ]]; then
+  mkdir -p ${DIR_SAVE}/func/tensorZ
+  mv ${DIR_SCRATCH}/tensorZ/* ${DIR_SAVE}/func/tensorZ/
+fi
+if [[ ${DO_RSFC} == "true" ]]; then
+  mkdir -p ${DIR_SAVE}/func/rsfc_parameters
+  mv ${DIR_SCRATCH}/rsfc_parameters/* ${DIR_SAVE}/func/rsfc_parameters/
 fi
 
 # set status file --------------------------------------------------------------

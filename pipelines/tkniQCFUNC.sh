@@ -45,7 +45,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hv --long pi:,project:,dir-project:,id:,dir-id:,\
+OPTS=$(getopt -o hvnr --long pi:,project:,dir-project:,id:,dir-id:,\
 dir-raw:,dir-clean:,dir-residual:,dir-regressor:,dir-mask:,dir-mean:,dir-xfm:,\
 mask-brain:,redo-frame,\
 dir-save:,dir-scratch:,requires:,\
@@ -86,7 +86,7 @@ NO_LOG="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
-FLOW=${FCN_NAME//\.sh}
+#FLOW=${FCN_NAME//\.sh}
 REQUIRES=""
 FORCE=false
 
@@ -123,28 +123,51 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo 'WTF'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Post-Processing QC Report for Functional Images'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA STAGES:'
+    echo '  The script automatically searches for and evaluates:'
+    echo '  1. RAW BOLD        (Native raw data pushed to native T1 space)'
+    echo '  2. CLEAN BOLD      (Motion corrected and denoised images)'
+    echo '  3. RESIDUAL BOLD   (Nuisance regressed time-series)'
+    echo ''
+    echo ' DIRECTORY OVERRIDES (Defaults to project derivatives/tkni/func):'
+    echo '  --dir-raw <path>      Location of raw functional images'
+    echo '  --dir-clean <path>    Location of cleaned functional images'
+    echo '  --dir-residual <p>    Location of residual functional images'
+    echo '  --dir-regressor <p>   Location of motion/nuisance regressor files'
+    echo '  --dir-mask <path>     Location of brain/frame masks'
+    echo '  --dir-mean <path>     Location of mean-BOLD reference images'
+    echo ''
+    echo ' QC OPTIONS & FLAGS:'
+    echo '  --mask-brain <file>   Brain mask for metric calculation'
+    echo '  --redo-frame          Force regeneration of frame masks'
+    echo '  --reset-csv           Archive existing QC CSVs and start new ones'
+    echo '                        (Requires manual [y/n] confirmation)'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  --dir-project <path>  Base project directory'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' METRICS CALCULATED:'
+    echo '  - Spatial: EFC, FBER, SNR, Ghosting (X,Y,Z), FWHM (Smoothness)'
+    echo '  - Temporal: DVARS, Framewise Displacement (FD), Spike Percentage'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
@@ -169,11 +192,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -225,15 +262,12 @@ fi
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/func/qc
-fi
 if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
 mkdir -p ${DIR_SCRATCH}
-mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SAVE}/func/qc
 
 # set output files and initialize with header as needed ----------------------
 HDR="${HDR},dateCalculated,processingStage,task,\
@@ -241,11 +275,11 @@ efc,fber,snr_frame,snr_brain,snr_dietrich,ghostr_x,ghostr_y,ghostr_z,fwhm_x,fwhm
 dvars_mean,dvars_sigma,fd_mean,fd_sigma,spike_pct"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-func_summary.csv
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-func.csv
+CSV_PX=${DIR_SAVE}/func/qc/${IDPFX}_qc-func.csv
 CSV_LOG=${TKNI_LOG}/log_QCFUNC.csv
 if [[ ${RESET_CSV} == "true" ]]; then
   mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-func_summary_dep${TIMESTAMP}.csv
-  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-func_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/func/qc/${IDPFX}_qc-func_dep${TIMESTAMP}.csv
   mv ${CSV_LOG} ${TKNI_LOG}/log_QCFUNC_dep${TIMESTAMP}.csv
 fi
 if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
@@ -256,11 +290,8 @@ fi
 
 # Find images and regressors ------------------------------------------------------
 IMGS_RAW=($(find ${DIR_RAW} -maxdepth 1 -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
-echo -e "/n/nRAW/n${IMGS_RAW[@]}"
 IMGS_CLEAN=($(find ${DIR_CLEAN} -maxdepth 1 -name "${IDPFX}*bold.nii.gz" 2>/dev/null))
-echo -e "/n/nCLEAN/n${IMGS_CLEAN[@]}"
 IMGS_RESIDUAL=($(find ${DIR_RESIDUAL} -maxdepth 1 -name "${IDPFX}*residual.nii.gz" 2>/dev/null))
-echo -e "/n/nRESIDUAL/n${IMGS_RESIDUal[@]}"
 #RGRS_RMS=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+RMS.1D" 2>/dev/null))
 #RGRS_FD=($(find ${DIR_REGRESSOR} -name "${IDPFX}*displacement+framewise.1D" 2>/dev/null))
 #RGRS_SPIKE=($(find ${DIR_REGRESSOR} -name "${IDPFX}*spike.1D" 2>/dev/null))

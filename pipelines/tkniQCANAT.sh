@@ -154,27 +154,59 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Post-Processing QC Report for Anatomical Images'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA STAGES:'
+    echo '  The script evaluates all .nii.gz files found in:'
+    echo '  1. RAW ANAT         (Raw data transformed to native spacing)'
+    echo '  2. NATIVE ANAT      (Standard processed T1w/T2w images)'
+    echo '  3. ADDITIONAL MAPS  (e.g., QALAS T1/T2/PD maps if available)'
+    echo ''
+    echo ' DIRECTORY OVERRIDES (Defaults to project derivatives/tkni/anat):'
+    echo '  --dir-raw <path>      Location of raw anatomical images'
+    echo '  --dir-native <path>   Location of native processed images'
+    echo '  --dir-add <list>      Comma-separated extra directories to evaluate'
+    echo '  --dir-mask <path>     Location of anatomical masks'
+    echo '  --dir-label <path>    Location of tissue labels'
+    echo '  --dir-posterior <p>   Location of tissue posterior probability maps'
+    echo ''
+    echo ' TISSUE LABELING & VALUES:'
+    echo '  --label-tissue <f>    Hard tissue segmentation (default: label-tissue)'
+    echo '  --value-gm <int>      Label ID for Gray Matter (default: 2)'
+    echo '  --value-wm <int>      Label ID for White Matter (default: 4)'
+    echo '  --value-deep <int>    Label ID for Deep Gray Matter (default: 3)'
+    echo '  --value-csf <int>     Label ID for CSF (default: 1)'
+    echo ''
+    echo ' QC OPTIONS & FLAGS:'
+    echo '  --mask-brain <file>   Brain mask for metric calculation'
+    echo '  --mask-wm <file>      White Matter mask for wm2max calculation'
+    echo '  --redo-frame          Force regeneration of frame/FOV masks'
+    echo '  --reset-csv           Archive existing QC CSVs and start new ones'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-save <path>     Directory for results (default: derivatives/tkni)'
+    echo '  --dir-summary <path>  Directory for project-wide summary CSV'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' METRICS CALCULATED:'
+    echo '  - Contrast/Noise: CJV, CNR, SNR (Frame/FG/Brain/Dietrich), wm2max'
+    echo '  - Image Quality: EFC, FBER, FWHM (Smoothness), PIESNO noise index'
+    echo '  - Descriptive: Mean, SD, Median, MAD, Skew, Kurtosis, 5/95 percentiles'
+    echo '  - Segmentation: RPVE (Residual Partial Volume Errors) for GM/WM/CSF'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
@@ -199,11 +231,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -259,15 +305,15 @@ fi
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/qc
-fi
+#if [[ -z ${DIR_SAVE} ]]; then
+#  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/anat/qc
+#fi
 if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
 mkdir -p ${DIR_SCRATCH}
-mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SAVE}/anat/qc
 
 # set output files and initialize with header as needed ----------------------
 HDR="${HDR},dateCalculated,processingStage,imageType,\
@@ -275,7 +321,7 @@ cjv,cnr,efc,fber,snr_frame,snr_fg,snr_brain,snr_dietrich,wm2max,fwhm_x,fwhm_y,fw
 piesno,mean,sigma,median,mad,skew,kurtosis,p05,p95,rpve_gm,rpve_deepgm,rpve_wm,rpve_csf"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary.csv
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-anat.csv
+CSV_PX=${DIR_SAVE}/anat/qc/${IDPFX}_qc-anat.csv
 CSV_LOG=${TKNI_LOG}/log_QCANAT.csv
 if [[ ${RESET_CSV} == "true" ]]; then
   mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-anat_summary_dep${TIMESTAMP}.csv
@@ -305,7 +351,7 @@ for (( i=0; i<${#IMGS_RAW[@]}; i++ )); do
   MOD=$(getField -i ${IMG} -f modality)
   if [[ ${MOD,,} == "qalas" ]]; then MOD=${MOD^^}; fi
   NV=$(niiInfo -i ${IMG} -f volumes)
-
+echo $MOD
   if [[ -f ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat ]]; then
     XFMSTR="-t ${DIR_XFM}/${IDPFX}_mod-${MOD}_from-raw_to-ACPC_xfm-rigid.mat"
   elif [[ -f "${DIR_XFM}/${IDPFX}_from-${MOD}_to-native_xfm-syn.nii.gz" ]]; then
@@ -516,8 +562,8 @@ fi
 
 # set status file --------------------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function

@@ -91,7 +91,7 @@ NO_LOG="false"
 
 PIPE=tkni
 FLOW=${FCN_NAME//tkni}
-FLOW=${FCN_NAME//\.sh}
+#FLOW=${FCN_NAME//\.sh}
 REQUIRES=""
 FORCE="false"
 RESET_CSV="false"
@@ -131,27 +131,51 @@ done
 
 # Usage Help -------------------------------------------------------------------
 if [[ "${HELP}" == "true" ]]; then
-  echo ''
-  echo '------------------------------------------------------------------------'
-  echo "TKNI: ${FCN_NAME}"
-  echo '------------------------------------------------------------------------'
-  echo '  -h | --help        display command help'
-  echo '  -v | --verbose     add verbose output to log file'
-  echo '  -n | --no-png      disable generating pngs of output'
-  echo '  --pi               folder name for PI, no underscores'
-  echo '                       default=evanderplas'
-  echo '  --project          project name, preferrable camel case'
-  echo '                       default=unitcall'
-  echo '  --dir-project      project directory'
-  echo '                     default=/data/x/projects/${PI}/${PROJECT}'
-  echo '  --id               file prefix, usually participant identifier string'
-  echo '                       e.g., sub-123_ses-20230111T1234_aid-4567'
-  echo '  --dir-id           sub-directory corresponding to subject in BIDS'
-  echo '  --dir-scratch      directory for temporary workspace'
-  echo ''
-  NO_LOG=true
-  exit 0
+    echo '------------------------------------------------------------------------'
+    echo " TKNI Pipeline: ${PIPE}:${FLOW}"
+    echo ' DESCRIPTION: Post-Processing QC Report for Diffusion Images'
+    echo '------------------------------------------------------------------------'
+    echo ' REQUIRED ARGUMENTS:'
+    echo '  --pi <name>           PI folder name (no underscores)'
+    echo '  --project <name>      Project name (preferably CamelCase)'
+    echo '  --id <string>         Participant identifier (BIDS prefix)'
+    echo ''
+    echo ' INPUT DATA STAGES:'
+    echo '  The script automatically evaluates shells from:'
+    echo '  1. RAW DWI          (Native raw data pushed to native T1 space)'
+    echo '  2. CLEAN DWI        (Preprocessed images from tkniDPREP)'
+    echo '  3. FA SCALARS       (Integrity check for NaNs/degenerate voxels)'
+    echo ''
+    echo ' DIRECTORY OVERRIDES (Defaults to project derivatives/tkni/dwi):'
+    echo '  --dir-raw <path>      Location of raw diffusion images'
+    echo '  --dir-clean <path>    Location of cleaned/preprocessed images'
+    echo '  --dir-scalar <path>   Location of diffusion scalar maps (FA, etc.)'
+    echo '  --dir-mask <path>     Location of anatomical/frame masks'
+    echo '  --dir-label <path>    Location of atlas labels'
+    echo '  --dir-xfm <path>      Location of registration transforms'
+    echo ''
+    echo ' QC MASKS & OPTIONS:'
+    echo '  --mask-fg <file>      Foreground mask for SNR calculation'
+    echo '  --mask-brain <file>   Full brain mask'
+    echo '  --mask-cc <file>      Corpus Callosum mask (for white matter SNR)'
+    echo '  --redo-frame          Force regeneration of frame masks'
+    echo '  --reset-csv           Archive existing QC CSVs and start new ones'
+    echo ''
+    echo ' GLOBAL OPTIONS:'
+    echo '  --dir-scratch <path>  Override default temporary workspace'
+    echo '  -h | --help           Display this help'
+    echo '  -v | --verbose        Enable console logging'
+    echo '  --force               Force re-run and overwrite status'
+    echo ''
+    echo ' METRICS CALCULATED (By Shell):'
+    echo '  - Compartmental SNR: Frame, FG, Brain, CC, & Dietrich'
+    echo '  - Image Quality: EFC, FBER, Smoothness (FWHM), PIESNO'
+    echo '  - Map Integrity: % NaNs, % Degenerate voxels, % Spike slices'
+    echo '------------------------------------------------------------------------'
+    NO_LOG=true
+    exit 0
 fi
+
 
 #===============================================================================
 # Start of Function
@@ -176,11 +200,25 @@ if [[ -z ${PROJECT} ]]; then
   echo "ERROR [${PIPE}:${FLOW}] PROJECT must be provided"
   exit 1
 fi
-if [[ -z ${DIR_PROJECT} ]]; then
-  DIR_PROJECT=/data/x/projects/${PI}/${PROJECT}
+if [[ -z ${DIR_PROJECT} ]] && [[ -n ${DIR_SAVE} ]]; then
+  DIR_PROJECT=${DIR_SAVE}
+elif [[ -z ${DIR_PROJECT} ]]; then
+  echo "ERROR [${PIPE}:${FLOW}] You must set a PROJECT DIRECTORY or SAVE DIRECTORY"
+  exit 1
 fi
 if [[ -z ${DIR_SCRATCH} ]]; then
   DIR_SCRATCH=${TKNI_SCRATCH}/${FLOW}_${PI}_${PROJECT}_${DATE_SUFFIX}
+fi
+if [[ -z ${DIR_SAVE} ]]; then
+  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}
+fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo "Running ${PIPE}${FLOW}"
+  echo -e "PI:\t${PI}\nPROJECT:\t${PROJECT}"
+  echo -e "PROJECT DIRECTORY:\t${DIR_PROJECT}"
+  echo -e "SAVE DIRECTORY:\t${DIR_SAVE}"
+  echo -e "SCRATCH DIRECTORY:\t${DIR_SCRATCH}"
+  echo -e "Start Time:\t${PROC_START}"
 fi
 
 # Check ID ---------------------------------------------------------------------
@@ -230,15 +268,12 @@ fi
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PROJECT}/derivatives/${PIPE}/xfm/${IDDIR}
 fi
-if [[ -z ${DIR_SAVE} ]]; then
-  DIR_SAVE=${DIR_PROJECT}/derivatives/${PIPE}/dwi/qc
-fi
 if [[ -z ${DIR_SUMMARY} ]]; then
   DIR_SUMMARY=${DIR_PROJECT}/summary
 fi
 
 mkdir -p ${DIR_SCRATCH}
-mkdir -p ${DIR_SAVE}
+mkdir -p ${DIR_SAVE}/dwi/qc
 
 # set output files and initialize with header as needed ----------------------
 if [[ ${VERBOSE} == "true" ]]; then echo ">>>initialize CSV output files"; fi
@@ -247,11 +282,11 @@ efc,fber,snr_frame,snr_fg,snr_brain,snr_cc,snr_dietrich,fwhm_x,fwhm_y,fwhm_z,pie
 is_nan,is_degen,spike_slice"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary.csv
-CSV_PX=${DIR_SAVE}/${IDPFX}_qc-dwi.csv
+CSV_PX=${DIR_SAVE}//dwi/qc${IDPFX}_qc-dwi.csv
 CSV_LOG=${TKNI_LOG}/log_QCDWI.csv
 if [[ ${RESET_CSV} == "true" ]]; then
   mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary_dep${TIMESTAMP}.csv
-  mv ${CSV_PX} ${DIR_SAVE}/${IDPFX}_qc-dwi_dep${TIMESTAMP}.csv
+  mv ${CSV_PX} ${DIR_SAVE}/dwi/qc${IDPFX}_qc-dwi_dep${TIMESTAMP}.csv
   mv ${CSV_LOG} ${TKNI_LOG}/log_QCDWI_dep${TIMESTAMP}.csv
 fi
 if [[ ! -f ${CSV_SUMMARY} ]]; then echo ${HDR} > ${CSV_SUMMARY}; fi
@@ -463,6 +498,13 @@ ${SNR_CC[-1]},${SNR_D[-1]},${FWHM[0]},${FWHM[1]},${FWHM[2]},${PIESNO[-1]},NA,NA,
 done
 
 FA=${DIR_SCALAR}/${IDPFX}_space-native_scalar-fa.nii.gz
+if [[ ! -f ${FA} ]]; then
+  FA_ORIG=${DIR_PROJECT}/derivatives/${PIPE}/dwi/scalar/${IDPFX}_scalar-fa.nii.gz
+  if [[ -f ${FA_ORIG} ]]; then
+    antsApplyTransforms -d 3 -n Linear -i ${FA_ORIG} -o ${FA} -r ${REF_NATIVE}
+  fi
+fi
+
 if [[ -f ${FA} ]]; then
   unset ISNAN ISDEGEN SPIKE
   if [[ ${VERBOSE} == "true" ]]; then echo ">>>>>>processing FA metrics and spikes"; fi

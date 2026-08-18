@@ -93,7 +93,7 @@ deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/
 sudo apt-get update
 sudo apt-get install r-base r-base-dev
 
-PKGLS=(car devtools doParallel downloadthis effects ez.combat fastcluster ggplot2 grid gridExtra Hmisc jsonlite kableExtra lme4 lmerTest MASS mixtools moments nifti.io optimParallel R.utils RcppColors reshape2 spant tools viridis withr)
+PKGLS=(assertions car data.table devtools doParallel downloadthis effects ez.combat fastcluster ggplot2 grid gridExtra Hmisc jsonlite kableExtra lme4 lmerTest MASS matrixStats mixtools moments nifti.io optimParallel R.utils RcppColors reshape2 spant tools viridis withr zoo)
 
 APTLS=
 RLS="install.packages(c("
@@ -112,6 +112,7 @@ Rscript -e ${RLS}
 Rscript -e 'devtools::install_github("tkoscik/fsurfR")'
 Rscript -e 'devtools::install_github("tkoscik/tkmisc")'
 Rscript -e 'devtools::install_github("tkoscik/timbow")'
+Rscript -e 'devtools::install_github("tkoscik/tkniModel")'
 
 # install R -----------------------------------------------------------------
 ## https://cran.r-project.org/bin/linux/ubuntu/fullREADME.html
@@ -310,9 +311,18 @@ python -m venv amicoVENV
 source ./amicoVENV/bin/activate
 pip install dmri-amico
 
+## alternative with conda
+
+
 mkdir -p /usr/local/tkni/pyvenv
 cd /usr/local/tkni/pyvenv
 python3 -m venv clusteringVENV
 source clusteringVENV/bin/activate
 pip install -r /usr/local/tkni/dev/python/requirements_clusteringVENV.txt
 pip install "numpy<2" matplotlib nibabel scikit-image
+
+
+####
+conda create --name tkni_venv python=3.10
+conda activate tkni_venv
+pip install -r /usr/local/tkni/dev/python/requirements.txt

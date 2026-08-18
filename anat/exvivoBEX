@@ -38,7 +38,7 @@ function egress {
 trap egress EXIT
 
 # Parse inputs -----------------------------------------------------------------
-OPTS=$(getopt -o hvkln --long image:,nnmodel:,\
+OPTS=$(getopt -o hvkln --long image:,nnmodel:,which-venv:,\
 dir-save:,dir-scratch:,\
 help,verbose,no-log,no-png -n 'parse-options' -- "$@")
 if [[ $? != 0 ]]; then
@@ -50,6 +50,7 @@ eval set -- "$OPTS"
 # Set default values for function ---------------------------------------------
 IMAGE=
 NNMODEL="Dataset001_uhrbex"
+WHICH_VENV=
 
 DIR_SAVE=
 DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
@@ -64,6 +65,7 @@ while true; do
     -n | --no-png) NO_PNG=true ; shift ;;
     --image) IMAGE="$2" ; shift 2 ;;
     --nnmodel) NNMODEL="$2" ; shift 2 ;;
+    --which-venv) WHICH_VENV="$2" ; shift 2 ;;
     --dir-save) DIR_SAVE="$2" ; shift 2 ;;
     --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
     -- ) shift ; break ;;
@@ -92,6 +94,8 @@ fi
 #===============================================================================
 # EX VIVO BRAIN EXTRACTION
 #===============================================================================
+# activate conda environment
+if [[ -n ${WHICH_VENV} ]]; then conda activate ${WHICH_VENV}; fi
 
 if [[ -z ${DIR_SAVE} ]]; then DIR_SAVE=$(dirname ${IMAGE}); fi
 
@@ -140,6 +144,9 @@ if [[ ${NO_PNG} == "false" ]]; then
     --filename ${FILENAME} \
     --dir-save ${DIR_SAVE}
 fi
+
+# deactivate conda
+if [[ -n ${WHICH_VENV} ]]; then conda deactivate; fi
 
 #===============================================================================
 # End of Function

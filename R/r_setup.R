@@ -1,7 +1,9 @@
 rm(list=ls())
 invisible(gc())
 
-CRAN.pkgs <- c("car",
+CRAN.pkgs <- c("assertions",
+               "car",
+               "data.table",
                "devtools",
                "doParallel",
                "downloadthis",
@@ -16,7 +18,9 @@ CRAN.pkgs <- c("car",
                "kableExtra",
                "lme4",
                "lmerTest",
+               "magick",
                "MASS",
+               "matrixStats",
                "mixtools",
                "moments",
                "nifti.io",
@@ -27,10 +31,12 @@ CRAN.pkgs <- c("car",
                "spant",
                "tools",
                "viridis",
-               "withr")
+               "withr",
+               "zoo")
 GITHUB.pkgs <- c("tkoscik/fsurfR",
                  "tkoscik/tkmisc",
-                 "tkoscik/timbow")
+                 "tkoscik/timbow",
+                 "tkoscik/tkniModel")
 
 # Setup a library including the appropriate R packages -------------------------
 pkgs <- as.character(unique(as.data.frame(installed.packages())$Package))

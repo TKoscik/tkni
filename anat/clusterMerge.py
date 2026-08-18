@@ -1,4 +1,5 @@
 #!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
+##!/usr/bin/env python
 import argparse
 import nibabel as nib
 import numpy as np
@@ -26,22 +27,19 @@ def get_cluster_stats(image_array, label_array):
             continue
         m = prop.mean_intensity
         s = np.std(pixels)
-        if s < 1e-7:
+        if s < 1e-4:
             sk = 0.0
             kurt = 0.0
             cv = 0.0
         else:
-            sk = skew(pixels)
-            kurt = kurtosis(pixels)
-            cv = s / (abs(m) + 1e-8)
+             if np.allclose(pixels, m, atol=1e-4):
+                 sk, kurt, cv = 0.0, 0.0, 0.0
+             else:
+                 sk = skew(pixels)
+                 kurt = kurtosis(pixels)
+                 cv = s / (abs(m) + 1e-8)
         stats_map[l_id] = np.array([m, s, sk, kurt, cv])
     return stats_map
-
-#def _weight_stats(g, src, dst, n, weights):
-#    """Weight function applying custom importance to specific stats."""
-#    # Apply weights to the difference vector before calculating Euclidean norm
-#    diff = (g.nodes[dst]['fingerprint'] - g.nodes[n]['fingerprint']) * weights
-#    return {'weight': np.linalg.norm(diff)}
 
 def _weight_stats(g, src, dst, n, weights):
     """Calculates the distance between the NEW node (dst) and neighbor (n)."""
@@ -77,34 +75,6 @@ def _merge_stats(g, src, dst):
 
     g.nodes[dst]['fingerprint'] = (f_src * count_src + f_dst * count_dst) / total
     g.nodes[dst]['pixel count'] = total
-
-#merge_count = 0
-#def _merge_stats(graph, src, dst):
-#    """
-#    REQUIRED: Updates the fingerprint of the newly merged node (weighted average).
-#    Without this, the 'fingerprint' attribute is lost after the first merge.
-#    """
-#    # counter to give a sense of duration
-#    global merge_count
-#    merge_count += 1
-#    if merge_count % 100 == 0:
-#        print(f"-> Merged: {merge_count} | # Clusters: {graph.number_of_nodes()}", end='\r')
-#
-#    count_src = graph.nodes[src].get('pixel count', 1)
-#    count_dst = graph.nodes[dst].get('pixel count', 1)
-#    total = count_src + count_dst
-#
-#    # Update Mean Color (Standard RAG behavior)
-#    graph.nodes[dst]['mean color'] = (
-#        (graph.nodes[src]['mean color'] * count_src +
-#         graph.nodes[dst]['mean color'] * count_dst) / total
-#    )
-#    # Update Fingerprint (Crucial for your weight function)
-#    graph.nodes[dst]['fingerprint'] = (
-#        (graph.nodes[src]['fingerprint'] * count_src +
-#         graph.nodes[dst]['fingerprint'] * count_dst) / total
-#    )
-#    graph.nodes[dst]['pixel count'] = total
 
 def merge_clusters(nii_image, nii_mask, nii_label, threshold, connectivity, clip_lo, clip_hi, nii_out, feature_weights):
     print("-> Loading NIfTI volumes")
@@ -148,6 +118,7 @@ def merge_clusters(nii_image, nii_mask, nii_label, threshold, connectivity, clip
         weight_func=lambda g, s, d, n: _weight_stats(g, s, d, n, feature_weights),
     )
 
+    print("")
     print("-> Relabeling and saving")
     final_label, _, _ = relabel_sequential(new_label.astype(np.int32))
     nib.save(nib.Nifti1Image(final_label.astype(np.int32), image.affine), nii_out)
