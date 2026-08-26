@@ -455,7 +455,7 @@ fi
 
 # Get brain masks --------------------------------------------------------------
 for (( i=0; i<${NVOL}; i++ )); do
-  mri_synthstrip -i ${QPROC[${i}]} -m ${DIR_SCRATCH}/mask-brain${i}.nii.gz
+  mri_synthstrip -i ${QPROC[${i}]} -m ${DIR_SCRATCH}/mask-brain${i}.nii.gz -t 2
 done
 ImageMath 3 ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
   MajorityVoting ${DIR_SCRATCH}/mask-brain*.nii.gz
@@ -773,11 +773,11 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### T1map Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T1map.png')\n' >> ${RMD}
+  echo -e '![Axial]('${DIR_SCRATCH}/${IDPFX}_plane-axial_T1map.png')\n' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-coronal_T1map.png')\n' >> ${RMD}
+  echo -e '![Axial]('${DIR_SCRATCH}/${IDPFX}_plane-coronal_T1map.png')\n' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-sagittal_T1map.png')\n' >> ${RMD}
+  echo -e '![Axial]('${DIR_SCRATCH}/${IDPFX}_plane-sagittal_T1map.png')\n' >> ${RMD}
 
   ## T2 ------------------------------------------------------------------------
   echo '### T2 map' >> ${RMD}
@@ -785,11 +785,11 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### T2map Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_T2map.png')\n' >> ${RMD}
+  echo -e '![Axial]('${DIR_SCRATCH}/${IDPFX}_plane-axial_T2map.png')\n' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo -e '![Coronal]('${DIR_PREP}/${IDPFX}_plane-coronal_T2map.png')\n' >> ${RMD}
+  echo -e '![Coronal]('${DIR_SCRATCH}/${IDPFX}_plane-coronal_T2map.png')\n' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo -e '![Sagittal]('${DIR_PREP}/${IDPFX}_plane-sagittal_T2map.png')\n' >> ${RMD}
+  echo -e '![Sagittal]('${DIR_SCRATCH}/${IDPFX}_plane-sagittal_T2map.png')\n' >> ${RMD}
 
   ## PD ------------------------------------------------------------------------
   echo '### Proton Density (PD)' >> ${RMD}
@@ -797,11 +797,11 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '#### PD Slice Mosaics {.tabset}' >> ${RMD}
   echo '##### Click to View -->' >> ${RMD}
   echo '##### Axial' >> ${RMD}
-  echo -e '![Axial]('${DIR_PREP}/${IDPFX}_plane-axial_PDmap.png')\n' >> ${RMD}
+  echo -e '![Axial]('${DIR_SCRATCH}/${IDPFX}_plane-axial_PDmap.png')\n' >> ${RMD}
   echo '##### Coronal' >> ${RMD}
-  echo -e '![Coronal]('${DIR_PREP}/${IDPFX}_plane-coronal_PDmap.png')\n' >> ${RMD}
+  echo -e '![Coronal]('${DIR_SCRATCH}/${IDPFX}_plane-coronal_PDmap.png')\n' >> ${RMD}
   echo '##### Sagittal' >> ${RMD}
-  echo -e'![Sagittal]('${DIR_PREP}/${IDPFX}_plane-sagittal_PDmap.png')\n' >> ${RMD}
+  echo -e'![Sagittal]('${DIR_SCRATCH}/${IDPFX}_plane-sagittal_PDmap.png')\n' >> ${RMD}
 
   ## Synthesized Images --------------------------------------------------------
   echo '### Synthesized Images {.tabset}' >> ${RMD}
@@ -822,8 +822,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
 
   if [[ ${NO_DENOISE} == "false" ]]; then
     echo '#### Denoising' >> ${RMD}
-    echo -e '![Denoised QALAS]('${DIR_PREP}/${IDPFX}_prep-denoise_qalas.png')\n' >> ${RMD}
-    echo -e '![Noise]('${DIR_PREP}/${IDPFX}_prep-noise_qalas.png')\n' >> ${RMD}
+    echo -e '![Denoised QALAS]('${DIR_SCRATCH}/${IDPFX}_prep-denoise_qalas.png')\n' >> ${RMD}
+    echo -e '![Noise]('${DIR_SCRATCH}/${IDPFX}_prep-noise_qalas.png')\n' >> ${RMD}
   fi
 
   echo '#### FG Mask' >> ${RMD}
@@ -845,7 +845,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo -e '![Brain Mask]('${DIR_SCRATCH}'/'${IDPFX}'_mask-brain+'${FLOW}'.png)\n' >> ${RMD}
 
   echo '#### Coregistration' >> ${RMD}
-  echo -e '![Coregistration to Native]('${DIR_SCRATCH}'/'${IDPFX}'_coregistration.png)\n' >> ${RMD}
+  echo -e '![Coregistration to Native]('${DIR_SCRATCH}'/xfm/'${IDPFX}'_coregistration.png)\n' >> ${RMD}
 
   ## knit RMD
   Rscript -e "Sys.setenv(RSTUDIO_PANDOC=\"/usr/bin/pandoc\"); rmarkdown::render('${RMD}')"

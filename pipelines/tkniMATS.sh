@@ -736,7 +736,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '' >> ${RMD}
 
   echo '## Tissue Segmentation' >> ${RMD}
-  TPNG=${DIR_SCRATCH}/${IDPFX}_label-tissue/${IDPFX}_label-tissue.png
+  TPNG=${DIR_SCRATCH}/${IDPFX}_label-tissue.png
   echo '!['${IDPFX}'_label-tissue.nii.gz]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
@@ -773,7 +773,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="ANTS"
       echo '#### ANTs {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_label-tissue+${TM}.png
         echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
