@@ -318,7 +318,7 @@ if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
     --filename ${IDPFX}_label-mtl \
     --dir-save ${DIR_SCRATCH}
 fi
-rm tmp*.nii.gz
+rm ${DIR_SCRATCH}/tmp*.nii.gz
 
 segment_subregions brainstem --cross ${IDPFX} --sd ${DIR_SCRATCH}
 mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/brainstemSsLabels.mgz \
