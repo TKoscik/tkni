@@ -75,7 +75,7 @@ VERBOSE=false
 NO_PNG=false
 NO_RMD=false
 
-FSPIPE=fsSynth
+FSPIPE=freesurfer
 PIPE=tkni
 FLOW=${FCN_NAME//${PIPE}}
 REQUIRES="tkniDICOM,tkniAINIT"
@@ -111,7 +111,7 @@ done
 if [[ "${HELP}" == "true" ]]; then
     echo '------------------------------------------------------------------------'
     echo " TKNI Pipeline: ${PIPE^^}:${FLOW}"
-    echo ' DESCRIPTION: FreeSurfer recon-all-clinical & Surface Reconstruction'
+    echo ' DESCRIPTION: FreeSurfer recon-all & Surface Reconstruction'
     echo '------------------------------------------------------------------------'
     echo ' REQUIRED ARGUMENTS:'
     echo '  --pi <name>           PI folder name (no underscores)'
@@ -260,30 +260,146 @@ IMAGE=${DIR_SCRATCH}/${IDPFX}_${MOD}.nii.gz
 
 # Recon-all-clinical -----------------------------------------------------------
 CHK_FS_VERSION=$(recon-all -version)
-if [[ ${CHK_FS_VERSION} == *"x86_64-8.1.0"* ]]; then
-  recon-all-clinical.sh -i ${IMAGE} -subjid ${IDPFX} -sdir ${DIR_SCRATCH} -threads ${NTHREADS}
-elif [[ ${CHK_FS_VERSION} == *"x86_64-7.4.1"* ]]; then
-  recon-all-clinical.sh ${IMAGE} ${IDPFX} ${NTHREADS} ${DIR_SCRATCH}
+if [[ ${CHK_FS_VERSION} == *"x86_64-8."* ]]; then
+  recon-all -subjid ${IDPFX} -i ${IMAGE} -sd ${DIR_SCRATCH} -all
 else
-  echo "WARNING [${PIPE}:${FLOW}] Freesurfer version or code may need to be changed"
-  echo -e "\t attempting to use newest syntax form v8.1.0"
-  recon-all-clinical.sh -i ${IMAGE} -subjid ${IDPFX} -sdir ${DIR_SCRATCH} -threads ${NTHREADS}
+  echo "ERROR [${PIPE}:${FLOW}] Freesurfer version 8 is required"
+  exit 1
 fi
-
 if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> RECON-ALL Clinical COMPLETE"; fi
 
+# Add subregion segmentations --------------------------------------------------
+## Thalamic Nuclei
+segment_subregions thalamus --cross ${IDPFX} --sd ${DIR_SCRATCH}
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/ThalamicNuclei.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_label-thalamicNuclei.nii.gz
+antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
+  -i ${DIR_SCRATCH}/${IDPFX}_label-thalamicNuclei.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-thalamicNuclei.nii.gz
+if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
+  TLAYOUT="5:z"
+  make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
+    --fg ${DIR_SCRATCH}/${IDPFX}_label-thalamicNuclei.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/${IDPFX}_label-thalamicNuclei.nii.gz \
+    --fg-color "timbow:hue=#FF0000:lum=50,85:cyc=5/6:random" \
+    --fg-cbar "false" \
+    --layout ${TLAYOUT} \
+    --filename ${IDPFX}_label-thalamicNuclei \
+    --dir-save ${DIR_SCRATCH}
+fi
+
+## Hippocampus Amygdala
+segment_subregions hippo-amygdala --cross ${IDPFX} --sd ${DIR_SCRATCH}
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/lh.hippoAmygLabels.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_label-mtl+lh.nii.gz
+antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
+  -i ${DIR_SCRATCH}/${IDPFX}_label-mtl+lh.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-mtl+lh.nii.gz
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/rh.hippoAmygLabels.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_label-mtl+rh.nii.gz
+antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
+  -i ${DIR_SCRATCH}/${IDPFX}_label-mtl+rh.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-mtl+rh.nii.gz
+niimath ${DIR_SCRATCH}/${IDPFX}_label-mtl+rh.nii.gz -bin ${DIR_SCRATCH}/tmp_mask.nii.gz -odt char
+niimath ${DIR_SCRATCH}/${IDPFX}_label-mtl+rh.nii.gz \
+  -add 1000 -mas ${DIR_SCRATCH}/tmp_mask.nii.gz \
+  -add ${DIR_SCRATCH}/${IDPFX}_label-mtl+lh.nii.gz \
+  ${DIR_SCRATCH}/${IDPFX}_label-mtl.nii.gz
+if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
+  TLAYOUT="5:z"
+  3dRank -overwrite -prefix ${DIR_SCRATCH}/TLABEL.nii.gz \
+    -input ${DIR_SCRATCH}/${IDPFX}_label-mtl.nii.gz
+  make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
+    --fg ${DIR_SCRATCH}/TLABEL.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/TLABEL.nii.gz \
+    --fg-color "timbow:hue=#FF0000:lum=50,85:cyc=11/6:random" \
+    --fg-cbar "false" \
+    --layout ${TLAYOUT} \
+    --filename ${IDPFX}_label-mtl \
+    --dir-save ${DIR_SCRATCH}
+fi
+rm tmp*.nii.gz
+
+segment_subregions brainstem --cross ${IDPFX} --sd ${DIR_SCRATCH}
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/brainstemSsLabels.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_label-brainstem.nii.gz
+antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
+  -i ${DIR_SCRATCH}/${IDPFX}_label-brainstem.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-brainstem.nii.gz
+if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
+  TLAYOUT="5:x"
+  make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
+    --fg ${DIR_SCRATCH}/${IDPFX}_label-brainstem.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/${IDPFX}_label-brainstem.nii.gz \
+    --fg-color "timbow:hue=#FF0000:lum=50,85:cyc=5/6:random" \
+    --fg-cbar "false" \
+    --layout ${TLAYOUT} \
+    --filename ${IDPFX}_label-brainstem \
+    --dir-save ${DIR_SCRATCH}
+fi
+
+mri_segment_hypothalamic_subunits --s ${IDPFX} --sd ${DIR_SCRATCH}
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/hypothalamic_subunits_seg.v1.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_label-hypothalamus.nii.gz
+antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
+  -i ${DIR_SCRATCH}/${IDPFX}_label-hypothalamus.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-hypothalamus.nii.gz
+if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
+  TLAYOUT="5:x"
+  make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
+    --fg ${DIR_SCRATCH}/${IDPFX}_label-hypothalamus.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/${IDPFX}_label-hypothalamus.nii.gz \
+    --fg-color "timbow:hue=#FF0000:lum=50,85:cyc=5/6;random" \
+    --fg-cbar "false" \
+    --layout ${TLAYOUT} \
+    --filename ${IDPFX}_label-hypothalamus \
+    --dir-save ${DIR_SCRATCH}
+fi
+
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> Subregion segmentation complete"; fi
+
+## Add HCPMMP1 annotations -----------------------------------------------------
+mri_surf2surf --srcsubject fsaverage --trgsubject ${IDPFX} --sd ${DIR_SCRATCH} \
+              --hemi lh --sval-annot ${DIR_SCRATCH}/fsaverage/label/lh.HCP-MMP1.annot \
+              --tval ${DIR_SCRATCH}/${IDPFX}/label/lh.HCP-MMP1.annot
+mri_surf2surf --srcsubject fsaverage --trgsubject ${IDPFX} --sd ${DIR_SCRATCH} \
+              --hemi rh --sval-annot ${DIR_SCRATCH}/fsaverage/label/rh.HCP-MMP1.annot \
+              --tval ${DIR_SCRATCH}/${IDPFX}/label/rh.HCP-MMP1.annot
+mri_aparc2aseg --s ${IDPFX} --sd ${DIR_SCRATCH} --annot HCP-MMP1 \
+               --o ${DIR_SCRATCH}/${IDPFX}/mri/hcpmmp1.mgz
+mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/hcpmmp1.mgz \
+  ${DIR_SCRATCH}/${IDPFX}_label-hcpmmp1.nii.gz
+antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
+  -i ${DIR_SCRATCH}/${IDPFX}_label-hcpmmp1.nii.gz \
+  -o ${DIR_SCRATCH}/${IDPFX}_label-hcpmmp1.nii.gz
+if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
+  TLAYOUT="7:z;7:z;7:z"
+  3dRank -overwrite -prefix ${DIR_SCRATCH}/TLABEL.nii.gz \
+    -input ${DIR_SCRATCH}/${IDPFX}_label-hcpmmp1.nii.gz
+  make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
+    --fg ${DIR_SCRATCH}/TLABEL.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/TLABEL.nii.gz \
+    --fg-color "timbow:hue=#FF0000:lum=35,85:cyc=35/6:random" \
+    --fg-alpha 50 \
+    --fg-cbar "false" \
+    --layout ${TLAYOUT} \
+    --filename ${IDPFX}_label-hcpmmp1 \
+    --dir-save ${DIR_SCRATCH}
+fi
+if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> HCPMMP1 Annotations transferred"; fi
+
 # convert native_synth ---------------------------------------------------------
-mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/synthSR.raw.mgz \
-  ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
-antsApplyTransforms -d 3 -n BSpline[3] -t identity -r ${IMAGE} \
-  -i ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz \
-  -o ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
-if [[ "${NO_PNG}" == "false" ]]; then
-  make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz --bg-threshold "2.5,97.5"
-fi
-if [[ ${VERBOSE} == "true" ]]; then
-  echo -e ">>>>> Converted to Native space NIFTI"
-fi
+## mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/synthSR.raw.mgz \
+##   ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
+## antsApplyTransforms -d 3 -n BSpline[3] -t identity -r ${IMAGE} \
+##   -i ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz \
+##   -o ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
+## if [[ "${NO_PNG}" == "false" ]]; then
+##   make3Dpng --bg ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz --bg-threshold "2.5,97.5"
+## fi
+## if [[ ${VERBOSE} == "true" ]]; then
+##   echo -e ">>>>> Converted to Native space NIFTI"
+## fi
 
 # convert stats output to CSV --------------------------------------------------
 HEMI=("lh" "rh")
@@ -317,12 +433,15 @@ antsApplyTransforms -d 3 -n MultiLabel -t identity -r ${IMAGE} \
   -i ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz \
   -o ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz
 if [[ "${NO_PNG}" == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
-  TLAYOUT="3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x"
+  TLAYOUT="7:z;7:z;7:z"
   make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
     --fg ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz \
-    --fg-color "timbow:hue=#FF0000:lum=50,50,cyc=1/6" \
+    --fg-mask ${DIR_SCRATCH}/${IDPFX}_label-ribbon.nii.gz \
+    --fg-color "timbow:hue=#FF0000:lum=50,50:cyc=4/6" \
+    --fg-alpha 50 \
     --layout ${TLAYOUT} \
     --filename ${IDPFX}_label-ribbon \
+    --fg-cbar "false" \
     --dir-save ${DIR_SCRATCH}
 fi
 if [[ ${VERBOSE} == "true" ]]; then
@@ -337,19 +456,22 @@ for (( i=0; i<${#LABELS[@]}; i ++ )); do
   if [[ ${LAB} == *"aparc"* ]]; then FSLAB="aparc+aseg"; fi
   if [[ ${LAB} == *"wmparc"* ]]; then FSLAB="wmparc"; fi
   mri_convert ${DIR_SCRATCH}/${IDPFX}/mri/${FSLAB}.mgz \
-    ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz
+    ${DIR_SCRATCH}/${IDPFX}_label-${LAB}.nii.gz
   antsApplyTransforms -d 3 -n MultiLabel \
-    -i ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
-    -o ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
+   -i ${DIR_SCRATCH}/${IDPFX}_label-${LAB}.nii.gz \
+   -o ${DIR_SCRATCH}/${IDPFX}_label-${LAB}.nii.gz \
     -r ${IMAGE} \
     -t identity
   if [[ "${NO_PNG}" == "false" ]]; then
+    3dRank -overwrite -prefix ${DIR_SCRATCH}/TLABEL.nii.gz \
+      -input ${DIR_SCRATCH}/${IDPFX}_label-${LAB}.nii.gz
     make3Dpng --bg ${IMAGE} --bg-threshold "2.5,97.5" \
-      --fg ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FSPIPE}.nii.gz \
+      --fg ${DIR_SCRATCH}/TLABEL.nii.gz \
+      --fg-mask ${DIR_SCRATCH}/TLABEL.nii.gz \
       --fg-color "timbow:random" \
       --fg-cbar "false" --fg-alpha 50 \
-      --layout "7:x;7:x;7:y;7:y;7:z;7:z" \
-      --filename ${IDPFX}_label-${LAB}+${FSPIPE} --dir-save ${DIR_SCRATCH}
+      --layout "7:z;7:z;7:z" \
+      --filename ${IDPFX}_label-${LAB} --dir-save ${DIR_SCRATCH}
   fi
 done
 if [[ ${VERBOSE} == "true" ]]; then
@@ -357,14 +479,15 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # create masks -----------------------------------------------------------------
-niimath ${DIR_SCRATCH}/${IDPFX}_label-wmparc+${FSPIPE}.nii.gz \
+niimath ${DIR_SCRATCH}/${IDPFX}_label-wmparc.nii.gz \
   -thr 24 -uthr 24 -binv \
-  -mul ${DIR_SCRATCH}/${IDPFX}_label-wmparc+${FSPIPE}.nii.gz -bin \
+  -mul ${DIR_SCRATCH}/${IDPFX}_label-wmparc.nii.gz -bin \
   ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz
 if [[ "${NO_PNG}" == "false" ]]; then
-  TLAYOUT="3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x;3:x"
+  TLAYOUT="7:y;7:y;7:y"
   make3Dpng --bg ${IMAGE} \
     --fg ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz \
+    --fg-mask ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.nii.gz \
     --fg-color "timbow:random" --fg-alpha 50 --fg-cbar "false" \
     --layout ${TLAYOUT} \
     --filename ${IDPFX}_mask-brain+${FSPIPE} \
@@ -427,8 +550,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '    lengthMenu=list(c(10,25,50,-1), c(10,25,50,"All"))))}' >> ${RMD}
   echo -e '```\n' >> ${RMD}
 
-  echo '## Freesurfer Synth Pipeline' >> ${RMD}
-  echo 'recon-all-clinical.sh\' >> ${RMD}
+  echo '## Freesurfer Recon-All Pipeline' >> ${RMD}
   echo -e '\n---\n' >> ${RMD}
 
   # output Project related information -------------------------------------------
@@ -438,21 +560,58 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo 'DATE: **`r Sys.time()`**\' >> ${RMD}
   echo '' >> ${RMD}
 
+  echo '### Pipeline Information {.tabset}' >> ${RMD}
+  echo '#### Click for Details ->' >> ${RMD}
+  echo '#### Description' >> ${RMD}
+    echo 'Cortical reconstruction and volumetric segmentation performed using the Freesurfer software suite. The automated `recon-all` processes structural images through intensity normalization, non-brain tissue removal (skull-stripping), and automated topology correction. The pipeline segments subcortical white matter and deep gray matter structures, and subsequently reconstructs the pial and gray/white matter boundaries. To achieve highly localized anatomical quantification, the standard pipeline was augmented with specialized sub-parcellation modules. Deep gray matter and brainstem substructures were automatically segmented using the FreeSurfer sub-region modules for the thalamic nuclei, the hippocampus and amygdala, the brainstem, and the hypothalamus. Cortical thickness is calculated at each vertex across the cortical ribbon as the closest distance between these two surfaces. The resulting surfaces are inflation-corrected and non-linearly registered to a spherical atlas to enable vertex-wise and region-of-interest morphometric analyses across subjects. For detailed cortical mapping, the Human Connectome Project Multi-Modal Parcellation (HCP-MMP1) atlas was mapped to each individual reconstructed surface mantle via spherical registration.\' >> ${RMD}
+  echo '#### Version' >> ${RMD}
+    echo 'recon-all\' >> ${RMD}
+    cat $FREESURFER_HOME/build-stamp.txt >> ${RMD}
+  echo '#### Citations' >> ${RMD}
+    echo '##### FreeSurfer' >> ${RMD}
+      echo 'Fischl B. FreeSurfer. Neuroimage. 2012;62: 774–781. doi:10.1016/j.neuroimage.2012.01.021\' >> ${RMD}
+      echo '' >> ${RMD}
+      echo 'Dale AM, Fischl B, Sereno MI. Cortical surface-based analysis. I. Segmentation and surface reconstruction. Neuroimage. 1999;9: 179–194. doi:10.1006/nimg.1998.0395\' >> ${RMD}
+      echo '' >> ${RMD}
+      echo 'Fischl B, Sereno MI, Dale AM. Cortical surface-based analysis. II: Inflation, flattening, and a surface-based coordinate system. Neuroimage. 1999;9: 195–207. doi:10.1006/nimg.1998.0396\' >> ${RMD}
+      echo '' >> ${RMD}
+    echo '##### Human Connectome Multimodal Parcellation (HCP-MMP1)' >> ${RMD}
+      echo 'Glasser MF, Coalson TS, Robinson EC, Hacker CD, Harwell J, Yacoub E, et al. A multi-modal parcellation of human cerebral cortex. Nature. 2016;536: 171–178. doi:10.1038/nature18933\' >> ${RMD}
+      echo '' >> ${RMD}
+    echo '##### Sub-Region Modules' >> ${RMD}
+      echo 'Thalamus:\' >> ${RMD}
+      echo 'Iglesias JE, Insausti R, Lerma-Usabiaga G, Bocchetta M, Van Leemput K, Greve DN, et al. A probabilistic atlas of the human thalamic nuclei combining ex vivo MRI and histology. Neuroimage. 2018;183: 314–326. doi:10.1016/j.neuroimage.2018.08.012\' >> ${RMD}
+      echo '' >> ${RMD}
+      echo 'Hippocampus:\' >> ${RMD}
+      echo 'Iglesias JE, Augustinack JC, Nguyen K, Player CM, Player A, Wright M, et al. A computational atlas of the hippocampal formation using ex vivo, ultra-high resolution MRI: Application to adaptive segmentation of in vivo MRI. Neuroimage. 2015;115: 117–137. doi:10.1016/j.neuroimage.2015.04.042\' >> ${RMD}
+      echo '' >> ${RMD}
+      echo 'Amygdala:\' >> ${RMD}
+      echo 'Saygin ZM, Kliemann D, Iglesias JE, van der Kouwe AJW, Boyd E, Reuter M, et al. High-resolution magnetic resonance imaging reveals nuclei of the human amygdala: manual segmentation to automatic atlas. Neuroimage. 2017;155: 370–382. doi:10.1016/j.neuroimage.2017.04.046\' >> ${RMD}
+      echo '' >> ${RMD}
+      echo 'Brainstem:\' >> ${RMD}
+      echo 'Iglesias JE, Van Leemput K, Bhatt P, Casillas C, Dutt S, Schuff N, et al. Bayesian segmentation of brainstem structures in MRI. Neuroimage. 2015;113: 184–195. doi:10.1016/j.neuroimage.2015.02.065\' >> ${RMD}
+      echo '' >> ${RMD}
+      echo 'Hypothalamus:\' >> ${RMD}
+      echo 'Billot B, Bocchetta M, Todd E, Dalca AV, Rohrer JD, Iglesias JE. Automated segmentation of the hypothalamus and associated subunits in brain MRI. Neuroimage. 2020;223: 117287. doi:10.1016/j.neuroimage.2020.117287\' >> ${RMD}
+      echo '' >> ${RMD}
+
   echo '### Anatomical Images {.tabset}' >> ${RMD}
+  echo '#### Cortical Segmentation' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-ribbon.png
+    echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+    echo '' >> ${RMD}
   echo '#### Input' >> ${RMD}
     TNII=${IMAGE}
     TPNG=${IMAGE//\.nii\.gz}.png
     if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
     echo '![Input Anatomical]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
-  echo '#### Synthetic' >> ${RMD}
-    TNII=${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz
-    TPNG=${DIR_SCRATCH}/${IDPFX}_synthT1w.png
-    if [[ ! -f "${TPNG}" ]]; then make3Dpng --bg ${TNII}; fi
-    echo '![Synthetic T1w]('${TPNG}')' >> ${RMD}
+  echo '#### Brain Mask' >> ${RMD}
+    TPNG=${DIR_SCRATCH}/${IDPFX}_mask-brain+${FSPIPE}.png
+    echo '![Brain Mask]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
 
-  echo '### Surface Reconstruction {.tabset}' >> ${RMD}
+  echo '### Surfaces {.tabset}' >> ${RMD}
   echo '#### Pial' >> ${RMD}
     TPNG=${DIR_SCRATCH}/${IDPFX}_surface-pial.png
     echo '![Pial Surface]('${TPNG}')' >> ${RMD}
@@ -461,8 +620,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
     TPNG=${DIR_SCRATCH}/${IDPFX}_surface-white.png
     echo '![WM Surface]('${TPNG}')' >> ${RMD}
     echo '' >> ${RMD}
-
-  echo '### Surface Outcomes {.tabset}' >> ${RMD}
   OUTLS=("thickness" "area" "curv")
   for k in {0..2}; do
     OUT=${OUTLS[${k}]}
@@ -490,26 +647,54 @@ if [[ "${NO_RMD}" == "false" ]]; then
       done
     done
   done
-  echo '### Cortical Labels {.tabset}' >> ${RMD}
-  for (( i=0; i<${#LABELS[@]}; i ++ )); do
-    LAB=(${LABELS[${i}]//+/ })
-    TPNG=${DIR_SCRATCH}/${IDPFX}_surface-pial_label-${LAB}.png
+
+  echo '### Labels {.tabset}' >> ${RMD}
+    for (( i=0; i<${#LABELS[@]}; i ++ )); do
+      LAB=(${LABELS[${i}]//+/ })
+      TPNG=${DIR_SCRATCH}/${IDPFX}_surface-pial_label-${LAB}.png
+      TVOL=${DIR_SCRATCH}/${IDPFX}_label-${LABELS[${i}]}.png
+      if [[ -f ${TPNG} ]]; then
+        echo "#### ${LAB}" >> ${RMD}
+        echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+        echo '!['${LAB}']('${TVOL}')' >> ${RMD}
+        echo '' >> ${RMD}
+      fi
+    done
+    LAB="HCP-MMP1"
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-hcpmmp1.png
     if [[ -f ${TPNG} ]]; then
       echo "#### ${LAB}" >> ${RMD}
       echo '!['${LAB}']('${TPNG}')' >> ${RMD}
       echo '' >> ${RMD}
     fi
-  done
-  echo '### Processing Check {.tabset}' >> ${RMD}
-  echo '#### Click to View ->' >> ${RMD}
-  echo '#### Cortical Segmentation' >> ${RMD}
-    TPNG=${DIR_SCRATCH}/${IDPFX}_label-ribbon.png
-    echo '!['${LAB}']('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
-  echo '#### Brain Mask' >> ${RMD}
-    TPNG=${DIR_SCRATCH}/${IDPFX}_mask-brain+fsSynth.png
-    echo '![Brain Mask]('${TPNG}')' >> ${RMD}
-    echo '' >> ${RMD}
+    LAB="Thalamic Nuclei"
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-thalamicNuclei.png
+    if [[ -f ${TPNG} ]]; then
+      echo "#### ${LAB}" >> ${RMD}
+      echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+    fi
+    LAB="Medial Temporal Lobe"
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-mtl.png
+    if [[ -f ${TPNG} ]]; then
+      echo "#### ${LAB}" >> ${RMD}
+      echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+    fi
+    LAB="Brainstem"
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-brainstem.png
+    if [[ -f ${TPNG} ]]; then
+      echo "#### ${LAB}" >> ${RMD}
+      echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+    fi
+    LAB="Hypothalamus"
+    TPNG=${DIR_SCRATCH}/${IDPFX}_label-hypothalamus.png
+    if [[ -f ${TPNG} ]]; then
+      echo "#### ${LAB}" >> ${RMD}
+      echo '!['${LAB}']('${TPNG}')' >> ${RMD}
+      echo '' >> ${RMD}
+    fi
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
@@ -525,14 +710,13 @@ fi
 # Save output to appropriate locations -----------------------------------------
 mkdir -p ${DIR_FS}
 mv ${DIR_SCRATCH}/${IDPFX} ${DIR_FS}/
-mkdir -p ${DIR_SAVE}/anat/native/${FSPIPE}
 mkdir -p ${DIR_SAVE}/anat/label/${FSPIPE}
 mkdir -p ${DIR_SAVE}/anat/mask/${FSPIPE}
-mkdir -p ${DIR_SAVE}/anat/surface
-mv ${DIR_SCRATCH}/${IDPFX}_synthT1w.nii.gz ${DIR_SAVE}/anat/native/${FSPIPE}/
-mv ${DIR_SCRATCH}/${IDPFX}_label*.nii.gz ${DIR_SAVE}/anat/label/${FSPIPE}/
-mv ${DIR_SCRATCH}/${IDPFX}_mask*.nii.gz ${DIR_SAVE}/anat/mask/${FSPIPE}/
+mkdir -p ${DIR_SAVE}/anat/surface/png
+mv ${DIR_SCRATCH}/${IDPFX}_label* ${DIR_SAVE}/anat/label/${FSPIPE}/
+mv ${DIR_SCRATCH}/${IDPFX}_mask* ${DIR_SAVE}/anat/mask/${FSPIPE}/
 mv ${DIR_SCRATCH}/${IDPFX}_surface-brain+${FSPIPE}.stl ${DIR_SAVE}/anat/surface/
+mv ${DIR_SCRATCH}/${IDPFX}_surface*.png ${DIR_SAVE}/anat/surface/png/
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> output moved to BIDS-esque locations"
 fi

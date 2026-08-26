@@ -170,6 +170,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_AINIT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
+    echo "# Activate CONDA environment ------" >> ${SLURM_AINIT}
+    echo "conda activate ni_20260514" >> ${SLURM_AINIT}
+    echo 'export CONDA_ENV_PATH=$(conda env list | grep "ni_20260514" | awk '"'{print $NF}'"')/bin' >> ${SLURM_AINIT}
+    echo 'export PATH="$CONDA_ENV_PATH:$PATH"' >> ${SLURM_AINIT}
+    echo "" >> ${SLURM_AINIT}
     echo "# Load Neurocontainers ------" >> ${SLURM_AINIT}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_AINIT}
     echo "               \"ants_2.6.5_20260225\" \\" >> ${SLURM_AINIT}

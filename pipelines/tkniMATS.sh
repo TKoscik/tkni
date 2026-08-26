@@ -309,7 +309,7 @@ if [[ -z ${IMAGE} ]]; then
 fi
 if [[ -z ${MASK} ]]; then
   if [[ -z ${SRC_ANAT} ]]; then SRC_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
-  if [[ ! -d ${SRC_ANAT} ]]; then SRC_ANAT=$(dirname $(dirname ${IMAGE})); then
+  if [[ ! -d ${SRC_ANAT} ]]; then SRC_ANAT=$(dirname $(dirname ${IMAGE})); fi
   if [[ ! -d ${SRC_ANAT} ]]; then
     echo "ERROR [${PIPE}${FLOW}] Cannot determine an exisiting source path for anatomical images, aborting"
     exit 1
