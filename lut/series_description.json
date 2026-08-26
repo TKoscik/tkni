@@ -258,11 +258,16 @@
         "acq-mrsLoc+axi_T2w": ["anatt2wdescmrsLocAX"],
         "acq-mrsLoc+cor_T2w": ["anatt2wdescmrsLocCor"],
         "acq-mrsLoc+axi+nd_T2w": ["anatt2wdescmrsLocAXND"],
-        "acq-mrsLoc+cor+nd_T2w": ["anatt2wdescmrsLocCorND"]
+        "acq-mrsLoc+cor+nd_T2w": ["anatt2wdescmrsLocCorND"],
+        "acq-mrsLocAXMPRcorND_T2w": ["anatt2wdescmrsLocAXMPRcorND"],
+        "acq-mrsLocAXMPRsagND_T2w": ["anatt2wdescmrsLocAXMPRsagND"],
+        "acq-mrsLocAXMPRcor_T2w": ["anatt2wdescmrsLocAXMPRcor"],
+        "acq-mrsLocAXMPRsag_T2w": ["anatt2wdescmrsLocAXMPRsag"]
     },
     "perf": {
-        "asl": ["3DASL","3DASLNOMUSIC","CBF","CerebralBloodFlow", "asl3dtrap2"],
+        "asl": ["3DASL","3DASLNOMUSIC","CBF","CerebralBloodFlow", "asl3dtrap2", "asl3dtra"],
         "pwi": ["PerfusionWeighted"],
+	"relCBF": ["relCBF"],
         "flow": ["Ax4DFLOW3slab80VENCPreview","Ax4DFLOW3slab80VENCLRFlow",
         "Ax4DFLOW3slab80VENCSIFlow","Ax4DFLOW3slab80VENCAPFlow"],
         "acq-preview_flow": ["Ax4DFLOW3slab80VENCPreviewe1","Ax4DFLOW3slab80VENCPreviewe2",
