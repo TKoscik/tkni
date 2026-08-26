@@ -171,7 +171,7 @@ if [[ -n ${OVERLAY} ]]; then
   fi
 fi
 if [[ -n ${LABEL} ]]; then
-  OPTS="${OPTS}:annot=${DIR_FS}/${DIR_ID}/label/HEMI.${LABEL}"
+  OPTS="${OPTS}:annot=${DIR_FS}/${DIR_ID}/label/HEMI.${LABEL}.annot"
   if [[ ${LABEL_OUTLINE} != "false" ]]; then
     OPTS="${OPTS}:annot_outline=1"
   fi

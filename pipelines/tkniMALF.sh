@@ -457,7 +457,7 @@ antsApplyTransforms -d 3 -n GenericLabel \
   -i ${DIR_SCRATCH}/atlas_mask_orig.nii.gz \
   -o ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
   -r ${DIR_SCRATCH}/image_orig.nii.gz \
-  -t identity -t ${XFM_AFFINE_INV} -t ${XFM_SYN_INV}
+  -t identity -t ${XFM_AFFINE_INV} -t ${DIR_SCRATCH}/${XFM_SYN_INV}
 if [[ ${NO_PNG} == "false" ]] || [[ ${NO_RMD} == "false" ]]; then
   make3Dpng --bg ${DIR_SCRATCH}/image_orig.nii.gz \
     --fg ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.nii.gz \
@@ -536,12 +536,13 @@ done
 # calculate Jacobians ----------------------------------------------------------
 if [[ ${NO_JAC} == "false" ]]; then
   XFM_NORIGID=${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-affine+norigid.mat
-  AverageAffineTransformNoRigid 3 ${XFM_NORIGID} -i ${XFM_AFFINE}
+  AverageAffineTransformNoRigid 3 ${DIR_SCRATCH}/${XFM_NORIGID} -i ${DIR_SCRATCH}/${XFM_AFFINE}
   mapJacobian --prefix ${IDPFX} \
-    --xfm "${DIR_SCRATCH}/${XFM_SYN},${DIR_SCRATCH}/${XFM_RIGID}" \
+    --xfm "${DIR_SCRATCH}/${XFM_SYN},${DIR_SCRATCH}/${XFM_NORIGID}" \
     --ref-image ${DIR_SCRATCH}/atlas_ref_orig.nii.gz \
     --from "native" --to ${ATLAS_NAME} \
     --dir-save ${DIR_SCRATCH}/
+  mv ${DIR_SCRATCH}/jacobian_from-native_to-${ATLAS_NAME}/* ${DIR_SCRATCH}/
   if [[ ${VERBOSE} == "true" ]]; then
     echo -e ">>>>> jacobian determinants of the normalization transform calculated"
   fi
@@ -588,8 +589,8 @@ if [[ "${NO_RMD}" == "false" ]]; then
     fi
   if [[ ${NO_JAC} == "false" ]]; then
     echo '### Jacobian Determinants' >> ${RMD}
-      TPNG=${DIR_SCRATCH}/${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-syn_jacobian.png
-      echo '!'"[${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-syn_jacobian.nii.gz](${TPNG})" >> ${RMD}
+      TPNG=${DIR_SCRATCH}/${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-affine+norigid+syn_jacobian.png
+      echo '!'"[${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-affine+norigid+syn_jacobian.nii.gz](${TPNG})" >> ${RMD}
       echo '' >> ${RMD}
   fi
   echo '### Labels {.tabset}' >> ${RMD}
@@ -628,12 +629,12 @@ mv ${DIR_SCRATCH}/${IDPFX}_reg-${ATLAS_NAME}_${MOD}.nii.gz \
   ${DIR_ANAT}/reg_${ATLAS_NAME}/
 mv ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.* ${DIR_ANAT}/mask/${FLOW}/
 mv ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FLOW}.* ${DIR_ANAT}/label/${FLOW}/
-mv ${DIR_SCRATCH}/${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-syn_jacobian.* \
+mv ${DIR_SCRATCH}/${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-affine+norigid+syn_jacobian.* \
   ${DIR_ANAT}/outcomes/jacobian_from-native_to-${ATLAS_NAME}/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
-touch ${DIR_SAV}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi

@@ -16,7 +16,8 @@
         "3MPRAGET1CoronalTI900","3DSagT1MPRAGE","MPRAGET1CoronalTI1000",
         "MPRAGET1CoronalTI800","MPRAGET1TI1100","SagMPRAGET1R2X2",
         "SagMPRAGET1R2X1","CORMPRAGE","MPRAGEG21mm", "MPRAGE","REP3DSagT1MPRAGE",
-        "2MPRAGET1CoronalTI900","MPRAGET1ND","MODIFIEDSAGT1MPR"],
+        "2MPRAGET1CoronalTI900","MPRAGET1ND","MODIFIEDSAGT1MPR","3DT1MPRAGE"],
+        "acq-MPRAGE+ND_T1w": ["3DT1MPRAGE_ND", "3DT1MPRAGEND"],
         "acq-silent_T1w": ["3DSagT1Silent"],
         "proc-orig_T1w": ["ORIGT1","ORIGCORFSPGRBRAVO",
         "ORIGCORFSPGRBRAVOUNTILPROMO","ORIGCORMPRAGEPROMO","ORIGCorFSPGRBRAVO",
@@ -35,7 +36,7 @@
         "t2spctrap2iso10","tsevfl","3DT2","T2weighted",
         "FilteredT2weighted","PUCorCUBET2","T2VAR155","SCCorCUBET2",
         "ABCDT2wSPCvNavsetter","ABCDT2wSPCvNav","FIESTA01x01x015",
-        "HighResAnat","AXT2","FIESTA009x01x012","t2spaceCOR"],
+        "HighResAnat","AXT2","FIESTA009x01x012","t2spaceCOR","3DT2SPACE"],
         "echo-11_T2w": ["t2tsetra512TE11"],
         "echo-99_T2w": ["t2tsetra512TE99"],
         "echo-13_T2w": ["t2TE13"],
@@ -123,6 +124,7 @@
         "ScreenSave","waterstability8ml"]
     },
     "dwi": {
+        "dwi": ["Diffusion64Direction"],
         "acq-b0_dwi": ["DWIB0"],
         "acq-b0_dir-rev_dwi": ["DWIB0REVPE"],
         "acq-b500_dwi": ["DWIB5006Dir","dticmrrvx2b500ap","dticmrrvx2b500pa"],
