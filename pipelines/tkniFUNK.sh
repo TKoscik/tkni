@@ -1012,29 +1012,29 @@ fi
 
 
 # move final output to save folders --------------------------------------------
-mkdir -p ${DIR_SAVE}/mask
-cp ${DIR_SCRATCH}/mask/* ${DIR_SAVE}/mask/
+mkdir -p ${DIR_SAVE}/func/mask
+cp ${DIR_SCRATCH}/mask/* ${DIR_SAVE}/func/mask/
 
-mkdir -p ${DIR_SAVE}/mean
-cp ${DIR_SCRATCH}/mean/* ${DIR_SAVE}/mean/
+mkdir -p ${DIR_SAVE}/func/mean
+cp ${DIR_SCRATCH}/mean/* ${DIR_SAVE}/func/mean/
 
-mkdir -p ${DIR_SAVE}/qc/${IDDIR}
-cp ${DIR_SCRATCH}/qc/* ${DIR_SAVE}/qc/${IDDIR}/
+mkdir -p ${DIR_SAVE}/func/qc/${IDDIR}
+cp ${DIR_SCRATCH}/qc/* ${DIR_SAVE}/func/qc/${IDDIR}/
 
-mkdir -p ${DIR_SAVE}/regressor/${IDDIR}
-cp ${DIR_SCRATCH}/regressor/* ${DIR_SAVE}/regressor/${IDDIR}/
+mkdir -p ${DIR_SAVE}/func/regressor/${IDDIR}
+cp ${DIR_SCRATCH}/regressor/* ${DIR_SAVE}/func/regressor/${IDDIR}/
 
-mkdir -p ${DIR_SAVE}/residual_native
-cp ${DIR_SCRATCH}/residual_native/* ${DIR_SAVE}/residual_native/
+mkdir -p ${DIR_SAVE}/func/residual_native
+cp ${DIR_SCRATCH}/residual_native/* ${DIR_SAVE}/func/residual_native/
 
 if [[ ${NO_NORM} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/residual_${NORM_LABEL}
-  cp ${DIR_SCRATCH}/residual_${NORM_LABEL}/* ${DIR_SAVE}/residual_${NORM_LABEL}/
+  mkdir -p ${DIR_SAVE}/func/residual_${NORM_LABEL}
+  cp ${DIR_SCRATCH}/residual_${NORM_LABEL}/* ${DIR_SAVE}/func/residual_${NORM_LABEL}/
 fi
 
 if [[ ${NO_SAVE_CLEAN} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/clean
-  cp ${DIR_SCRATCH}/clean/* ${DIR_SAVE}/clean/
+  mkdir -p ${DIR_SAVE}/func/clean
+  cp ${DIR_SCRATCH}/clean/* ${DIR_SAVE}/func/clean/
 fi
 
 cp ${DIR_SCRATCH}/xfm/${IDPFX}* ${DIR_XFM}/

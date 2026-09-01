@@ -266,7 +266,7 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # Set Up Directories -----------------------------------------------------------
-#DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
+DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
 #if [[ -z ${DIR_SAVE} ]]; then
 #  DIR_SAVE=${DIR_PIPE}/func
 #fi
@@ -502,7 +502,7 @@ fi
 
 # Save Output ------------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/func/ts_${LABEL_NAME}
-mv ${DIR_SCRATCH}/ts_${LABEL_NAME}/* ${DIR_SAVE}/func/
+mv ${DIR_SCRATCH}/ts_${LABEL_NAME}/* ${DIR_SAVE}/func/ts_${LABEL_NAME}/
 mkdir -p ${DIR_SAVE}/func/connectivity
 mv ${DIR_SCRATCH}/connectivity/* ${DIR_SAVE}/func/connectivity/
 if [[ ${NO_Z} == "false" ]]; then
