@@ -527,8 +527,9 @@ if [[ ${NO_PNG} == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
   make4Dpng --fg ${TMP_NII}/dwi_preproc_coreg.nii.gz \
     --fg-mask ${TMP_NII}/b0_mask_coreg.nii.gz \
     --fg-color "timbow" --fg-alpha 100 --fg-thresh "2.5,97.5" --layout "${TLAYOUT}"
-  make3Dpng --bg --bg ${TMP_NII}/b0_mean_coreg.nii.gz -v \
+  make3Dpng --bg ${TMP_NII}/b0_mean_coreg.nii.gz -v \
     --fg ${TMP_NII}/b0_mask_coreg.nii.gz \
+    --fg-mask ${TMP_NII}/b0_mask_coreg.nii.gz \
     --fg-color "timbow:random" --fg-alpha 25 --fg-cbar "false" \
     --layout "10:x;10:y;10:z" \
     --filename "${IDPFX}_mask-brain+b0" --dir-save ${TMP_NII}
@@ -546,6 +547,47 @@ if [[ ${NO_PNG} == "false" ]] || [[ "${NO_RMD}" == "false" ]]; then
     --filename ${IDPFX}_from-b0_to-native_overlay \
     --dir-save ${TMP_NII}
 fi
+
+## save cleaned nifti format to tkni folders -----------------------------------
+mkdir -p ${DIR_DWI}/preproc/dwi
+mkdir -p ${DIR_DWI}/preproc/b0
+mkdir -p ${DIR_DWI}/preproc/mask
+mkdir -p ${DIR_ANAT}/native/dwi
+mv ${TMP_NII}/dwi_preproc_coreg.nii.gz   ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz
+mv ${TMP_NII}/dwi_preproc_coreg.png      ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.png
+mv ${TMP_NII}/dwi_preproc.bvec           ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bvec
+mv ${TMP_NII}/dwi_preproc.bval           ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bval
+mv ${TMP_NII}/b0_mean_coreg.nii.gz       ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz
+mv ${TMP_NII}/b0_mean_coreg.png          ${DIR_DWI}/preproc/b0/${IDPFX}_b0.png
+mv ${TMP_NII}/b0_mask_coreg.nii.gz       ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz
+mv ${TMP_NII}/${IDPFX}_mask-brain+b0.png ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.png
+mv ${TMP_NII}/T1_spacing-DWI.nii.gz      ${DIR_ANAT}/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz
+
+## save XFMs to TKNI folders ---------------------------------------------------
+mv ${TMP_XFM}/xfm_0GenericAffine.mat ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat
+mv ${TMP_XFM}/xfm_1Warp.nii.gz ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn.nii.gz
+mv ${TMP_XFM}/xfm_1InverseWarp.nii.gz ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn+inverse.nii.gz
+mv ${TMP_NII}/${IDPFX}_from-b0_to-native_overlay.png ${DIR_XFM}/
+
+# move qc files ----------------------------------------------------------------
+mkdir -p ${DIR_DWI}/preproc/qc
+mv ${TMP_NII}/${IDPFX}_bias.* ${DIR_DWI}/preproc/qc/
+mv ${TMP_NII}/${IDPFX}_noise.* ${DIR_DWI}/preproc/qc/
+mv ${TMP_NII}/${IDPFX}_residual.* ${DIR_DWI}/preproc/qc/
+mv ${TMP_NII}/${IDPFX}_residualUnring.* ${DIR_DWI}/preproc/qc/
+mv ${TMP_DWI}/percentageOutliers.txt ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt
+
+# Clean scratch folder and save MRTRIX for next steps --------------------------
+rm ${TMP_NII}/*
+rmdir ${TMP_NII}/
+rm ${TMP_XFM}/*
+rmdir ${TMP_XFM}/
+
+#DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
+mkdir -p ${DIR_MRTRIX}
+mv ${TMP_DWI}/b0_mask_coreg.mif ${DIR_MRTRIX}/
+mv ${TMP_DWI}/b0_mean_coreg.mif ${DIR_MRTRIX}/
+mv ${TMP_DWI}/dwi_preproc_coreg.mif ${DIR_MRTRIX}/
 
 # generate HTML QC report ------------------------------------------------------
 if [[ "${NO_RMD}" == "false" ]]; then
@@ -579,7 +621,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
 
-  PCTOUT=$(cat ${TMP_DWI}/percentageOutliers.txt)
+  PCTOUT=$(cat ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt)
   echo "### ${PCTOUT} % of SLICES are outliers.  " >> ${RMD}
   echo "If >10 %, may have too much motion or corrupted slices.  " >> ${RMD}
   echo '' >> ${RMD}
@@ -587,25 +629,25 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # B0
   echo '### DWI Preprocessing Results {.tabset}' >> ${RMD}
   echo '#### B0' >> ${RMD}
-    echo -e '!['${IDPFX}'_b0.nii.gz]('${TMP_NII}'/b0_mean_coreg.png)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_b0.nii.gz]('${DIR_DWI}'/preproc/b0/'${IDPFX}'_b0.png)\n' >> ${RMD}
   echo '#### Brain Mask' >> ${RMD}
-    echo -e '!['${IDPFX}'_mask-brain+b0.nii.gz]('${TMP_NII}'/'${IDPFX}'_mask-brain+b0.png)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_mask-brain+b0.nii.gz]('${DIR_DWI}'/preproc/mask/'${IDPFX}'_mask-brain+b0.png)\n' >> ${RMD}
   echo '#### DWI' >> ${RMD}
-    echo -e '!['${IDPFX}'_dwi.nii.gz]('${TMP_NII}'/dwi_preproc_coreg.nii.gz)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_dwi.nii.gz]('${DIR_DWI}'/preproc/dwi/'${IDPFX}'_dwi.png)\n' >> ${RMD}
   echo '#### Coregistration' >> ${RMD}
-    echo -e '![]('${TMP_NII}'/'${IDPFX}'_from-b0_to-native_overlay.png)\n' >> ${RMD}
+    echo -e '![]('${DIR_XFM}'/'${IDPFX}'_from-b0_to-native_overlay.png)\n' >> ${RMD}
 
   # QC
   echo '### DWI Preprocessing Results {.tabset}' >> ${RMD}
   echo '#### Click to View ->' >> ${RMD}
   echo '#### Noise' >> ${RMD}
-    echo -e '!['${IDPFX}'_noise.nii.gz]('${TMP_NII}'/'${IDPFX}'_noise.png)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_noise.nii.gz]('${DIR_DWI}'/preproc/qc/'${IDPFX}'_noise.png)\n' >> ${RMD}
   echo '#### Bias' >> ${RMD}
-    echo -e '!['${IDPFX}'_bias.nii.gz]('${TMP_NII}'/'${IDPFX}'_bias.png)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_bias.nii.gz]('${DIR_DWI}'/preproc/qc/'${IDPFX}'_bias.png)\n' >> ${RMD}
   echo '#### Unring' >> ${RMD}
-    echo -e '!['${IDPFX}'_residualUnring.nii.gz]('${TMP_NII}'/'${IDPFX}'_residualUnring.png)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_residualUnring.nii.gz]('${DIR_DWI}'/preproc/qc/'${IDPFX}'_residualUnring.png)\n' >> ${RMD}
   echo '#### Residual' >> ${RMD}
-    echo -e '!['${IDPFX}'_residual.nii.gz]('${TMP_NII}'/'${IDPFX}'_residual.png)\n' >> ${RMD}
+    echo -e '!['${IDPFX}'_residual.nii.gz]('${DIR_DWI}'/preproc/qc/'${IDPFX}'_residual.png)\n' >> ${RMD}
 
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
@@ -617,47 +659,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
 fi
-
-## save cleaned nifti format to tkni folders -----------------------------------
-mkdir -p ${DIR_DWI}/preproc/dwi
-mkdir -p ${DIR_DWI}/preproc/b0
-mkdir -p ${DIR_DWI}/preproc/mask
-mkdir -p ${DIR_ANAT}/native/dwi
-mv ${TMP_NII}/dwi_preproc_coreg.nii.gz   ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.nii.gz
-mv ${TMP_NII}/dwi_preproc_coreg.png      ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.png
-mv ${TMP_NII}/dwi_preproc.bvec           ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bvec
-mv ${TMP_NII}/dwi_preproc.bval           ${DIR_DWI}/preproc/dwi/${IDPFX}_dwi.bval
-mv ${TMP_NII}/b0_mean_coreg.nii.gz       ${DIR_DWI}/preproc/b0/${IDPFX}_b0.nii.gz
-mv ${TMP_NII}/b0_mean_coreg.png          ${DIR_DWI}/preproc/b0/${IDPFX}_b0.png
-mv ${TMP_NII}/b0_mask_coreg.nii.gz       ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.nii.gz
-mv ${TMP_NII}/${IDPFX}_mask-brain+b0.png ${DIR_DWI}/preproc/mask/${IDPFX}_mask-brain+b0.png
-mv ${TMP_NII}/T1_spacing-DWI.nii.gz      ${DIR_ANAT}/native/dwi/${IDPFX}_space-dwi_T1w.nii.gz
-
-## save XFMs to TKNI folders ---------------------------------------------------
-mv ${TMP_XFM}/xfm_0GenericAffine.mat ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-affine.mat
-mv ${TMP_XFM}/xfm_1Warp.nii.gz ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn.nii.gz
-mv ${TMP_XFM}/xfm_1InverseWarp.nii.gz ${DIR_XFM}/${IDPFX}_from-dwi_to-native_xfm-syn+inverse.nii.gz
-mv ${TMP_NII}/${IDPFX}_from-b0_to-native_overlay.png ${DIR_XFM}/
-
-# Clean scratch folder and save MRTRIX for next steps --------------------------
-rm ${TMP_NII}/*
-rmdir ${TMP_NII}/
-rm ${TMP_XFM}/*
-rmdir ${TMP_XFM}/
-
-#DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
-mkdir -p ${DIR_MRTRIX}
-mv ${TMP_DWI}/b0_mask_coreg.mif ${DIR_MRTRIX}/
-mv ${TMP_DWI}/b0_mean_coreg.mif ${DIR_MRTRIX}/
-mv ${TMP_DWI}/dwi_preproc_coreg.mif ${DIR_MRTRIX}/
-
-## save QC images
-mkdir -p ${DIR_DWI}/preproc/qc
-mv ${TMP_DWI}/${IDPFX}_bias.nii.gz ${DIR_DWI}/preproc/qc/
-mv ${TMP_DWI}/${IDPFX}_noise.nii.gz ${DIR_DWI}/preproc/qc/
-mv ${TMP_DWI}/${IDPFX}_residual.nii.gz ${DIR_DWI}/preproc/qc/
-mv ${TMP_DWI}/${IDPFX}_residualUnring.nii.gz ${DIR_DWI}/preproc/qc/
-mv ${TMP_DWI}/percentageOutliers.txt ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}

@@ -619,18 +619,16 @@ mkdir -p ${DIR_XFM}
 mv ${DIR_SCRATCH}/${XFM_AFFINE} ${DIR_XFM}/
 mv ${DIR_SCRATCH}/${XFM_SYN} ${DIR_XFM}/
 mv ${DIR_SCRATCH}/${XFM_SYN_INV} ${DIR_XFM}/
-
+ls $DIR_SCRATCH
 DIR_ANAT=${DIR_SAVE}/anat
 mkdir -p ${DIR_ANAT}/reg_${ATLAS_NAME}
 mkdir -p ${DIR_ANAT}/mask/${FLOW}
 mkdir -p ${DIR_ANAT}/label/${FLOW}
 mkdir -p ${DIR_ANAT}/outcomes/jacobian_from-native_to-${ATLAS_NAME}
-mv ${DIR_SCRATCH}/${IDPFX}_reg-${ATLAS_NAME}_${MOD}.nii.gz \
-  ${DIR_ANAT}/reg_${ATLAS_NAME}/
+mv ${DIR_SCRATCH}/${IDPFX}_reg-${ATLAS_NAME}_${MOD}.nii.gz ${DIR_ANAT}/reg_${ATLAS_NAME}/
 mv ${DIR_SCRATCH}/${IDPFX}_mask-brain+${FLOW}.* ${DIR_ANAT}/mask/${FLOW}/
-mv ${DIR_SCRATCH}/${IDPFX}_label-${LAB}+${FLOW}.* ${DIR_ANAT}/label/${FLOW}/
-mv ${DIR_SCRATCH}/${IDPFX}_from-native_to-${ATLAS_NAME}_xfm-affine+norigid+syn_jacobian.* \
-  ${DIR_ANAT}/outcomes/jacobian_from-native_to-${ATLAS_NAME}/
+mv ${DIR_SCRATCH}/${IDPFX}*jacobian.* ${DIR_ANAT}/outcomes/jacobian_from-native_to-${ATLAS_NAME}/
+mv ${DIR_SCRATCH}/${IDPFX}_label-* ${DIR_ANAT}/label/${FLOW}/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}

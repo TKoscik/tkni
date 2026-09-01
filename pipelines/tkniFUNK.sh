@@ -256,6 +256,20 @@ if [[ ${VERBOSE} == "true" ]]; then
   echo -e "Start Time:\t${PROC_START}"
 fi
 
+# Check ID ---------------------------------------------------------------------
+if [[ -z ${IDPFX} ]]; then
+  echo "ERROR [TKNI:${FCN_NAME}] ID Prefix must be provided"
+  exit 1
+fi
+if [[ -z ${IDDIR} ]]; then
+  TSUB=$(getField -i ${IDPFX} -f sub)
+  TSES=$(getField -i ${IDPFX} -f ses)
+  IDDIR=sub-${TSUB}
+  if [[ -n ${TSES} ]]; then
+    IDDIR="${IDDIR}/ses-${TSES}"
+  fi
+fi
+
 # Check if Prerequisites are run and QC'd --------------------------------------
 if [[ ${REQUIRES} != "null" ]]; then
   REQUIRES=(${REQUIRES//,/ })
@@ -295,7 +309,7 @@ if [[ ${VERBOSE} == "true" ]]; then
 fi
 
 # set up directories -----------------------------------------------------------
-#DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
+DIR_PIPE=${DIR_PROJECT}/derivatives/${PIPE}
 if [[ -z ${DIR_XFM} ]]; then
   DIR_XFM=${DIR_PIPE}/xfm/${IDDIR}
 fi
@@ -940,7 +954,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # ts-processing
   echo '## Time-series Preprocessing {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*ts-processing.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDPPFX}*ts-processing.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]} -s)
     BNAME=${BNAME//${IDPFX}_}
@@ -952,7 +966,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # coregistration
   echo '## Coregistration {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*reg-native*.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDPPFX}*reg-native*.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]})
     BNAME=${BNAME//${IDPFX}_}
@@ -964,7 +978,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # normalization
   echo '## Normalization {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*reg-${NORM_LABEL}*.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDPPFX}*reg-${NORM_LABEL}*.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]})
     BNAME=${BNAME//${IDPFX}_}
@@ -976,7 +990,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   # regressor plot
   echo '## Nuisance Regression {.tabset}' >> ${RMD}
   unset TPNG
-  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDDIR}/${IDPPFX}*regressors.png))
+  TPNG=($(ls ${DIR_SCRATCH}/qc/${IDPPFX}*regressors.png))
   for (( i=0; i<${#TPNG[@]}; i++ )); do
     BNAME=$(getBidsBase -i ${TPNG[$i]})
     BNAME=${BNAME//${IDPFX}_}

@@ -468,8 +468,39 @@ if [[ "${NO_TRACT}" == "false" ]]; then
 
   LABNAME=$(getField -i ${LABEL} -f label)
   LABNAME=(${LABNAME//+/ })
-  Rscript ${TKNIPATH}/R/connectivityPlot.R ${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.png
+  #Rscript ${TKNIPATH}/R/connectivityPlot.R ${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.png
+  Rscript ${TKNIPATH}/R/connectivityPlot.R ${DIR_SCRATCH}/connectome.csv
+  #mv ${DIR_SCRATCH}/connectome.png ${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.png
+  #mv ${DIR_SCRATCH}/connectome.csv ${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.csv
 fi
+
+# Save Results -----------------------------------------------------------------
+mkdir -p ${DIR_SAVE}/dwi/scalar/AFD
+mkdir -p ${DIR_SAVE}/dwi/scalar/Dispersion
+mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFD.* ${DIR_SAVE}/dwi/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFDcomplexity.* ${DIR_SAVE}/dwi/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_Dispersion.* ${DIR_SAVE}/dwi/scalar/Dispersion/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFD.* ${DIR_SAVE}/dwi/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFDcomplexity.* ${DIR_SAVE}/dwi/scalar/AFD/
+mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_Dispersion.* ${DIR_SAVE}/dwi/scalar/Dispersion/
+
+# tractography output
+mv ${TMP_ANAT} ${DIR_MRTRIX}/
+mv ${TMP_FOD} ${DIR_MRTRIX}/
+if [[ ${KEEP_10MIL} == "false" ]]; then rm ${TMP_TCK}/tracks_10mio.tck; fi
+mv ${TMP_TCK} ${DIR_MRTRIX}/
+
+# connectome output
+mkdir -p ${DIR_SAVE}/connectome
+mkdir -p ${DIR_MRTRIX}/CON
+cp ${DIR_SCRATCH}/connectome.csv ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/connectome.csv ${DIR_SAVE}/dwi/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
+mv ${DIR_SCRATCH}/connectome.png ${DIR_SAVE}/dwi/connectome/${IDPFX}_connectome-${LABNAME[0]}.png
+mv ${DIR_SCRATCH}/assignments.csv ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/exemplar.tck ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/labels_mesh.obj ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/labels.mif ${DIR_MRTRIX}/CON/
+mv ${DIR_SCRATCH}/labels.nii.gz ${DIR_MRTRIX}/CON/
 
 # generate HTML QC report ======================================================
 if [[ "${NO_RMD}" == "false" ]]; then
@@ -520,28 +551,12 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '```' >> ${RMD}
   echo '' >> ${RMD}
 
-  if [[ "${NO_AFD}" == "false" ]]; then
-    echo "### Apparent Fiber Density {.tabset}" >> ${RMD}
-    echo "#### WM Mean AFD" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-wm_AFD.png)\n' >> ${RMD}
-    echo "#### WM Complexity AFD" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_oi-wm_AFDcomplexity)\n' >> ${RMD}
-    echo "#### WM Dispersion" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-wm_Dispersion.png)\n' >> ${RMD}
-    echo "#### GM Mean AFD" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-gm_AFD.png)\n' >> ${RMD}
-    echo "#### GM Complexity AFD" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-gm_AFDcomplexity.png)\n' >> ${RMD}
-    echo "#### GM Dispersion" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_roi-gm_Dispersion.png)\n' >> ${RMD}
-  fi
-
   if [[ "${NO_TRACT}" == "false" ]]; then
     echo "### Whole Brain Tractography" >> ${RMD}
-      echo -e '![]('${TMP_TCK}'/'${IDPFX}'_200k_streamlines.png)\n' >> ${RMD}
+      echo -e '![]('${DIR_MRTRIX}'/TCK/'${IDPFX}'_200k_streamlines.png)\n' >> ${RMD}
     echo "### Connectogram" >> ${RMD}
-      echo -e '![]('${DIR_SCRATCH}'/'${IDPFX}'_connectome-'${LABNAME[0]}'.png)\n' >> ${RMD}
-    TCSV=${DIR_SCRATCH}/${IDPFX}_connectome-${LABNAME[0]}.csv
+      echo -e '![]('${DIR_SAVE}'/dwi/connectome/'${IDPFX}'_connectome-'${LABNAME[0]}'.png)\n' >> ${RMD}
+    TCSV=${DIR_SAVE}/dwi/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
     FNAME=${IDPFX}_connectome-${LABNAME[0]}
     echo '```{r}' >> ${RMD}
     echo 'data <- read.csv("'${TCSV}'")' >> ${RMD}
@@ -553,6 +568,23 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo '```' >> ${RMD}
     echo '' >> ${RMD}
   fi
+
+  if [[ "${NO_AFD}" == "false" ]]; then
+    echo "### Apparent Fiber Density {.tabset}" >> ${RMD}
+    echo "#### WM Mean AFD" >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/AFD/'${IDPFX}'_roi-wm_AFD.png)\n' >> ${RMD}
+    echo "#### WM Complexity AFD" >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/AFD/'${IDPFX}'_roi-wm_AFDcomplexity.png)\n' >> ${RMD}
+    echo "#### WM Dispersion" >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/Dispersion/'${IDPFX}'_roi-wm_Dispersion.png)\n' >> ${RMD}
+    echo "#### GM Mean AFD" >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/AFD/'${IDPFX}'_roi-gm_AFD.png)\n' >> ${RMD}
+    echo "#### GM Complexity AFD" >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/AFD/'${IDPFX}'_roi-gm_AFDcomplexity.png)\n' >> ${RMD}
+    echo "#### GM Dispersion" >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/Dispersion]/'${IDPFX}'_roi-gm_Dispersion.png)\n' >> ${RMD}
+  fi
+
   ## knit RMD
   Rscript -e "rmarkdown::render('${RMD}')"
   mkdir -p ${DIR_SAVE}/qc/${PIPE}${FLOW}/Rmd
@@ -563,34 +595,6 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo -e "\t${DIR_SAVE}/qc/${PIPE}${FLOW}/${IDPFX}_${PIPE}${FLOW}.html"
   fi
 fi
-
-# Save Results -----------------------------------------------------------------
-mkdir -p ${DIR_SAVE}/scalar/AFD
-mkdir -p ${DIR_SAVE}/scalar/Dispersion
-mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFD.* ${DIR_SAVE}/scalar/AFD/
-mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_AFDcomplexity.* ${DIR_SAVE}/scalar/AFD/
-mv ${DIR_SCRATCH}/${IDPFX}_roi-wm_Dispersion.* ${DIR_SAVE}/scalar/Dispersion/
-mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFD.* ${DIR_SAVE}/scalar/AFD/
-mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFDcomplexity.* ${DIR_SAVE}/scalar/AFD/
-mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_Dispersion.* ${DIR_SAVE}/scalar/Dispersion/
-
-# tractography output
-mv ${TMP_ANAT} ${DIR_MRTRIX}/
-mv ${TMP_FOD} ${DIR_MRTRIX}/
-if [[ ${KEEP_10MIL} == "false" ]]; then rm ${TMP_TCK}/tracks_10mio.tck; fi
-mv ${TMP_TCK} ${DIR_MRTRIX}/
-
-# connectome output
-mkdir -p ${DIR_SAVE}/connectome
-mkdir -p ${DIR_MRTRIX}/CON
-cp ${DIR_SCRATCH}/connectome.csv ${DIR_MRTRIX}/CON/
-mv ${DIR_SCRATCH}/connectome.csv ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.csv
-mv ${DIR_SCRATCH}/connectome.png ${DIR_SAVE}/connectome/${IDPFX}_connectome-${LABNAME[0]}.png
-mv ${DIR_SCRATCH}/assignments.csv ${DIR_MRTRIX}/CON/
-mv ${DIR_SCRATCH}/exemplar.tck ${DIR_MRTRIX}/CON/
-mv ${DIR_SCRATCH}/labels_mesh.obj ${DIR_MRTRIX}/CON/
-mv ${DIR_SCRATCH}/labels.mif ${DIR_MRTRIX}/CON/
-mv ${DIR_SCRATCH}/labels.nii.gz ${DIR_MRTRIX}/CON/
 
 # set status file --------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
