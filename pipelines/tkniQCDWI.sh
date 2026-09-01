@@ -282,7 +282,7 @@ efc,fber,snr_frame,snr_fg,snr_brain,snr_cc,snr_dietrich,fwhm_x,fwhm_y,fwhm_z,pie
 is_nan,is_degen,spike_slice"
 
 CSV_SUMMARY=${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary.csv
-CSV_PX=${DIR_SAVE}//dwi/qc${IDPFX}_qc-dwi.csv
+CSV_PX=${DIR_SAVE}/dwi/qc/${IDPFX}_qc-dwi.csv
 CSV_LOG=${TKNI_LOG}/log_QCDWI.csv
 if [[ ${RESET_CSV} == "true" ]]; then
   mv ${CSV_SUMMARY} ${DIR_SUMMARY}/${PI}_${PROJECT}_qc-dwi_summary_dep${TIMESTAMP}.csv
@@ -529,8 +529,8 @@ fi
 
 # set status file --------------------------------------------------------------
 if [[ ${VERBOSE} == "true" ]]; then echo "[${PIPE}${FLOW}] MESSAGE: workflow complete."; fi
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 
 #===============================================================================
 # End of Function
