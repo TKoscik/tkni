@@ -797,7 +797,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="5TT"
       echo '#### 5TT (MRTrix3, FSL) {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_label-tissue+${TM}.png
         echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
@@ -821,7 +821,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="SYNTHSEG"
       echo '#### Freesurfer SynthSeg {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_label-tissue+${TM}.png
         echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
