@@ -1,9 +1,11 @@
 #!/app/ni/miniconda3/envs/clusteringVENV/bin/python
 ##!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
 
+#!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
 import argparse
 import nibabel as nib
 import numpy as np
+import os
 import time
 
 def compute_tissue_probabilities(image_path, label_path, values_str, output_path, mask_path=None, sigma=None, max_label_output=None):
@@ -66,16 +68,21 @@ def compute_tissue_probabilities(image_path, label_path, values_str, output_path
         prob_4d[..., c] = class_vol
 
     # 6. Save Output 4D NIfTI Probability Map
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     print(f"-> Saving multi-volume probability map to: {output_path}")
     out_img = nib.Nifti1Image(prob_4d, img.affine, img.header)
     nib.save(out_img, output_path)
 
     # 7. Optional Max Probability Label Map Output
     if max_label_output:
+        max_dir = os.path.dirname(max_label_output)
+        if max_dir:
+            os.makedirs(max_dir, exist_ok=True)
         print(f"-> Computing and saving max probability label map to: {max_label_output}")
         argmax_indices = np.argmax(probabilities, axis=1)
         max_label_vol = np.zeros(image_data.shape, dtype=np.int32)
-        # Assign 1-indexed classes matching the order of reference values (background = 0)
         max_label_vol[valid_indices] = argmax_indices + 1
 
         max_label_img = nib.Nifti1Image(max_label_vol, img.affine, img.header)
