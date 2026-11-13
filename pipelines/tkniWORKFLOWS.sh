@@ -1409,9 +1409,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -p normal" >> ${SLURM_XSEGMENT}
     echo "#SBATCH -q normal" >> ${SLURM_XSEGMENT}
     echo "#SBATCH --nodes=1" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --ntasks=1" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --cpus-per-task=${XSEGMENT_NTHREADS}" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --exclusive" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --mem=0" >> ${SLURM_XSEGMENT}
+#    echo "#SBATCH --ntasks=1" >> ${SLURM_XSEGMENT}
+#    echo "#SBATCH --cpus-per-task=${XSEGMENT_NTHREADS}" >> ${SLURM_XSEGMENT}
+#    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
