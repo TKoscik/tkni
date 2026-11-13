@@ -1436,9 +1436,6 @@ for (( i=1; i<${N}; i++ )); do
     else
       FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
     fi
-    echo "TEST--------------------------"
-    echo ${XSEGMENT_NO_ANISOSMOOTH}
-    echo "TEST--------------------------"
     if [[ -n ${XSEGMENT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field ${XSEGMENT_IDFIELD}"; fi
     if [[ -n ${XSEGMENT_IMAGE} ]]; then  FSTR="${FSTR} --image ${XSEGMENT_IMAGE}"; fi
     if [[ -n ${XSEGMENT_MASK} ]]; then  FSTR="${FSTR} --mask ${XSEGMENT_MASK}"; fi
@@ -1465,6 +1462,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   ## SUBMIT JOBS WITH DEPENDENCIES
   ###############################################################################
+  echo "TEST"
   mkdir -p ${DIR_LOG}
 
   # Reset Job IDs for iteration
