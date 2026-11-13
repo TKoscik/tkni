@@ -1540,5 +1540,14 @@ for (( i=1; i<${N}; i++ )); do
     DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_QCFUNC=$(sbatch --parsable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
   fi
+  if [[ ${WORKFLOW^^} == *"XINIT"* ]]; then
+    echo "submitting XINIT"
+    JOB_XINIT=$(sbatch --parsable ${SLURM_XINIT})
+  fi
+  if [[ ${WORKFLOW^^} == *"XSEGMENT"* ]]; then
+    echo "submitting XSEGMENT"
+    JOB_XSEGMENT=$(sbatch --parsable ${JOB_XINIT:+--dependency=afterok:${JOB_XINIT}} ${SLURM_XSEGMENT})
+  fi
+
   echo ">>>>>${IDPFX} jobs submitted"
 done
