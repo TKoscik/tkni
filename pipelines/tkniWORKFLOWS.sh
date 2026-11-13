@@ -470,7 +470,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QALAS}
     echo "#SBATCH --nodes=1" >> ${SLURM_QALAS}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QALAS}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QALAS}
+    echo "#SBATCH --cpus-per-task=${QALAS_NTHREADS}" >> ${SLURM_QALAS}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QALAS}
@@ -564,7 +564,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DPREP}
     echo "#SBATCH --nodes=1" >> ${SLURM_DPREP}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DPREP}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DPREP}
+    echo "#SBATCH --cpus-per-task=${DPREP_NTHREADS}" >> ${SLURM_DPREP}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DPREP}
@@ -624,7 +624,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DSCALE}
     echo "#SBATCH --nodes=1" >> ${SLURM_DSCALE}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DSCALE}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DSCALE}
+    echo "#SBATCH --cpus-per-task=${DSCALE_NTHREADS}" >> ${SLURM_DSCALE}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DSCALE}
@@ -679,7 +679,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DMICRO}
     echo "#SBATCH --nodes=1" >> ${SLURM_DMICRO}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DMICRO}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DMICRO}
+    echo "#SBATCH --cpus-per-task=${DMICRO_NTHREADS}" >> ${SLURM_DMICRO}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DMICRO}
@@ -749,7 +749,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DTRACT}
     echo "#SBATCH --nodes=1" >> ${SLURM_DTRACT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DTRACT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DTRACT}
+    echo "#SBATCH --cpus-per-task=${DTRACT_NTHREADS}" >> ${SLURM_DTRACT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DTRACT}
@@ -808,7 +808,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_PCASL}
     echo "#SBATCH --nodes=1" >> ${SLURM_PCASL}
     echo "#SBATCH --ntasks=1" >> ${SLURM_PCASL}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_PCASL}
+    echo "#SBATCH --cpus-per-task=${PCASL_NTHREADS}" >> ${SLURM_PCASL}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_PCASL}
@@ -883,7 +883,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_FUNK}
     echo "#SBATCH --nodes=1" >> ${SLURM_FUNK}
     echo "#SBATCH --ntasks=1" >> ${SLURM_FUNK}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_FUNK}
+    echo "#SBATCH --cpus-per-task=${FUNK_NTHREADS}" >> ${SLURM_FUNK}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_FUNK}
@@ -956,7 +956,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_FCON}
     echo "#SBATCH --nodes=1" >> ${SLURM_FCON}
     echo "#SBATCH --ntasks=1" >> ${SLURM_FCON}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_FCON}
+    echo "#SBATCH --cpus-per-task=${FCON_NTHREADS}" >> ${SLURM_FCON}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_FCON}
@@ -1013,7 +1013,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_MRS}
     echo "#SBATCH --nodes=1" >> ${SLURM_MRS}
     echo "#SBATCH --ntasks=1" >> ${SLURM_MRS}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_MRS}
+    echo "#SBATCH --cpus-per-task=${MRS_NTHREADS}" >> ${SLURM_MRS}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_MRS}
@@ -1072,7 +1072,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QCANAT}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCANAT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QCANAT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QCANAT}
+    echo "#SBATCH --cpus-per-task=${QCANAT_NTHREADS}" >> ${SLURM_QCANAT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QCANAT}
@@ -1144,7 +1144,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QCDWI}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCDWI}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QCDWI}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QCDWI}
+    echo "#SBATCH --cpus-per-task=${QCDWI_NTHREADS}" >> ${SLURM_QCDWI}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QCDWI}
@@ -1204,7 +1204,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QCFUNC}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCFUNC}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QCFUNC}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QCFUNC}
+    echo "#SBATCH --cpus-per-task=${QCFUNC_NTHREADS}" >> ${SLURM_QCFUNC}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QCFUNC}
@@ -1261,7 +1261,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_XINIT}
     echo "#SBATCH --nodes=1" >> ${SLURM_XINIT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_XINIT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_XINIT}
+    echo "#SBATCH --cpus-per-task=${XINIT_NTHREADS}" >> ${SLURM_XINIT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XINIT}
     echo "" >> ${SLURM_XINIT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XINIT}
@@ -1325,7 +1325,7 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_XSEGMENT}
     echo "#SBATCH --nodes=1" >> ${SLURM_XSEGMENT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --cpus-per-task=${XSEGMENT_NTHREADS}" >> ${SLURM_XSEGMENT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XSEGMENT}
@@ -1375,6 +1375,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   ## SUBMIT JOBS WITH DEPENDENCIES
   ###############################################################################
+  mkdir -p ${DIR_LOG}
 
   # Reset Job IDs for iteration
   TFLOW=(${WORKFLOWS//,/ })
