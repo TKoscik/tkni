@@ -285,6 +285,9 @@ if [[ -z ${MRTRIXPATH} ]]; then MRTRIXPATH=/usr/lib/mrtrix3/bin; fi
 if [[ -z ${DIR_MRTRIX} ]]; then
   DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
 fi
+if [[ ${VERBOSE} == "true" ]]; then
+  echo -e ">>>>> MRTRIX Output Directory: ${DIR_MRTRIX}"
+fi
 
 # Additional default values ----------------------------------------------------
 if [[ -z ${DIR_ANAT} ]]; then DIR_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
@@ -578,10 +581,10 @@ mv ${TMP_NII}/${IDPFX}_residualUnring.* ${DIR_DWI}/preproc/qc/
 mv ${TMP_DWI}/percentageOutliers.txt ${DIR_DWI}/preproc/qc/${IDPFX}_pctOutliers.txt
 
 # Clean scratch folder and save MRTRIX for next steps --------------------------
-rm ${TMP_NII}/*
-rmdir ${TMP_NII}/
-rm ${TMP_XFM}/*
-rmdir ${TMP_XFM}/
+#rm ${TMP_NII}/*
+#rmdir ${TMP_NII}/
+#rm ${TMP_XFM}/*
+#rmdir ${TMP_XFM}/
 
 #DIR_MRTRIX=${DIR_PROJECT}/derivatives/mrtrix/${IDDIR}
 mkdir -p ${DIR_MRTRIX}

@@ -485,10 +485,10 @@ mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_AFDcomplexity.* ${DIR_SAVE}/dwi/scalar/AFD/
 mv ${DIR_SCRATCH}/${IDPFX}_roi-gm_Dispersion.* ${DIR_SAVE}/dwi/scalar/Dispersion/
 
 # tractography output
-mv ${TMP_ANAT} ${DIR_MRTRIX}/
-mv ${TMP_FOD} ${DIR_MRTRIX}/
+mv ${TMP_ANAT}/* ${DIR_MRTRIX}/
+mv ${TMP_FOD}/* ${DIR_MRTRIX}/
 if [[ ${KEEP_10MIL} == "false" ]]; then rm ${TMP_TCK}/tracks_10mio.tck; fi
-mv ${TMP_TCK} ${DIR_MRTRIX}/
+mv ${TMP_TCK}/* ${DIR_MRTRIX}/
 
 # connectome output
 mkdir -p ${DIR_SAVE}/connectome

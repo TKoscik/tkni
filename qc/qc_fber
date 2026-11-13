@@ -124,6 +124,10 @@ for i in "${VOLUME[@]}"; do
   FGMED=($(3dROIstats -mask ${MASK} -quiet -median ${TSQD}))
   FGMED=${FGMED[-1]}
   BGMED=($(3dROIstats -mask ${MASKINV} -quiet -median ${TSQD}))
+#  if [[ ${#BGMED[@]} -eq 0 ]]; then
+#    VAL=("NA" "NA")
+#    exit 0
+#  fi
   BGMED=${BGMED[-1]}
 
   if [[ "${BGMED}" == "0.000000" ]]; then
