@@ -559,15 +559,15 @@ fi
 
 # Save results -----------------------------------------------------------------
 mkdir -p ${DIR_SAVE}/anat/native
-mv ${IMG} ${DIR_ANAT}/native/
-mv ${DIR_SCRATCH}/${IDPFX}_${BASE_MOD}.png ${DIR_ANAT}/native/
-mv ${DIR_SCRATCH}/${IDPFX}_slice-*_${BASE_MOD}.png ${DIR_ANAT}/native/
+mv ${IMG} ${DIR_SAVE}/anat/native/
+mv ${DIR_SCRATCH}/${IDPFX}_${BASE_MOD}.png ${DIR_SAVE}/anat/native/
+mv ${DIR_SCRATCH}/${IDPFX}_slice-*_${BASE_MOD}.png ${DIR_SAVE}/anat/native/
 
 mkdir -p ${DIR_SAVE}/anat/mask
 mv ${DIR_SCRATCH}/${IDPFX}_mask-* ${DIR_SAVE}/anat/mask/
 
 mkdir -p ${DIR_SAVE}/xfm/${IDDIR}
-mv ${DIR_SCRATCH}/*.mat ${DIR_XFM}/
+mv ${DIR_SCRATCH}/*.mat ${DIR_SAVE}/xfm/${IDDIR}/
 
 ## save prep
 if [[ ${NO_KEEP} == "false" ]]; then

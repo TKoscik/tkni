@@ -403,8 +403,9 @@ if [[ ${NO_NODDI} == "false" ]]; then
     done
   fi
   # save output
-  mv ${DIR_SCRATCH}/NODDI_results/*NODDI* ${DIR_SAVE}/
-  mv ${DIR_SCRATCH}/*NODDI*.png ${DIR_SAVE}/
+  mkdir -p ${DIR_SAVE}/dwi/microstructure/NODDI
+  mv ${DIR_SCRATCH}/NODDI_results/*NODDI* ${DIR_SAVE}/dwi/microstructure/NODDI/
+  mv ${DIR_SCRATCH}/*NODDI*.png ${DIR_SAVE}/dwi/microstructure/NODDI
 fi
 
 # Run SANDI ====================================================================
@@ -445,8 +446,9 @@ if [[ ${NO_SANDI} == "false" ]]; then
         --dir-save ${DIR_SCRATCH}
     done
   fi
-  mv ${DIR_SCRATCH}/SANDI_results/*SANDI* ${DIR_SAVE}/
-  mv ${DIR_SCRATCH}/*SANDI*.png ${DIR_SAVE}/
+  mkdir -p ${DIR_SAVE}/dwi/microstructure/SANDI
+  mv ${DIR_SCRATCH}/SANDI_results/*SANDI* ${DIR_SAVE}/dwi/microstructure/SANDI/
+  mv ${DIR_SCRATCH}/*SANDI*.png ${DIR_SAVE}/dwi/microstructure/SANDI/
 fi
 
 # generate HTML QC report ------------------------------------------------------
@@ -492,7 +494,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     for i in {0..2}; do
       echo "#### ${SLAB[${i}]}" >> ${RMD}
       echo -e "${SDESC[${i}]}  " >> ${RMD}
-      TPNG=${DIR_SCRATCH}/${IDPFX}_NODDI-${SLS[${i}]}.png
+      TPNG=${DIR_SAVE}/dwi/microstructure/NODDI/${IDPFX}_NODDI-${SLS[${i}]}.png
       echo -e '!['${IDPFX}'_NODDI-'${SLS[${i}]}'.nii.gz]('${TPNG}')\n' >> ${RMD}
     done
   fi
@@ -509,7 +511,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     for i in {0..5}; do
       echo "#### ${SLAB[${i}]}" >> ${RMD}
       echo -e "${SDESC[${i}]}  " >> ${RMD}
-      TPNG=${DIR_SCRATCH}/${IDPFX}_SANDI-${SLS[${i}]}.png
+      TPNG=${DIR_SAVE}/dwi/microstructure/SANDI/${IDPFX}_SANDI-${SLS[${i}]}.png
       echo -e '!['${IDPFX}'_SANDI-'${SLS[${i}]}'.nii.gz]('${TPNG}')\n' >> ${RMD}
     done
   fi
@@ -535,15 +537,15 @@ if [[ "${NO_RMD}" == "false" ]]; then
 fi
 
 # Save Results =================================================================
-mkdir -p ${DIR_SAVE}/dwi/microstructure
-if [[ ${NO_NODDI} == "false" ]]; then
-  mv ${DIR_SCRATCH}/NODDI_results/*NODDI* ${DIR_SAVE}/dwi/microstructure
-  mv ${DIR_SCRATCH}/*NODDI*.png ${DIR_SAVE}/dwi/microstructure
-fi
-if [[ ${NO_SANDI} == "false" ]]; then
-  mv ${DIR_SCRATCH}/SANDI_results/*SANDI* ${DIR_SAVE}/dwi/microstructure
-  mv ${DIR_SCRATCH}/*SANDI*.png ${DIR_SAVE}/dwi/microstructure
-fi
+#mkdir -p ${DIR_SAVE}/dwi/microstructure
+#if [[ ${NO_NODDI} == "false" ]]; then
+#  mv ${DIR_SCRATCH}/NODDI_results/*NODDI* ${DIR_SAVE}/dwi/microstructure
+#  mv ${DIR_SCRATCH}/*NODDI*.png ${DIR_SAVE}/dwi/microstructure
+#fi
+#if [[ ${NO_SANDI} == "false" ]]; then
+#  mv ${DIR_SCRATCH}/SANDI_results/*SANDI* ${DIR_SAVE}/dwi/microstructure
+#  mv ${DIR_SCRATCH}/*SANDI*.png ${DIR_SAVE}/dwi/microstructure
+#fi
 
 
 # set status file --------------------------------------------------------------

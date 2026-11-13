@@ -252,13 +252,24 @@ cp -r ${FREESURFER_HOME}/subjects/fsaverage ${DIR_SCRATCH}/
 
 # parse image inputs -----------------------------------------------------------
 if [[ -z ${IMAGE} ]]; then
-  IMAGE=${DIR_PROJECT}/${PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
+  IMAGE=${DIR_PROJECT}/derivatives/${PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
 fi
 cp ${IMAGE} ${DIR_SCRATCH}/
-IMAGE=${DIR_SCRATCH}/${PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
+#IMAGE=${DIR_SCRATCH}/${PIPE}/anat/native/${IDPFX}_${MOD}.nii.gz
+IMAGE=${DIR_SCRATCH}/${IDPFX}_${MOD}.nii.gz
 
 # Recon-all-clinical -----------------------------------------------------------
-recon-all-clinical.sh ${IMAGE} ${IDPFX} ${NTHREADS} ${DIR_SCRATCH}
+CHK_FS_VERSION=$(recon-all -version)
+if [[ ${CHK_FS_VERSION} == *"x86_64-8.1.0"* ]]; then
+  recon-all-clinical.sh -i ${IMAGE} -subjid ${IDPFX} -sdir ${DIR_SCRATCH} -threads ${NTHREADS}
+elif [[ ${CHK_FS_VERSION} == *"x86_64-7.4.1"* ]]; then
+  recon-all-clinical.sh ${IMAGE} ${IDPFX} ${NTHREADS} ${DIR_SCRATCH}
+else
+  echo "WARNING [${PIPE}:${FLOW}] Freesurfer version or code may need to be changed"
+  echo -e "\t attempting to use newest syntax form v8.1.0"
+  recon-all-clinical.sh -i ${IMAGE} -subjid ${IDPFX} -sdir ${DIR_SCRATCH} -threads ${NTHREADS}
+fi
+
 if [[ ${VERBOSE} == "true" ]]; then echo -e ">>>>> RECON-ALL Clinical COMPLETE"; fi
 
 # convert native_synth ---------------------------------------------------------

@@ -309,7 +309,7 @@ if [[ -z ${IMAGE} ]]; then
 fi
 if [[ -z ${MASK} ]]; then
   if [[ -z ${SRC_ANAT} ]]; then SRC_ANAT=${DIR_PROJECT}/derivatives/${PIPE}/anat; fi
-  if [[ ! -d ${SRC_ANAT} ]]; then SRC_ANAT=$(dirname $(dirname ${IMAGE})); then
+  if [[ ! -d ${SRC_ANAT} ]]; then SRC_ANAT=$(dirname $(dirname ${IMAGE})); fi
   if [[ ! -d ${SRC_ANAT} ]]; then
     echo "ERROR [${PIPE}${FLOW}] Cannot determine an exisiting source path for anatomical images, aborting"
     exit 1
@@ -736,7 +736,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
   echo '' >> ${RMD}
 
   echo '## Tissue Segmentation' >> ${RMD}
-  TPNG=${DIR_SCRATCH}/${IDPFX}_label-tissue/${IDPFX}_label-tissue.png
+  TPNG=${DIR_SCRATCH}/${IDPFX}_label-tissue.png
   echo '!['${IDPFX}'_label-tissue.nii.gz]('${TPNG}')' >> ${RMD}
   echo '' >> ${RMD}
 
@@ -773,7 +773,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="ANTS"
       echo '#### ANTs {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_label-tissue+${TM}.png
         echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
@@ -797,7 +797,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="5TT"
       echo '#### 5TT (MRTrix3, FSL) {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_label-tissue+${TM}.png
         echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}
@@ -821,7 +821,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
       TM="SYNTHSEG"
       echo '#### Freesurfer SynthSeg {.tabset}' >> ${RMD}
       echo '##### Tissue Segmentation' >> ${RMD}
-        TPNG=${DIR_SCRATCH}/MATS/${IDPFX}_label-tissue+${TM}.png
+        TPNG=${DIR_SCRATCH}/${TM}/${IDPFX}_label-tissue+${TM}.png
         echo '!['${IDPFX}'_label-tissue+'${TM}'.nii.gz]('${TPNG}')' >> ${RMD}
         echo '' >> ${RMD}
       echo '##### Gray Matter' >> ${RMD}

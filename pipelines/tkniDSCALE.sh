@@ -278,7 +278,7 @@ if [[ -n ${MASK_ROI} ]]; then
   TMPFCN="${TMPFCN} -mask ${MASK_ROI}"
 fi
 if [[ ${NO_B0} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/scalar
+  #mkdir -p ${DIR_SAVE}/scalar
   TMPFCN="${TMPFCN} -b0 ${DIR_SCRATCH}/${IDPFX}_b0.nii.gz"
 fi
 if [[ ${NO_KURTOSIS} == "false" ]]; then
@@ -452,18 +452,18 @@ fi
 
 # Save output ------------------------------------------------------------------
 if [[ ${NO_SCALAR} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/scalar
-  mv ${DIR_SCRATCH}/${IDPFX}_b0.nii.gz ${DIR_SAVE}/scalar/
-  mv ${DIR_SCRATCH}/*scalar* ${DIR_SAVE}/scalar/
+  mkdir -p ${DIR_SAVE}/dwi/scalar
+  mv ${DIR_SCRATCH}/${IDPFX}_b0.nii.gz ${DIR_SAVE}/dwi/scalar/
+  mv ${DIR_SCRATCH}/*scalar* ${DIR_SAVE}/dwi/scalar/
 fi
 if [[ ${NO_TENSOR} == "false" ]] || [[ ${NO_KURTOSIS} == "false" ]]; then
-  mkdir -p ${DIR_SAVE}/tensor
-  mv ${DIR_SCRATCH}/*tensor* ${DIR_SAVE}/tensor/
+  mkdir -p ${DIR_SAVE}/dwi/tensor
+  mv ${DIR_SCRATCH}/*tensor* ${DIR_SAVE}/dwi/tensor/
 fi
 
 # set status file --------------------------------------------------------------
-mkdir -p ${DIR_PROJECT}/status/${PIPE}${FLOW}
-touch ${DIR_PROJECT}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
+mkdir -p ${DIR_SAVE}/status/${PIPE}${FLOW}
+touch ${DIR_SAVE}/status/${PIPE}${FLOW}/CHECK_${PIPE}${FLOW}_${IDPFX}.txt
 if [[ ${VERBOSE} == "true" ]]; then
   echo -e ">>>>> QC check file status set"
 fi
