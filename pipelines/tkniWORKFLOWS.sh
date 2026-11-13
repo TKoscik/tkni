@@ -1349,21 +1349,21 @@ for (( i=1; i<${N}; i++ )); do
     echo "TEST--------------------------"
     echo ${XSEGMENT_NO_ANISOSMOOTH}
     echo "TEST--------------------------"
-    if [[ -z ${XSEGMENT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field ${XSEGMENT_IDFIELD}"; fi
-    if [[ -z ${XSEGMENT_IMAGE} ]]; then  FSTR="${FSTR} --image ${XSEGMENT_IMAGE}"; fi
-    if [[ -z ${XSEGMENT_MASK} ]]; then  FSTR="${FSTR} --mask ${XSEGMENT_MASK}"; fi
-    if [[ -z ${XSEGMENT_NO_ANISOSMOOTH} ]]; then  FSTR="${FSTR} --no-anisosmooth"; fi
-    if [[ -z ${XSEGMENT_SMOOTH_CONDUCTANCE} ]]; then  FSTR="${FSTR} --aniso-conductance ${XSEGMENT_SMOOTH_CONDUCTANCE}"; fi
-    if [[ -z ${XSEGMENT_SMOOTH_ITER} ]]; then  FSTR="${FSTR} --aniso-iter ${XSEGMENT_SMOOTH_ITER}"; fi
-    if [[ -z ${XSEGMENT_DOG_G1} ]]; then  FSTR="${FSTR} --dog_g1 ${XSEGMENT_DOG_G1}"; fi
-    if [[ -z ${XSEGMENT_DOG_K} ]]; then  FSTR="${FSTR} --dog_k ${XSEGMENT_DOG_K}"; fi
-    if [[ -z ${XSEGMENT_DATUM} ]]; then  FSTR="${FSTR} --datum ${XSEGMENT_DATUM}"; fi
-    if [[ -z ${XSEGMENT_NO_MERGE} ]]; then  FSTR="${FSTR} --no-merge"; fi
-    if [[ -z ${XSEGMENT_MERGE_THRESHOLD} ]]; then  FSTR="${FSTR} --merge-threshold ${XSEGMENT_MERGE_THRESHOLD}"; fi
-    if [[ -z ${XSEGMENT_MERGE_WEIGHTS} ]]; then  FSTR="${FSTR} --merge-weights ${XSEGMENT_MERGE_WEIGHTS}"; fi
-    if [[ -z ${XSEGMENT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${XSEGMENT_DIR_SAVE}"; fi
-    if [[ -z ${XSEGMENT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${XSEGMENT_SCRATCH}"; fi
-    if [[ -z ${XSEGMENT_FORCE} ]]; then  FSTR="${FSTR} --force ${XSEGMENT_}"; fi
+    if [[ -n ${XSEGMENT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field ${XSEGMENT_IDFIELD}"; fi
+    if [[ -n ${XSEGMENT_IMAGE} ]]; then  FSTR="${FSTR} --image ${XSEGMENT_IMAGE}"; fi
+    if [[ -n ${XSEGMENT_MASK} ]]; then  FSTR="${FSTR} --mask ${XSEGMENT_MASK}"; fi
+    if [[ -n ${XSEGMENT_NO_ANISOSMOOTH} ]]; then  FSTR="${FSTR} --no-anisosmooth"; fi
+    if [[ -n ${XSEGMENT_SMOOTH_CONDUCTANCE} ]]; then  FSTR="${FSTR} --aniso-conductance ${XSEGMENT_SMOOTH_CONDUCTANCE}"; fi
+    if [[ -n ${XSEGMENT_SMOOTH_ITER} ]]; then  FSTR="${FSTR} --aniso-iter ${XSEGMENT_SMOOTH_ITER}"; fi
+    if [[ -n ${XSEGMENT_DOG_G1} ]]; then  FSTR="${FSTR} --dog_g1 ${XSEGMENT_DOG_G1}"; fi
+    if [[ -n ${XSEGMENT_DOG_K} ]]; then  FSTR="${FSTR} --dog_k ${XSEGMENT_DOG_K}"; fi
+    if [[ -n ${XSEGMENT_DATUM} ]]; then  FSTR="${FSTR} --datum ${XSEGMENT_DATUM}"; fi
+    if [[ -n ${XSEGMENT_NO_MERGE} ]]; then  FSTR="${FSTR} --no-merge"; fi
+    if [[ -n ${XSEGMENT_MERGE_THRESHOLD} ]]; then  FSTR="${FSTR} --merge-threshold ${XSEGMENT_MERGE_THRESHOLD}"; fi
+    if [[ -n ${XSEGMENT_MERGE_WEIGHTS} ]]; then  FSTR="${FSTR} --merge-weights ${XSEGMENT_MERGE_WEIGHTS}"; fi
+    if [[ -n ${XSEGMENT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${XSEGMENT_DIR_SAVE}"; fi
+    if [[ -n ${XSEGMENT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${XSEGMENT_SCRATCH}"; fi
+    if [[ -n ${XSEGMENT_FORCE} ]]; then  FSTR="${FSTR} --force ${XSEGMENT_}"; fi
     echo ${FSTR} >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
     echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_XSEGMENT}
