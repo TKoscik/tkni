@@ -582,7 +582,7 @@ if [[ "${NO_RMD}" == "false" ]]; then
     echo "#### GM Complexity AFD" >> ${RMD}
       echo -e '![]('${DIR_SAVE}'/dwi/scalar/AFD/'${IDPFX}'_roi-gm_AFDcomplexity.png)\n' >> ${RMD}
     echo "#### GM Dispersion" >> ${RMD}
-      echo -e '![]('${DIR_SAVE}'/dwi/scalar/Dispersion]/'${IDPFX}'_roi-gm_Dispersion.png)\n' >> ${RMD}
+      echo -e '![]('${DIR_SAVE}'/dwi/scalar/Dispersion/'${IDPFX}'_roi-gm_Dispersion.png)\n' >> ${RMD}
   fi
 
   ## knit RMD
