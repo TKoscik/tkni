@@ -1,10 +1,6 @@
 #!/app/ni/miniconda3/envs/clusteringVENV/bin/python
 ##!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
-<<<<<<< HEAD
-##!/usr/bin/env python
-=======
 
->>>>>>> 6fa823f3bf29fe9a744da0e58c070cc5b4beba01
 import argparse
 import nibabel as nib
 import numpy as np
