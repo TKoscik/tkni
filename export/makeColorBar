@@ -136,7 +136,7 @@ if [[ ${ORDER,,} == *"reverse"* ]]; then
 fi
 
 # Convert to PNG palette for ImageMagick use -----------------------------------
-tmpfcn="convert -size 30x600 gradient: -interpolate Bicubic \( +size"
+tmpfcn="convert -size 30x600 gradient: -interpolate Spline \( +size"
 for (( i=1; i<=${#CPAL[@]}; i++ )); do
   tmpfcn="${tmpfcn} xc:\"${CPAL[-${i}]}\""
 done

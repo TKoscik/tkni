@@ -1,3 +1,4 @@
 #!/bin/bash
 
-conda run -n tkni_venv python clusterMerge.py "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+conda run -n tkni_venv python "${SCRIPT_DIR}/clusterMerge.py" "$@"

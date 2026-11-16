@@ -1,5 +1,6 @@
-#!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
-##!/usr/bin/env python
+#!/app/ni/miniconda3/envs/clusteringVENV/bin/python
+##!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
+
 import argparse
 import nibabel as nib
 import numpy as np

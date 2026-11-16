@@ -171,9 +171,9 @@ for (( i=1; i<${N}; i++ )); do
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
     echo "# Activate CONDA environment ------" >> ${SLURM_AINIT}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_AINIT}
     echo "conda activate ni_20260514" >> ${SLURM_AINIT}
-    echo 'export CONDA_ENV_PATH=$(conda env list | grep "ni_20260514" | awk '"'{print $NF}'"')/bin' >> ${SLURM_AINIT}
-    echo 'export PATH="$CONDA_ENV_PATH:$PATH"' >> ${SLURM_AINIT}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_AINIT}
     echo "" >> ${SLURM_AINIT}
     echo "# Load Neurocontainers ------" >> ${SLURM_AINIT}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_AINIT}
@@ -227,6 +227,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "" >> ${SLURM_FSSYNTH}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_FSSYNTH}
     echo "" >> ${SLURM_FSSYNTH}
+    echo "# Activate CONDA environment ------" >> ${SLURM_FSSYNTH}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_FSSYNTH}
+    echo "conda activate ni_20260514" >> ${SLURM_FSSYNTH}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_FSSYNTH}
+    echo "" >> ${SLURM_FSSYNTH}
     echo "# Load Neurocontainers ------" >> ${SLURM_FSSYNTH}
     echo "ND_CONTAINERS=(\"ants_2.6.5_20260225\" \\" >> ${SLURM_FSSYNTH}
     echo "               \"convert3d_1.1.0_20251212\" \\" >> ${SLURM_FSSYNTH}
@@ -277,6 +282,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_MALF}
     echo "" >> ${SLURM_MALF}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_MALF}
+    echo "" >> ${SLURM_MALF}
+    echo "# Activate CONDA environment ------" >> ${SLURM_MALF}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_MALF}
+    echo "conda activate ni_20260514" >> ${SLURM_MALF}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_MALF}
     echo "" >> ${SLURM_MALF}
     echo "# Load Neurocontainers ------" >> ${SLURM_MALF}
     echo "ND_CONTAINERS=(\"ants_2.6.5_20260225\" \\" >> ${SLURM_MALF}
@@ -336,6 +346,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_MATS}
     echo "" >> ${SLURM_MATS}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_MATS}
+    echo "" >> ${SLURM_MATS}
+    echo "# Activate CONDA environment ------" >> ${SLURM_MATS}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_MATS}
+    echo "conda activate ni_20260514" >> ${SLURM_MATS}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_MATS}
     echo "" >> ${SLURM_MATS}
     echo "# Load Neurocontainers ------" >> ${SLURM_MATS}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_MATS}
@@ -402,6 +417,11 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_AMOD}
+    echo "" >> ${SLURM_AMOD}
+    echo "# Activate CONDA environment ------" >> ${SLURM_AMOD}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_AMOD}
+    echo "conda activate ni_20260514" >> ${SLURM_AMOD}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_AMOD}
     echo "" >> ${SLURM_AMOD}
     echo "# Load Neurocontainers ------" >> ${SLURM_AMOD}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_AMOD}
@@ -470,10 +490,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QALAS}
     echo "#SBATCH --nodes=1" >> ${SLURM_QALAS}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QALAS}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QALAS}
+    echo "#SBATCH --cpus-per-task=${QALAS_NTHREADS}" >> ${SLURM_QALAS}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QALAS}
+    echo "" >> ${SLURM_QALAS}
+    echo "# Activate CONDA environment ------" >> ${SLURM_QALAS}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_QALAS}
+    echo "conda activate ni_20260514" >> ${SLURM_QALAS}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_QALAS}
     echo "" >> ${SLURM_QALAS}
     echo "# Load Neurocontainers ------" >> ${SLURM_QALAS}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_QALAS}
@@ -564,10 +589,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DPREP}
     echo "#SBATCH --nodes=1" >> ${SLURM_DPREP}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DPREP}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DPREP}
+    echo "#SBATCH --cpus-per-task=${DPREP_NTHREADS}" >> ${SLURM_DPREP}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DPREP}
+    echo "" >> ${SLURM_DPREP}
+    echo "# Activate CONDA environment ------" >> ${SLURM_DPREP}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_DPREP}
+    echo "conda activate ni_20260514" >> ${SLURM_DPREP}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_DPREP}
     echo "" >> ${SLURM_DPREP}
     echo "# Load Neurocontainers ------" >> ${SLURM_DPREP}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_DPREP}
@@ -624,10 +654,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DSCALE}
     echo "#SBATCH --nodes=1" >> ${SLURM_DSCALE}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DSCALE}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DSCALE}
+    echo "#SBATCH --cpus-per-task=${DSCALE_NTHREADS}" >> ${SLURM_DSCALE}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DSCALE}
+    echo "" >> ${SLURM_DSCALE}
+    echo "# Activate CONDA environment ------" >> ${SLURM_DSCALE}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_DSCALE}
+    echo "conda activate ni_20260514" >> ${SLURM_DSCALE}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_DSCALE}
     echo "" >> ${SLURM_DSCALE}
     echo "# Load Neurocontainers ------" >> ${SLURM_DSCALE}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_DSCALE}
@@ -679,10 +714,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DMICRO}
     echo "#SBATCH --nodes=1" >> ${SLURM_DMICRO}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DMICRO}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DMICRO}
+    echo "#SBATCH --cpus-per-task=${DMICRO_NTHREADS}" >> ${SLURM_DMICRO}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DMICRO}
+    echo "" >> ${SLURM_DMICRO}
+    echo "# Activate CONDA environment ------" >> ${SLURM_DMICRO}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_DMICRO}
+    echo "conda activate ni_20260514" >> ${SLURM_DMICRO}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_DMICRO}
     echo "" >> ${SLURM_DMICRO}
     echo "# Load Neurocontainers ------" >> ${SLURM_DMICRO}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_DMICRO}
@@ -749,10 +789,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_DTRACT}
     echo "#SBATCH --nodes=1" >> ${SLURM_DTRACT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_DTRACT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_DTRACT}
+    echo "#SBATCH --cpus-per-task=${DTRACT_NTHREADS}" >> ${SLURM_DTRACT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_DTRACT}
+    echo "" >> ${SLURM_DTRACT}
+    echo "# Activate CONDA environment ------" >> ${SLURM_DTRACT}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_DTRACT}
+    echo "conda activate ni_20260514" >> ${SLURM_DTRACT}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_DTRACT}
     echo "" >> ${SLURM_DTRACT}
     echo "# Load Neurocontainers ------" >> ${SLURM_DTRACT}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_DTRACT}
@@ -808,10 +853,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_PCASL}
     echo "#SBATCH --nodes=1" >> ${SLURM_PCASL}
     echo "#SBATCH --ntasks=1" >> ${SLURM_PCASL}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_PCASL}
+    echo "#SBATCH --cpus-per-task=${PCASL_NTHREADS}" >> ${SLURM_PCASL}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_PCASL}
+    echo "" >> ${SLURM_PCASL}
+    echo "# Activate CONDA environment ------" >> ${SLURM_PCASL}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_PCASL}
+    echo "conda activate ni_20260514" >> ${SLURM_PCASL}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_PCASL}
     echo "" >> ${SLURM_PCASL}
     echo "# Load Neurocontainers ------" >> ${SLURM_PCASL}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_PCASL}
@@ -883,10 +933,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_FUNK}
     echo "#SBATCH --nodes=1" >> ${SLURM_FUNK}
     echo "#SBATCH --ntasks=1" >> ${SLURM_FUNK}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_FUNK}
+    echo "#SBATCH --cpus-per-task=${FUNK_NTHREADS}" >> ${SLURM_FUNK}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_FUNK}
+    echo "" >> ${SLURM_FUNK}
+    echo "# Activate CONDA environment ------" >> ${SLURM_FUNK}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_FUNK}
+    echo "conda activate ni_20260514" >> ${SLURM_FUNK}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_FUNK}
     echo "" >> ${SLURM_FUNK}
     echo "# Load Neurocontainers ------" >> ${SLURM_FUNK}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_FUNK}
@@ -956,10 +1011,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_FCON}
     echo "#SBATCH --nodes=1" >> ${SLURM_FCON}
     echo "#SBATCH --ntasks=1" >> ${SLURM_FCON}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_FCON}
+    echo "#SBATCH --cpus-per-task=${FCON_NTHREADS}" >> ${SLURM_FCON}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_FCON}
+    echo "" >> ${SLURM_FCON}
+    echo "# Activate CONDA environment ------" >> ${SLURM_FCON}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_FCON}
+    echo "conda activate ni_20260514" >> ${SLURM_FCON}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_FCON}
     echo "" >> ${SLURM_FCON}
     echo "# Load Neurocontainers ------" >> ${SLURM_FCON}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_FCON}
@@ -1013,10 +1073,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_MRS}
     echo "#SBATCH --nodes=1" >> ${SLURM_MRS}
     echo "#SBATCH --ntasks=1" >> ${SLURM_MRS}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_MRS}
+    echo "#SBATCH --cpus-per-task=${MRS_NTHREADS}" >> ${SLURM_MRS}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_MRS}
+    echo "" >> ${SLURM_MRS}
+    echo "# Activate CONDA environment ------" >> ${SLURM_MRS}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_MRS}
+    echo "conda activate ni_20260514" >> ${SLURM_MRS}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_MRS}
     echo "" >> ${SLURM_MRS}
     echo "# Load Neurocontainers ------" >> ${SLURM_MRS}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_MRS}
@@ -1072,10 +1137,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QCANAT}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCANAT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QCANAT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QCANAT}
+    echo "#SBATCH --cpus-per-task=${QCANAT_NTHREADS}" >> ${SLURM_QCANAT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QCANAT}
+    echo "" >> ${SLURM_QCANAT}
+    echo "# Activate CONDA environment ------" >> ${SLURM_QCANAT}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_QCANAT}
+    echo "conda activate ni_20260514" >> ${SLURM_QCANAT}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_QCANAT}
     echo "" >> ${SLURM_QCANAT}
     echo "# Load Neurocontainers ------" >> ${SLURM_QCANAT}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_QCANAT}
@@ -1144,10 +1214,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QCDWI}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCDWI}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QCDWI}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QCDWI}
+    echo "#SBATCH --cpus-per-task=${QCDWI_NTHREADS}" >> ${SLURM_QCDWI}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QCDWI}
+    echo "" >> ${SLURM_QCDWI}
+    echo "# Activate CONDA environment ------" >> ${SLURM_QCDWI}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_QCDWI}
+    echo "conda activate ni_20260514" >> ${SLURM_QCDWI}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_QCDWI}
     echo "" >> ${SLURM_QCDWI}
     echo "# Load Neurocontainers ------" >> ${SLURM_QCDWI}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_QCDWI}
@@ -1204,10 +1279,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_QCFUNC}
     echo "#SBATCH --nodes=1" >> ${SLURM_QCFUNC}
     echo "#SBATCH --ntasks=1" >> ${SLURM_QCFUNC}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_QCFUNC}
+    echo "#SBATCH --cpus-per-task=${QCFUNC_NTHREADS}" >> ${SLURM_QCFUNC}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_QCFUNC}
+    echo "" >> ${SLURM_QCFUNC}
+    echo "# Activate CONDA environment ------" >> ${SLURM_QCFUNC}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_QCFUNC}
+    echo "conda activate ni_20260514" >> ${SLURM_QCFUNC}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_QCFUNC}
     echo "" >> ${SLURM_QCFUNC}
     echo "# Load Neurocontainers ------" >> ${SLURM_QCFUNC}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_QCFUNC}
@@ -1261,10 +1341,15 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -q normal" >> ${SLURM_XINIT}
     echo "#SBATCH --nodes=1" >> ${SLURM_XINIT}
     echo "#SBATCH --ntasks=1" >> ${SLURM_XINIT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_XINIT}
+    echo "#SBATCH --cpus-per-task=${XINIT_NTHREADS}" >> ${SLURM_XINIT}
     echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XINIT}
     echo "" >> ${SLURM_XINIT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XINIT}
+    echo "" >> ${SLURM_XINIT}
+    echo "# Activate CONDA environment ------" >> ${SLURM_XINIT}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_XINIT}
+    echo "conda activate ni_20260514" >> ${SLURM_XINIT}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_XINIT}
     echo "" >> ${SLURM_XINIT}
     echo "# Load Neurocontainers ------" >> ${SLURM_XINIT}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_XINIT}
@@ -1324,11 +1409,18 @@ for (( i=1; i<${N}; i++ )); do
     echo "#SBATCH -p normal" >> ${SLURM_XSEGMENT}
     echo "#SBATCH -q normal" >> ${SLURM_XSEGMENT}
     echo "#SBATCH --nodes=1" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --ntasks=1" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --cpus-per-task=${MATS_NTHREADS}" >> ${SLURM_XSEGMENT}
-    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --exclusive" >> ${SLURM_XSEGMENT}
+    echo "#SBATCH --mem=0" >> ${SLURM_XSEGMENT}
+#    echo "#SBATCH --ntasks=1" >> ${SLURM_XSEGMENT}
+#    echo "#SBATCH --cpus-per-task=${XSEGMENT_NTHREADS}" >> ${SLURM_XSEGMENT}
+#    echo "#SBATCH --mem-per-cpu=8G" >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
     echo "PROC_START=\"$(date -u +%s.%N)\"" >> ${SLURM_XSEGMENT}
+    echo "" >> ${SLURM_XSEGMENT}
+    echo "# Activate CONDA environment ------" >> ${SLURM_XSEGMENT}
+    echo "source /app/miniforge3/etc/profile.d/conda.sh" >> ${SLURM_XSEGMENT}
+    echo "conda activate ni_20260514" >> ${SLURM_XSEGMENT}
+    echo 'export PATH="$CONDA_PREFIX/bin:$PATH"' >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
     echo "# Load Neurocontainers ------" >> ${SLURM_XSEGMENT}
     echo "ND_CONTAINERS=(\"afni_26.0.07_20260128\" \\" >> ${SLURM_XSEGMENT}
@@ -1346,21 +1438,21 @@ for (( i=1; i<${N}; i++ )); do
     else
       FSTR="${FSTR} --dir-project ${DIR_PROJECT}"
     fi
-    if [[ -z ${XSEGMENT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field ${XSEGMENT_IDFIELD}"; fi
-    if [[ -z ${XSEGMENT_IMAGE} ]]; then  FSTR="${FSTR} --image ${XSEGMENT_IMAGE}"; fi
-    if [[ -z ${XSEGMENT_MASK} ]]; then  FSTR="${FSTR} --mask ${XSEGMENT_MASK}"; fi
-    if [[ -z ${XSEGMENT_NO_ANISOSMOOTH} ]]; then  FSTR="${FSTR} --no-anisosmooth"; fi
-    if [[ -z ${XSEGMENT_SMOOTH_CONDUCTANCE} ]]; then  FSTR="${FSTR} --aniso-conductance ${XSEGMENT_SMOOTH_CONDUCTANCE}"; fi
-    if [[ -z ${XSEGMENT_SMOOTH_ITER} ]]; then  FSTR="${FSTR} --aniso-iter ${XSEGMENT_SMOOTH_ITER}"; fi
-    if [[ -z ${XSEGMENT_DOG_G1} ]]; then  FSTR="${FSTR} --dog_g1 ${XSEGMENT_DOG_G1}"; fi
-    if [[ -z ${XSEGMENT_DOG_K} ]]; then  FSTR="${FSTR} --dog_k ${XSEGMENT_DOG_K}"; fi
-    if [[ -z ${XSEGMENT_DATUM} ]]; then  FSTR="${FSTR} --datum ${XSEGMENT_DATUM}"; fi
-    if [[ -z ${XSEGMENT_NO_MERGE} ]]; then  FSTR="${FSTR} --no-merge"; fi
-    if [[ -z ${XSEGMENT_MERGE_THRESHOLD} ]]; then  FSTR="${FSTR} --merge-threshold ${XSEGMENT_MERGE_THRESHOLD}"; fi
-    if [[ -z ${XSEGMENT_MERGE_WEIGHTS} ]]; then  FSTR="${FSTR} --merge-weights ${XSEGMENT_MERGE_WEIGHTS}"; fi
-    if [[ -z ${XSEGMENT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${XSEGMENT_DIR_SAVE}"; fi
-    if [[ -z ${XSEGMENT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${XSEGMENT_SCRATCH}"; fi
-    if [[ -z ${XSEGMENT_FORCE} ]]; then  FSTR="${FSTR} --force ${XSEGMENT_}"; fi
+    if [[ -n ${XSEGMENT_IDFIELD} ]]; then  FSTR="${FSTR} --id-field ${XSEGMENT_IDFIELD}"; fi
+    if [[ -n ${XSEGMENT_IMAGE} ]]; then  FSTR="${FSTR} --image ${XSEGMENT_IMAGE}"; fi
+    if [[ -n ${XSEGMENT_MASK} ]]; then  FSTR="${FSTR} --mask ${XSEGMENT_MASK}"; fi
+    if [[ -n ${XSEGMENT_NO_ANISOSMOOTH} ]]; then  FSTR="${FSTR} --no-anisosmooth"; fi
+    if [[ -n ${XSEGMENT_SMOOTH_CONDUCTANCE} ]]; then  FSTR="${FSTR} --aniso-conductance ${XSEGMENT_SMOOTH_CONDUCTANCE}"; fi
+    if [[ -n ${XSEGMENT_SMOOTH_ITER} ]]; then  FSTR="${FSTR} --aniso-iter ${XSEGMENT_SMOOTH_ITER}"; fi
+    if [[ -n ${XSEGMENT_DOG_G1} ]]; then  FSTR="${FSTR} --dog_g1 ${XSEGMENT_DOG_G1}"; fi
+    if [[ -n ${XSEGMENT_DOG_K} ]]; then  FSTR="${FSTR} --dog_k ${XSEGMENT_DOG_K}"; fi
+    if [[ -n ${XSEGMENT_DATUM} ]]; then  FSTR="${FSTR} --datum ${XSEGMENT_DATUM}"; fi
+    if [[ -n ${XSEGMENT_NO_MERGE} ]]; then  FSTR="${FSTR} --no-merge"; fi
+    if [[ -n ${XSEGMENT_MERGE_THRESHOLD} ]]; then  FSTR="${FSTR} --merge-threshold ${XSEGMENT_MERGE_THRESHOLD}"; fi
+    if [[ -n ${XSEGMENT_MERGE_WEIGHTS} ]]; then  FSTR="${FSTR} --merge-weights ${XSEGMENT_MERGE_WEIGHTS}"; fi
+    if [[ -n ${XSEGMENT_DIR_SAVE} ]]; then     FSTR="${FSTR} --dir-save ${XSEGMENT_DIR_SAVE}"; fi
+    if [[ -n ${XSEGMENT_DIR_SCRATCH} ]]; then  FSTR="${FSTR} --dir-scratch ${XSEGMENT_SCRATCH}"; fi
+    if [[ -n ${XSEGMENT_FORCE} ]]; then  FSTR="${FSTR} --force ${XSEGMENT_}"; fi
     echo ${FSTR} >> ${SLURM_XSEGMENT}
     echo "" >> ${SLURM_XSEGMENT}
     echo 'PROC_END="$(date -u +%s.%N)"' >> ${SLURM_XSEGMENT}
@@ -1372,6 +1464,7 @@ for (( i=1; i<${N}; i++ )); do
   ###############################################################################
   ## SUBMIT JOBS WITH DEPENDENCIES
   ###############################################################################
+  mkdir -p ${DIR_LOG}
 
   # Reset Job IDs for iteration
   TFLOW=(${WORKFLOWS//,/ })
@@ -1447,5 +1540,14 @@ for (( i=1; i<${N}; i++ )); do
     DEP_QCFUNC=$(echo "${DEP_QCFUNC}" | sed -E 's/:+/:/g; s/^:|:$//g')
     JOB_QCFUNC=$(sbatch --parsable ${DEP_QCFUNC:+--dependency=afterok:${DEP_QCFUNC}} ${SLURM_QCFUNC})
   fi
+  if [[ ${WORKFLOWS^^} == *"XINIT"* ]]; then
+    echo "submitting XINIT"
+    JOB_XINIT=$(sbatch --parsable ${SLURM_XINIT})
+  fi
+  if [[ ${WORKFLOWS^^} == *"XSEGMENT"* ]]; then
+    echo "submitting XSEGMENT"
+    JOB_XSEGMENT=$(sbatch --parsable ${JOB_XINIT:+--dependency=afterok:${JOB_XINIT}} ${SLURM_XSEGMENT})
+  fi
+
   echo ">>>>>${IDPFX} jobs submitted"
 done
