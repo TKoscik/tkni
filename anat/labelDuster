@@ -1,0 +1,141 @@
+#!/bin/bash -e
+#===============================================================================
+# Remove small blips from labels while preserving fine contours
+# Authors: Timothy R. Koscik, PhD
+# Date: 2026-11-17
+#===============================================================================
+PROC_START=$(date +%Y-%m-%dT%H:%M:%S%z)
+FCN_NAME=($(basename "$0"))
+DATE_SUFFIX=$(date +%Y%m%dT%H%M%S%N)
+OPERATOR=$(whoami)
+OPERATOR=${OPERATOR//@}
+KERNEL="$(uname -s)"
+HARDWARE="$(uname -m)"
+NO_LOG=false
+umask 007
+
+# actions on exit, write to logs, clean scratch --------------------------------
+function egress {
+  EXIT_CODE=$?
+  PROC_STOP=$(date +%Y-%m-%dT%H:%M:%S%z)
+  if [[ ${EXIT_CODE} -eq 0 ]]; then
+    if [[ -n ${DIR_SCRATCH} ]]; then
+      if [[ -d ${DIR_SCRATCH} ]]; then
+        if [[ "$(ls -A ${DIR_SCRATCH})" ]]; then
+          rm -R ${DIR_SCRATCH}
+        else
+          rmdir ${DIR_SCRATCH}
+        fi
+      fi
+    fi
+  fi
+  if [[ "${NO_LOG}" == "false" ]]; then
+    writeBenchmark ${OPERATOR} ${HARDWARE} ${KERNEL} ${FCN_NAME} \
+      ${PROC_START} ${PROC_STOP} ${EXIT_CODE}
+  fi
+}
+trap egress EXIT
+
+# Parse inputs -----------------------------------------------------------------
+OPTS=$(getopt -o hvln --long prefix:,label:,\
+image:,method:,suffix:,spatial-filter:,filter-radius:,automask-clip:,ants-template:,\
+dir-save:,dir-scratch:,\
+help,verbose,no-log,no-png -n 'parse-options' -- "$@")
+if [[ $? != 0 ]]; then
+  echo "Failed parsing options" >&2
+  exit 1
+fi
+eval set -- "$OPTS"
+
+# Set default values for function ---------------------------------------------
+LABEL=
+KERNEL="3x3x3vox"
+VALUES="all"
+FILENAME=
+DIR_SAVE=
+DIR_SCRATCH=${TKNI_SCRATCH}/${FCN_NAME}_${OPERATOR}_${DATE_SUFFIX}
+HELP=false
+VERBOSE=false
+NO_PNG=false
+
+while true; do
+  case "$1" in
+    -h | --help) HELP=true ; shift ;;
+    -v | --verbose) VERBOSE=true ; shift ;;
+    -l | --no-log) NO_LOG=true ; shift ;;
+    -n | --no-png) NO_PNG=true ; shift ;;
+    --label) LABEL="$2" ; shift 2 ;;
+    --kernel) KERNEL="$2" ; shift 2 ;;
+    --values) VALUES="$2" ; shift 2 ;;
+    --filename) FILENAME="$2" ; shift 2 ;;
+    --dir-save) DIR_SAVE="$2" ; shift 2 ;;
+    --dir-scratch) DIR_SCRATCH="$2" ; shift 2 ;;
+    -- ) shift ; break ;;
+    * ) break ;;
+  esac
+done
+
+# Usage Help -------------------------------------------------------------------
+if [[ "${HELP}" == "true" ]]; then
+  echo ''
+  echo '------------------------------------------------------------------------'
+  echo "TKNI: ${FCN_NAME}"
+  echo '------------------------------------------------------------------------'
+  echo '  -h | --help        display command help'
+  echo '  -v | --verbose     add verbose output to log file'
+  echo '  -l | --no-log      disable writing to output log'
+  echo '  -n | --no-png      disable generating pngs of output'
+  echo '  --prefix           scan prefix, default: sub-123_ses-1234abcd'
+  echo '  --label            '
+  echo '  --dir-save         directory to save output'
+  echo '  --dir-scratch      directory for temporary workspace'
+  echo ''
+  NO_LOG=true
+  exit 0
+fi
+
+#===============================================================================
+# Start of Function
+#===============================================================================
+if [[ -z "${FILENAME}" ]]; then
+  #PREFIX=$(getBidsBase -s -i ${LABEL[0]})
+  FILENAME=$(basename ${LABEL[0]})
+  TLAB=$(getField -i ${FILENAME} -f label)
+  FILENAME=$(modField -i ${FILENAME} -m -f label -v "${TLAB}+dusted")
+fi
+if [[ -z "${DIR_SAVE}" ]]; then DIR_SAVE=$(dirname ${IMAGE[0]}); fi
+mkdir -p ${DIR_SCRATCH}
+mkdir -p ${DIR_SAVE}
+
+# setup label vector -----------------------------------------------------------
+if [[ "${VALUES}" == "all" ]]; then
+  VALUES=($(c3d ${LABEL} -lstat | awk 'NF && NR>1 && $1 != 0 {print $1}'))
+else
+  VALUES=(${VALUES//,/ })
+fi
+
+# Loop over label values -------------------------------------------------------
+TNEW=${DIR_SCRATCH}/${FILENAME}
+niimath ${LABEL} -mul 0 ${TNEW}
+for (( i=0; i<${#VALUES[@]}; i++ )); do
+  TVAL=${VALUES[${i}]}
+  TBIN=${DIR_SCRATCH}/tbin.nii.gz
+  TNII=${DIR_SCRATCH}/tval.nii.gz
+
+  ## generate label binary mask
+  niimath ${LABEL} -thr ${TVAL} -uthr ${TVAL} -bin ${TBIN} -odt char
+
+  ## morphological opening
+  c3d ${TBIN} -erode ${KERNEL} -dilate ${KERNEL} -o ${TNII}
+
+  ## apply binary mask to restore fine structures
+  niimath ${TNII} -mas ${TBIN} -bin -mul ${TVAL} -add ${TNEW} ${TNEW}
+done
+
+# output result ---------------------------
+mv ${TNEW} ${DIR_SAVE}/
+
+#===============================================================================
+# End of Function
+#===============================================================================
+exit 0
