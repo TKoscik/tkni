@@ -1,5 +1,5 @@
-#!/app/ni/miniconda3/envs/clusteringVENV/bin/python
-##!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
+#!/usr/local/tkni/pyvenv/clusteringVENV/bin/python
+##!/app/ni/miniconda3/envs/clusteringVENV/bin/python
 
 import argparse
 import nibabel as nib
